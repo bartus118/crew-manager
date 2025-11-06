@@ -171,3 +171,21 @@ td.disabled {
   .modal-content { width: 95%; }
   table { font-size: 0.9em; }
 }
+/* cell states */
+td.disabled {
+  background: #000;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+td.empty-cell {
+  background: #fff7a8; /* jasny żółty */
+  color: #000;
+  cursor: pointer;
+}
+
+td.assigned-cell {
+  background: #ffffff;
+  color: #000;
+  cursor: pointer;
+}

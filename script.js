@@ -31,19 +31,31 @@ const COLUMNS = [
   {key:'inserty', title:'Inserty'}
 ];
 
+// statusy maszyny (rozszerzone)
 const MACHINE_STATUSES = [
   'Produkcja',
   'Produkcja + Filtry',
   'Produkcja + Inserty',
-  'Produkcja + Filtry + Inserty'
+  'Produkcja + Filtry + Inserty',
+  'Konserwacja',
+  'Rozruch',
+  'Bufor',
+  'Stop'
 ];
 
+// które role są aktywne przy danym statusie
 const STATUS_ACTIVE_ROLES = {
   'Produkcja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
   'Produkcja + Filtry': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry'],
   'Produkcja + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','inserty'],
-  'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty']
+  'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
+  // w trybach nieprodukcyjnych nie ma ról produkcyjnych
+  'Konserwacja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
+  'Rozruch': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy']
+  'Bufor': ['operator_focke','operator_protos'],
+  'Stop': []
 };
+
 
 let sb = null;
 
@@ -180,6 +192,113 @@ function buildTableFor(date) {
     th.textContent = c.title;
     theadRow.appendChild(th);
   });
+
+  tbody.innerHTML = '';
+  // use machines array for default view order
+  machines.forEach(m => {
+    const vals = dateData[m.number] || [m.number, m.status || 'Gotowa', '', '', '', '', '', '', ''];
+    const tr = document.createElement('tr');
+    tr.dataset.machine = m.number;
+
+    // 1) kolumna: tylko numer maszyny
+    const tdNum = document.createElement('td');
+    tdNum.textContent = m.number;
+    tr.appendChild(tdNum);
+
+    // 2) kolumna: status (select) — przeniesione tutaj
+    const tdStatus = document.createElement('td');
+    const selectStatus = document.createElement('select');
+    MACHINE_STATUSES.forEach(st => {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      if ((m.status || 'Produkcja') === st) opt.selected = true;
+      selectStatus.appendChild(opt);
+    });
+    selectStatus.disabled = !isAdmin;
+    selectStatus.onchange = async (e) => {
+      const newStatus = e.target.value;
+      const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
+      if (error) return console.error('Failed to update machine status', error);
+      await loadMachines();
+      await loadAssignmentsForDate(date);
+      buildTableFor(date);
+    };
+    tdStatus.appendChild(selectStatus);
+    tr.appendChild(tdStatus);
+
+    // 3+) pozostałe kolumny: status-dependent interactivity + kolorowanie
+    COLUMNS.slice(2).forEach((col, i) => {
+      const idx = i + 2; // index in vals
+      const td = document.createElement('td');
+      const roleKey = col.key;
+      const activeRoles = STATUS_ACTIVE_ROLES[m.status || 'Produkcja'] || [];
+      const isActive = activeRoles.includes(roleKey);
+      const cellValue = vals[idx] || '';
+
+      // style/class: disabled (czarne), empty (żółte), assigned (biały)
+      td.classList.remove('disabled', 'empty-cell', 'assigned-cell');
+
+      if (!isActive) {
+        td.classList.add('disabled'); // czarne
+        td.textContent = cellValue || ''; // show if exists
+      } else {
+        if (!cellValue) {
+          td.classList.add('empty-cell'); // żółte
+          td.textContent = '';
+        } else {
+          td.classList.add('assigned-cell'); // białe
+          td.textContent = cellValue;
+        }
+
+        // interactive only when active and not readonly
+        if (!document.body.classList.contains('readonly')) {
+          td.style.cursor = 'pointer';
+          td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key, idx));
+        }
+      }
+
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  // Also show any machines that have assignments for this date but are not in default view
+  Object.keys(dateData).forEach(num => {
+    if (!machines.find(mm => mm.number === num)) {
+      const vals = dateData[num];
+      const tr = document.createElement('tr');
+      tr.dataset.machine = num;
+      // machine number
+      const tdNum = document.createElement('td');
+      tdNum.textContent = num + ' (inny)';
+      tr.appendChild(tdNum);
+      // status placeholder
+      const tdStatus = document.createElement('td');
+      tdStatus.textContent = '—';
+      tr.appendChild(tdStatus);
+
+      COLUMNS.slice(2).forEach((col, i) => {
+        const idx = i + 2;
+        const td = document.createElement('td');
+        const cellValue = vals[idx] || '';
+        if (!cellValue) {
+          td.classList.add('empty-cell');
+          td.textContent = '';
+        } else {
+          td.classList.add('assigned-cell');
+          td.textContent = cellValue;
+        }
+        td.style.cursor = 'pointer';
+        td.addEventListener('dblclick', () => openAssignModal(date, num, col.key, idx));
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+  });
+}
+
 
   tbody.innerHTML = '';
   // use machines array for default view order
