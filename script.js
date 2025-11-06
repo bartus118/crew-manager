@@ -1,4 +1,3 @@
-
 // -----------------------------
 // script.js — full app with realtime + admin machines + status + export CSV
 // -----------------------------
@@ -49,7 +48,6 @@ const STATUS_ACTIVE_ROLES = {
   'Produkcja + Filtry': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry'],
   'Produkcja + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','inserty'],
   'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
-  // w trybach nieprodukcyjnych nie ma ról produkcyjnych
   'Konserwacja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
   'Rozruch': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
   'Bufor': ['operator_focke','operator_protos'],
@@ -299,93 +297,6 @@ function buildTableFor(date) {
   });
 }
 
-
-  tbody.innerHTML = '';
-  // use machines array for default view order
-  machines.forEach(m => {
-    const vals = dateData[m.number] || [m.number, 'Gotowa', '', '', '', '', '', '', ''];
-    const tr = document.createElement('tr');
-    tr.dataset.machine = m.number;
-
-    // machine + status select
-    const tdMachine = document.createElement('td');
-    tdMachine.style.display = 'flex';
-    tdMachine.style.flexDirection = 'column';
-    tdMachine.style.alignItems = 'center';
-    const spanNum = document.createElement('div');
-    spanNum.textContent = m.number;
-    const selectStatus = document.createElement('select');
-    MACHINE_STATUSES.forEach(st => {
-      const opt = document.createElement('option');
-      opt.value = st;
-      opt.textContent = st;
-      if (m.status === st) opt.selected = true;
-      selectStatus.appendChild(opt);
-    });
-    selectStatus.disabled = !isAdmin;
-    selectStatus.onchange = async (e) => {
-      const newStatus = e.target.value;
-      const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-      if (error) return console.error('Failed to update machine status', error);
-      await loadMachines();
-      await loadAssignmentsForDate(date);
-      buildTableFor(date);
-    };
-    tdMachine.appendChild(spanNum);
-    tdMachine.appendChild(selectStatus);
-    tr.appendChild(tdMachine);
-
-    // other cols
-    COLUMNS.slice(1).forEach((col, i) => {
-      const idx = i+1;
-      const td = document.createElement('td');
-      const roleKey = col.key;
-      const activeRoles = STATUS_ACTIVE_ROLES[m.status || 'Produkcja'] || [];
-      const isActive = activeRoles.includes(roleKey) || roleKey === 'status';
-      td.textContent = vals[idx] || '';
-      if (isActive && idx > 0 && !document.body.classList.contains('readonly')) {
-        td.classList.remove('disabled');
-        td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key, idx));
-      } else {
-        td.classList.add('disabled');
-      }
-      tr.appendChild(td);
-    });
-
-    tbody.appendChild(tr);
-  });
-
-  // Also show any machines that have assignments for this date but are not in default view
-  Object.keys(dateData).forEach(num => {
-    if (!machines.find(mm => mm.number === num)) {
-      const vals = dateData[num];
-      const tr = document.createElement('tr');
-      tr.dataset.machine = num;
-      const tdMachine = document.createElement('td');
-      tdMachine.style.display = 'flex';
-      tdMachine.style.flexDirection = 'column';
-      tdMachine.style.alignItems = 'center';
-      const spanNum = document.createElement('div');
-      spanNum.textContent = num + ' (inny)';
-      const dummySelect = document.createElement('div');
-      dummySelect.textContent = '—';
-      tdMachine.appendChild(spanNum);
-      tdMachine.appendChild(dummySelect);
-      tr.appendChild(tdMachine);
-      COLUMNS.slice(1).forEach((col, i) => {
-        const idx = i+1;
-        const td = document.createElement('td');
-        td.textContent = vals[idx] || '';
-        td.classList.remove('disabled');
-        td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, num, col.key, idx));
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    }
-  });
-}
 
 /* przypisywanie */
 async function saveAssignment(date, machine, role, empId) {
