@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crew Manager — Supabase</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h2>Crew Manager — widok główny</h2>
+
+  <div class="toolbar">
+    <div class="left">
+      <button class="btn" id="adminLoginBtn">Panel admina</button>
+    </div>
+    <div class="right">
+      Data: <input type="date" id="dateInput" />
+      <button class="btn primary" id="loadDay">Załaduj</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <table id="assignTable">
+      <thead><tr id="theadRow"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal przypisania -->
+  <div id="assignModal" class="modal">
+    <div class="modal-content">
+      <h3 id="assignTitle">Przypisz</h3>
+      <div id="assignInfo" class="muted"></div>
+      <div id="assignList" class="listbox"></div>
+      <button id="assignClose" class="btn">Zamknij</button>
+    </div>
+  </div>
+
+  <!-- Panel admina -->
+  <div id="adminPanel" class="modal">
+    <div class="modal-content">
+      <h3>Panel administracyjny</h3>
+      <div id="adminLoginSection">
+        <input type="password" id="adminPass" placeholder="Hasło administratora">
+        <button class="btn primary" id="adminLogin">Zaloguj</button>
+        <div id="adminMsg" class="muted"></div>
+      </div>
+
+      <div id="adminSection" style="display:none;">
+        <h4>Akcje</h4>
+        <button class="btn" id="adminExportEmpBtn">Eksportuj pracowników</button>
+        <button class="btn" id="exportAll">Eksportuj wszystkie dane</button>
+        <button class="btn" id="importAll">Importuj dane</button>
+        <button class="btn danger" id="closeAdmin">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
