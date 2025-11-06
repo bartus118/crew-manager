@@ -56,15 +56,19 @@
     </div>
   </div>
 
-  <!-- Import modułowy Supabase i wystawienie createClient globalnie -->
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/module/index.js';
-    // wystaw createClient w window.supabase, aby istniejący script.js mógł używać window.supabase.createClient(...)
-    window.supabase = { createClient };
-    console.log('module supabase loaded and window.supabase.createClient set');
+  <!-- UMD (browser) build Supabase — samodzielny bundle, wystawia global 'supabase' -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+    // Upewnij się, że global istnieje pod window.supabase
+    // W niektórych buildach UMD jest wystawiony pod nazwą 'supabase' lub 'supabase-js'
+    if (!window.supabase) {
+      // spróbuj kilku możliwych nazw globalnych (bezpiecznik)
+      window.supabase = window['supabase'] || window['supabase-js'] || window['Supabase'] || null;
+    }
+    console.log('UMD supabase global?', !!window.supabase);
   </script>
 
-  <!-- Twój skrypt aplikacji (cache-bust param zmieniaj gdy potrzebujesz wymusić odświeżenie) -->
-  <script src="script.js?v=1"></script>
+  <!-- Twój skrypt aplikacji (cache-bust param jeśli potrzebujesz) -->
+  <script src="script.js?v=2"></script>
 </body>
 </html>
