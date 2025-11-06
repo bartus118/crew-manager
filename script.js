@@ -215,13 +215,26 @@ function buildTableFor(date) {
     });
     selectStatus.disabled = !isAdmin;
     selectStatus.onchange = async (e) => {
-      const newStatus = e.target.value;
-      const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-      if (error) return console.error('Failed to update machine status', error);
+  const newStatus = e.target.value;
+  try {
+    const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
+    if (error) {
+      console.error('Failed to update machine status', error);
+      alert('Błąd zapisu statusu: ' + (error.message || JSON.stringify(error)));
+      // przywróć poprzednią wartość w select (opcjonalnie: odśwież listę)
       await loadMachines();
-      await loadAssignmentsForDate(date);
-      buildTableFor(date);
-    };
+      buildTableFor(currentDate);
+      return;
+    }
+    // pomyślnie zapisano — zaktualizuj lokalnie i przerysuj
+    await loadMachines();
+    if (currentDate) { await loadAssignmentsForDate(currentDate); }
+    buildTableFor(currentDate);
+  } catch (err) {
+    console.error('Exception updating status', err);
+    alert('Nieoczekiwany błąd przy zapisie statusu. Sprawdź konsolę.');
+  }
+};
     tdStatus.appendChild(selectStatus);
     tr.appendChild(tdStatus);
 
