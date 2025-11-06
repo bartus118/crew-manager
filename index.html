@@ -56,16 +56,15 @@
     </div>
   </div>
 
-   <!-- Supabase: import modułu i przypisz createClient do window.supabase -->
+  <!-- Import modułowy Supabase i wystawienie createClient globalnie -->
   <script type="module">
-    // importujemy createClient z modułowej wersji biblioteki i wystawiamy go globalnie
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/module/index.js';
-    // wystaw w global scope, aby stare skrypty działały (nasze script.js używa window.supabase.createClient)
+    // wystaw createClient w window.supabase, aby istniejący script.js mógł używać window.supabase.createClient(...)
     window.supabase = { createClient };
     console.log('module supabase loaded and window.supabase.createClient set');
   </script>
 
-  <!-- Twój skrypt aplikacji (musi ładować się po wystawieniu window.supabase) -->
-  <script src="script.js"></script>
+  <!-- Twój skrypt aplikacji (cache-bust param zmieniaj gdy potrzebujesz wymusić odświeżenie) -->
+  <script src="script.js?v=1"></script>
 </body>
 </html>

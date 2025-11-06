@@ -1,10 +1,10 @@
-// KONFIGURACJA SUPABASE
-const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 // -----------------------------
-// script.js (poprawiona wersja)
+// script.js — robust bootstrap
 // -----------------------------
 
+// KONFIGURACJA SUPABASE — Wklej swoje wartości (po utworzeniu projektu Supabase)
+const SUPABASE_URL = 'https://TWÓJ_PROJEKT.supabase.co';
+const SUPABASE_ANON_KEY = 'TWÓJ_PUBLICZNY_ANON_KEY';
 
 // Admin
 const ADMIN_PASSWORD = "admin123";
@@ -15,10 +15,10 @@ let employees = [];
 let machines = [];
 let assignments = {};
 
-// DOM refs (będą dostępne po DOMContentLoaded)
+// DOM refs (ustawiane w bootstrap)
 let dateInput, tbody, theadRow;
 
-// Stałe kolumn
+// Kolumny
 const COLUMNS = [
   {key:'maszyna', title:'Maszyna'},
   {key:'status', title:'Status'},
@@ -31,7 +31,7 @@ const COLUMNS = [
   {key:'inserty', title:'Inserty'}
 ];
 
-// Supabase client placeholder
+// Supabase client placeholder (będzie ustawiony w bootstrap)
 let sb = null;
 
 /* ================= helper: czekaj na załadowanie supabase SDK ================= */
@@ -54,7 +54,7 @@ function waitForSupabase(timeoutMs = 10000) {
   });
 }
 
-/* =================== FUNKCJE DANYCH / UI — te rzeczy są bez zmian (przepisane z Twojego) =================== */
+/* =================== FUNKCJE DANYCH / UI =================== */
 
 async function loadEmployees() {
   const { data, error } = await sb.from('employees').select('*').order('name', { ascending: true });
