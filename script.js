@@ -2,12 +2,10 @@
 // script.js — full app with realtime + admin machines + status + export CSV
 // -----------------------------
 
-
-// ---------- Wklej tutaj swoje dane Supabase (UWAŻNIE wklej dokładnie URL bez duplikatów) ----------
+// ---------- Twoje dane Supabase (upewnij się, że URL nie zawiera duplikatów) ----------
 const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 // ----------------------------------------------------
-
 
 const ADMIN_PASSWORD = "admin123";
 let isAdmin = false;
@@ -48,12 +46,11 @@ const STATUS_ACTIVE_ROLES = {
   'Produkcja + Filtry': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry'],
   'Produkcja + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','inserty'],
   'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
-  'Konserwacja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
-  'Rozruch': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
+  'Konserwacja': [], // brak ról produkcyjnych
+  'Rozruch': ['mechanik_focke','mechanik_protos','pracownik_pomocniczy'],
   'Bufor': ['operator_focke','operator_protos'],
   'Stop': []
 };
-
 
 let sb = null;
 
@@ -94,16 +91,12 @@ function setupRealtime() {
   // assignments
   realtimeAssignmentsSub = sb.channel('public:assignments')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, payload => {
-      console.log('realtime assignments event', payload);
       try {
         const record = payload.record || payload.new || null;
         const old = payload.old || null;
         const recDate = record && record.date ? record.date : (old ? old.date : null);
         if (!currentDate || !recDate || String(recDate) === String(currentDate)) {
-          (async () => {
-            await loadAssignmentsForDate(currentDate);
-            buildTableFor(currentDate);
-          })();
+          (async () => { await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); })();
         }
       } catch (err) { console.error('realtime assignments handler error', err); }
     }).subscribe(status => console.log('assignments realtime status', status));
@@ -111,7 +104,6 @@ function setupRealtime() {
   // edit_lock
   realtimeEditLockSub = sb.channel('public:edit_lock')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'edit_lock' }, payload => {
-      console.log('realtime edit_lock event', payload);
       (async () => {
         try {
           const { data, error } = await sb.from('edit_lock').select('*').maybeSingle();
@@ -131,7 +123,6 @@ function setupRealtime() {
   // machines
   realtimeMachinesSub = sb.channel('public:machines')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, payload => {
-      console.log('realtime machines event', payload);
       (async () => {
         await loadMachines();
         if (currentDate) { await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); }
@@ -162,7 +153,7 @@ async function loadAssignmentsForDate(date) {
   if (error) console.error('loadAssignmentsForDate error', error);
   const map = {};
   machines.forEach(m => {
-    const row = [m.number, 'Gotowa'];
+    const row = [m.number, m.status || 'Produkcja'];
     for (let i = 2; i < COLUMNS.length; i++) row.push('');
     map[m.number] = row;
   });
@@ -172,7 +163,7 @@ async function loadAssignmentsForDate(date) {
     if (idx > -1) {
       if (!map[a.machine_number]) {
         // jeśli maszyna nie jest w domyślnym widoku - utwórz wpis (by nadal pokazać przypisanie)
-        const row = [a.machine_number, 'Gotowa'];
+        const row = [a.machine_number, 'Produkcja'];
         for (let i = 2; i < COLUMNS.length; i++) row.push('');
         map[a.machine_number] = row;
       }
@@ -180,6 +171,19 @@ async function loadAssignmentsForDate(date) {
     }
   });
   assignments[date] = map;
+}
+
+// helper — bezpieczne odświeżenie głównej tabeli (obudowane try/catch)
+async function refreshMainTable() {
+  try {
+    await loadMachines();
+    if (currentDate) {
+      await loadAssignmentsForDate(currentDate);
+    }
+    buildTableFor(currentDate);
+  } catch (err) {
+    console.error('refreshMainTable error', err);
+  }
 }
 
 function buildTableFor(date) {
@@ -192,20 +196,22 @@ function buildTableFor(date) {
   });
 
   tbody.innerHTML = '';
+
   // use machines array for default view order
   machines.forEach(m => {
-    const vals = dateData[m.number] || [m.number, m.status || 'Gotowa', '', '', '', '', '', '', ''];
+    const vals = dateData[m.number] || [m.number, m.status || 'Produkcja', '', '', '', '', '', '', ''];
     const tr = document.createElement('tr');
     tr.dataset.machine = m.number;
 
-    // 1) kolumna: tylko numer maszyny
+    // 1) kolumna: numer maszyny
     const tdNum = document.createElement('td');
     tdNum.textContent = m.number;
     tr.appendChild(tdNum);
 
-    // 2) kolumna: status (select) — przeniesione tutaj
+    // 2) kolumna: status (select) — tu jest kolumna Status
     const tdStatus = document.createElement('td');
     const selectStatus = document.createElement('select');
+
     MACHINE_STATUSES.forEach(st => {
       const opt = document.createElement('option');
       opt.value = st;
@@ -213,28 +219,34 @@ function buildTableFor(date) {
       if ((m.status || 'Produkcja') === st) opt.selected = true;
       selectStatus.appendChild(opt);
     });
-    selectStatus.disabled = !isAdmin;
+
+    // pozwól każdemu zmieniać status (można ograniczyć przy pomocy isAdmin)
+    selectStatus.disabled = false;
+
+    // onchange: zapisujemy status i aktualizujemy UI; obsługujemy 204 No Content
     selectStatus.onchange = async (e) => {
-  const newStatus = e.target.value;
-  try {
-    const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-    if (error) {
-      console.error('Failed to update machine status', error);
-      alert('Błąd zapisu statusu: ' + (error.message || JSON.stringify(error)));
-      // przywróć poprzednią wartość w select (opcjonalnie: odśwież listę)
-      await loadMachines();
-      buildTableFor(currentDate);
-      return;
-    }
-    // pomyślnie zapisano — zaktualizuj lokalnie i przerysuj
-    await loadMachines();
-    if (currentDate) { await loadAssignmentsForDate(currentDate); }
-    buildTableFor(currentDate);
-  } catch (err) {
-    console.error('Exception updating status', err);
-    alert('Nieoczekiwany błąd przy zapisie statusu. Sprawdź konsolę.');
-  }
-};
+      const newStatus = e.target.value;
+      try {
+        const res = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
+        if (res.error) {
+          console.error('Failed to update machine status', res.error);
+          alert('Błąd zapisu statusu: ' + (res.error.message || JSON.stringify(res.error)));
+          // restore previous value
+          e.target.value = m.status || 'Produkcja';
+          return;
+        }
+        // success (res.status may be 204) — update lokalnie i rebuild
+        m.status = newStatus;
+        // reload assignments in case active roles change
+        if (currentDate) await loadAssignmentsForDate(currentDate);
+        buildTableFor(currentDate);
+      } catch (err) {
+        console.error('Exception updating status', err);
+        alert('Nieoczekiwany błąd przy zapisie statusu. Sprawdź konsolę.');
+        e.target.value = m.status || 'Produkcja';
+      }
+    };
+
     tdStatus.appendChild(selectStatus);
     tr.appendChild(tdStatus);
 
@@ -247,12 +259,12 @@ function buildTableFor(date) {
       const isActive = activeRoles.includes(roleKey);
       const cellValue = vals[idx] || '';
 
-      // style/class: disabled (czarne), empty (żółte), assigned (biały)
+      // clear classes
       td.classList.remove('disabled', 'empty-cell', 'assigned-cell');
 
       if (!isActive) {
         td.classList.add('disabled'); // czarne
-        td.textContent = cellValue || ''; // show if exists
+        td.textContent = cellValue || '';
       } else {
         if (!cellValue) {
           td.classList.add('empty-cell'); // żółte
@@ -277,7 +289,7 @@ function buildTableFor(date) {
 
   // Also show any machines that have assignments for this date but are not in default view
   Object.keys(dateData).forEach(num => {
-    if (!machines.find(mm => mm.number === num)) {
+    if (!machines.find(mm => String(mm.number) === String(num))) {
       const vals = dateData[num];
       const tr = document.createElement('tr');
       tr.dataset.machine = num;
@@ -309,7 +321,6 @@ function buildTableFor(date) {
     }
   });
 }
-
 
 /* przypisywanie */
 async function saveAssignment(date, machine, role, empId) {
@@ -370,33 +381,28 @@ const setupAdminPanel = () => {
   const closeAdmin = document.getElementById('closeAdmin');
 
   adminLoginBtn.onclick = () => adminPanel.style.display = 'flex';
-  closeAdmin.onclick = () => adminPanel.style.display = 'none';
 
- adminLogin.onclick = async () => {
-  const p = document.getElementById('adminPass').value;
-  if (p === ADMIN_PASSWORD) {
-    isAdmin = true;
-    adminMsg.textContent = "Zalogowano.";
-    adminSection.style.display = 'block';
+  // zamknięcie panelu - rebuild tabeli, żeby stan selectów był spójny
+  closeAdmin.onclick = async () => {
+    adminPanel.style.display = 'none';
+    await refreshMainTable();
+  };
 
-    // odśwież listę maszyn w panelu admina
-    await refreshAdminMachineList();
-
-    // PRZED: tabela była zbudowana zanim isAdmin=true — musimy ją przerysować,
-    // żeby selecty statusu powstały jako enabled (selectStatus.disabled = !isAdmin)
-    try {
-      await loadMachines();                       // pobierz aktualną listę (może się zmieniła)
-      if (currentDate) {
-        await loadAssignmentsForDate(currentDate); // przeładuj przypisania dla bieżącej daty
-      }
-      buildTableFor(currentDate);                  // przerysuj tabelę — teraz isAdmin === true
-    } catch (err) {
-      console.error('Error refreshing UI after admin login', err);
+  adminLogin.onclick = async () => {
+    const p = document.getElementById('adminPass').value;
+    if (p === ADMIN_PASSWORD) {
+      isAdmin = true;
+      adminMsg.textContent = "Zalogowano.";
+      adminSection.style.display = 'block';
+      // refresh admin specific UI
+      await refreshAdminMachineList();
+      // ensure main table rebuilds so selectStatus uses current isAdmin (if you later restrict)
+      await refreshMainTable();
+    } else {
+      adminMsg.textContent = "Błędne hasło.";
     }
-  } else {
-    adminMsg.textContent = "Błędne hasło.";
-  }
-};
+  };
+
   document.getElementById('adminExportEmpBtn').onclick = async () => {
     const { data, error } = await sb.from('employees').select('*');
     if (error) return alert('Błąd: ' + error.message);
@@ -418,6 +424,7 @@ const setupAdminPanel = () => {
     document.getElementById('newMachineNumber').value = '';
     await loadMachines();
     await refreshAdminMachineList();
+    await refreshMainTable();
   };
 
   document.getElementById('saveMachineOrderBtn').onclick = async () => {
@@ -429,6 +436,7 @@ const setupAdminPanel = () => {
       if (error) console.error('saveMachineOrderBtn update error', error);
     }
     await loadMachines();
+    await refreshMainTable();
     alert('Zapisano kolejność jako widok domyślny.');
   };
 
@@ -463,6 +471,7 @@ async function refreshAdminMachineList() {
       if (error) return alert('Błąd: ' + error.message);
       await loadMachines();
       await refreshAdminMachineList();
+      await refreshMainTable();
     };
   });
 
@@ -546,8 +555,8 @@ function exportDayToCSV(date) {
   const machineList = machines.length ? machines : Object.keys(dateData).map(k => ({ number: k }));
   machineList.forEach(m => {
     const machineNumber = m.number || m;
-    const vals = dateData[machineNumber] || [machineNumber, 'Gotowa', '', '', '', '', '', '', ''];
-    const row = [date, machineNumber, vals[1] || 'Gotowa', ...vals.slice(2)];
+    const vals = dateData[machineNumber] || [machineNumber, 'Produkcja', '', '', '', '', '', '', ''];
+    const row = [date, machineNumber, vals[1] || 'Produkcja', ...vals.slice(2)];
     rows.push(toCSVRow(row));
   });
   const csvContent = rows.join('\r\n');
