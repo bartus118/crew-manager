@@ -56,19 +56,24 @@
     </div>
   </div>
 
-  <!-- UMD (browser) build Supabase — samodzielny bundle, wystawia global 'supabase' -->
+  <!-- UMD (browser) build Supabase — gotowy bundle; ładuje global 'supabase' -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
-    // Upewnij się, że global istnieje pod window.supabase
-    // W niektórych buildach UMD jest wystawiony pod nazwą 'supabase' lub 'supabase-js'
-    if (!window.supabase) {
-      // spróbuj kilku możliwych nazw globalnych (bezpiecznik)
-      window.supabase = window['supabase'] || window['supabase-js'] || window['Supabase'] || null;
-    }
-    console.log('UMD supabase global?', !!window.supabase);
+    // Bezpieczne wystawienie globalu: jeśli bundle expose'uje inną nazwę, spróbujemy ją przypisać do window.supabase
+    (function(){
+      try {
+        if (typeof window.supabase === 'undefined') {
+          // możliwe nazwy globalne w różnych bundlach
+          window.supabase = window['supabase'] || window['supabase-js'] || window['Supabase'] || null;
+        }
+      } catch(e) {
+        window.supabase = null;
+      }
+      console.log('UMD supabase global present?', !!window.supabase);
+    })();
   </script>
 
-  <!-- Twój skrypt aplikacji (cache-bust param jeśli potrzebujesz) -->
-  <script src="script.js?v=2"></script>
+  <!-- Twój skrypt aplikacji (cache-bust param zmieniaj jak wprowadzisz zmiany) -->
+  <script src="script.js?v=3"></script>
 </body>
 </html>

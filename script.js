@@ -2,23 +2,20 @@
 // script.js — robust bootstrap
 // -----------------------------
 
-// KONFIGURACJA SUPABASE — Wklej swoje wartości (po utworzeniu projektu Supabase)
-const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NYY';
+// ---------- Wklej tutaj swoje dane Supabase ----------
+const SUPABASE_URL = 'https://https://vuptrwfxgirrkvxkjmnn.supabase.co.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
+// ----------------------------------------------------
 
-// Admin
 const ADMIN_PASSWORD = "admin123";
 let isAdmin = false;
 
-// Dane aplikacji
 let employees = [];
 let machines = [];
 let assignments = {};
 
-// DOM refs (ustawiane w bootstrap)
 let dateInput, tbody, theadRow;
 
-// Kolumny
 const COLUMNS = [
   {key:'maszyna', title:'Maszyna'},
   {key:'status', title:'Status'},
@@ -31,30 +28,29 @@ const COLUMNS = [
   {key:'inserty', title:'Inserty'}
 ];
 
-// Supabase client placeholder (będzie ustawiony w bootstrap)
 let sb = null;
 
-/* ================= helper: czekaj na załadowanie supabase SDK ================= */
-function waitForSupabase(timeoutMs = 10000) {
+/* ========== helper: czekaj na global window.supabase ========== */
+function waitForSupabaseGlobal(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
-    if (window.supabase) return resolve(window.supabase);
+    if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
     const interval = 100;
     let waited = 0;
     const id = setInterval(() => {
-      if (window.supabase) {
+      if (window.supabase && typeof window.supabase.createClient === 'function') {
         clearInterval(id);
         return resolve(window.supabase);
       }
       waited += interval;
       if (waited >= timeoutMs) {
         clearInterval(id);
-        return reject(new Error('Timeout waiting for Supabase SDK'));
+        return reject(new Error('Timeout waiting for Supabase global'));
       }
     }, interval);
   });
 }
 
-/* =================== FUNKCJE DANYCH / UI =================== */
+/* =================== DANE / UI =================== */
 
 async function loadEmployees() {
   const { data, error } = await sb.from('employees').select('*').order('name', { ascending: true });
@@ -85,7 +81,6 @@ async function loadAssignmentsForDate(date) {
   assignments[date] = map;
 }
 
-/* =================== RYSOWANIE TABELI =================== */
 function buildTableFor(date) {
   const dateData = assignments[date] || {};
   theadRow.innerHTML = '';
@@ -115,9 +110,11 @@ function buildTableFor(date) {
 
 /* =================== PRZYPISANIA =================== */
 async function saveAssignment(date, machine, role, empId) {
-  await sb.from('assignments').delete().eq('date', date).eq('machine_number', machine).eq('role', role);
+  const del = await sb.from('assignments').delete().eq('date', date).eq('machine_number', machine).eq('role', role);
+  if (del.error) console.error('delete assignment error', del.error);
   if (empId) {
-    await sb.from('assignments').insert([{ date, machine_number: machine, role, employee_id: empId }]);
+    const ins = await sb.from('assignments').insert([{ date, machine_number: machine, role, employee_id: empId }]);
+    if (ins.error) console.error('insert assignment error', ins.error);
   }
   await loadAssignmentsForDate(date);
   buildTableFor(date);
@@ -194,7 +191,8 @@ const setupAdminPanel = () => {
 
 /* =================== BLOKADA EDYCJI =================== */
 async function checkLock() {
-  const { data } = await sb.from('edit_lock').select('*').eq('active', true).maybeSingle();
+  const { data, error } = await sb.from('edit_lock').select('*').eq('active', true).maybeSingle();
+  if (error) console.error('checkLock error', error);
   if (data && data.active) {
     alert(`Grafik jest obecnie edytowany przez ${data.locked_by}`);
     document.body.classList.add('readonly');
@@ -204,12 +202,15 @@ async function checkLock() {
 }
 
 async function setLock(userName) {
-  await sb.from('edit_lock').delete().neq('id', 0);
-  await sb.from('edit_lock').insert([{ active: true, locked_by: userName }]);
+  const del = await sb.from('edit_lock').delete().neq('id', 0);
+  if (del.error) console.error('setLock delete error', del.error);
+  const ins = await sb.from('edit_lock').insert([{ active: true, locked_by: userName }]);
+  if (ins.error) console.error('setLock insert error', ins.error);
 }
 
 async function releaseLock() {
-  await sb.from('edit_lock').delete().neq('id', 0);
+  const del = await sb.from('edit_lock').delete().neq('id', 0);
+  if (del.error) console.error('releaseLock delete error', del.error);
 }
 
 /* =================== INICJALIZACJA =================== */
@@ -227,15 +228,15 @@ async function initApp() {
   }
 }
 
-/* =================== BOOTSTRAP: czekaj na DOM i na Supabase SDK, potem startuj =================== */
+/* =================== BOOTSTRAP =================== */
 async function bootstrap() {
-  // 1) poczekaj na DOM
+  // czekaj na DOM
   await new Promise(resolve => {
     if (document.readyState === 'complete' || document.readyState === 'interactive') return resolve();
     document.addEventListener('DOMContentLoaded', resolve);
   });
 
-  // 2) ustaw referencje DOM
+  // referencje DOM
   dateInput = document.getElementById('dateInput');
   dateInput.value = new Date().toISOString().slice(0,10);
   tbody = document.getElementById('tbody');
@@ -244,35 +245,36 @@ async function bootstrap() {
   setupAssignModal();
   setupAdminPanel();
 
-  // 3) poczekaj na supabase SDK (polling)
+  // czekaj na global supabase (UMD)
   try {
     console.log('Waiting for Supabase SDK to be available...');
-    await waitForSupabase(10000); // 10s timeout
-    console.log('Supabase SDK is available.');
+    await waitForSupabaseGlobal(10000);
+    console.log('Supabase global is available.');
   } catch (err) {
     console.error('Supabase SDK did not load in time:', err);
     return;
   }
 
-  // 4) utwórz klienta supabase
+  // utwórz klienta
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client created.');
   } catch (err) {
     console.error('Failed to create Supabase client:', err);
     return;
   }
 
-  // 5) podpięcie przycisków
+  // podpięcie przycisków
   document.getElementById('loadDay').onclick = async () => {
     const d = dateInput.value;
     await loadAssignmentsForDate(d);
     buildTableFor(d);
   };
 
-  // 6) start aplikacji
+  // start
   await initApp();
 
-  // 7) odblokowanie przy zamknięciu
+  // odblokowanie przy zamknięciu
   window.addEventListener('beforeunload', releaseLock);
 }
 
