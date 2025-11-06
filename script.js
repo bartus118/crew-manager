@@ -51,7 +51,7 @@ const STATUS_ACTIVE_ROLES = {
   'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
   // w trybach nieprodukcyjnych nie ma ról produkcyjnych
   'Konserwacja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
-  'Rozruch': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy']
+  'Rozruch': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
   'Bufor': ['operator_focke','operator_protos'],
   'Stop': []
 };
