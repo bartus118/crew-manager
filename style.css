@@ -26,6 +26,7 @@ h2 {
   cursor: pointer;
   background: #eee;
   transition: 0.2s;
+  margin-left: 6px;
 }
 
 .btn:hover {
@@ -50,17 +51,20 @@ h2 {
   border-radius: 8px;
   padding: 10px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow-x: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 800px;
 }
 
 th, td {
   border: 1px solid #ddd;
   padding: 6px;
   text-align: center;
+  vertical-align: middle;
 }
 
 th {
@@ -90,15 +94,9 @@ th {
   background: white;
   padding: 20px;
   border-radius: 8px;
-  width: 600px;
+  width: 700px;
   max-height: 80vh;
   overflow: auto;
-  animation: popup 0.2s ease-out;
-}
-
-@keyframes popup {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
 }
 
 .listbox {
@@ -136,35 +134,40 @@ th {
   padding-top: 10px;
 }
 
-/* Sticky header i hover w tabeli */
-thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f0f0f0;
+/* admin machine rows */
+.admin-machine-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px;
+  border-bottom: 1px dashed #eee;
+  background: #fff;
 }
 
-tbody tr:hover {
-  background: #f9fbff;
+.admin-machine-row .drag-handle {
+  cursor: grab;
+  margin-right: 8px;
 }
 
-/* Tryb tylko do odczytu */
-body.readonly {
-  opacity: 0.7;
-  pointer-events: none;
+/* small button styles */
+.btn.small {
+  padding: 4px 6px;
+  font-size: 0.85em;
 }
-body.readonly::after {
-  content: "Tryb podglądu — grafik edytowany przez inną osobę";
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #ffd54f;
-  color: #333;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: bold;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  pointer-events: none;
-  z-index: 1000;
+
+/* readonly UI */
+body.readonly td {
+  opacity: 0.6;
+}
+
+/* disabled cell style */
+td.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* responsive tweaks */
+@media (max-width: 700px) {
+  .modal-content { width: 95%; }
+  table { font-size: 0.9em; }
 }

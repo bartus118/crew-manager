@@ -16,6 +16,7 @@
     <div class="right">
       Data: <input type="date" id="dateInput" />
       <button class="btn primary" id="loadDay">Załaduj</button>
+      <button class="btn" id="exportDayBtn">Eksportuj dzień (CSV)</button>
     </div>
   </div>
 
@@ -51,6 +52,16 @@
         <button class="btn" id="adminExportEmpBtn">Eksportuj pracowników</button>
         <button class="btn" id="exportAll">Eksportuj wszystkie dane</button>
         <button class="btn" id="importAll">Importuj dane</button>
+
+        <h4>Maszyny (edycja)</h4>
+        <div id="adminMachineEditor">
+          <input id="newMachineNumber" placeholder="numer maszyny (np. 55)" />
+          <button class="btn" id="addMachineBtn">Dodaj maszynę</button>
+          <div id="machineListEditable" class="listbox"></div>
+          <button class="btn primary" id="saveMachineOrderBtn">Zapisz kolejność (widok domyślny)</button>
+        </div>
+
+        <button class="btn danger" id="forceUnlockBtn">Wymuś odblokowanie</button>
         <button class="btn danger" id="closeAdmin">Zamknij</button>
       </div>
     </div>
@@ -59,7 +70,6 @@
   <!-- UMD (browser) build Supabase — gotowy bundle; wystawia global 'supabase' -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
-    // pewne zabezpieczenie: jeśli bundle nie wystawił dokładnie window.supabase, spróbujemy przypisać
     (function(){
       try {
         if (typeof window.supabase === 'undefined') {
@@ -72,7 +82,7 @@
     })();
   </script>
 
-  <!-- Twój skrypt aplikacji (cache-bust param — zwiększ gdy deployujesz nową wersję) -->
-  <script src="script.js?v=4"></script>
+  <!-- Twój skrypt aplikacji (zmień wersję ?v= przy deploy) -->
+  <script src="script.js?v=1"></script>
 </body>
 </html>
