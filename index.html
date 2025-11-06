@@ -56,14 +56,13 @@
     </div>
   </div>
 
-  <!-- UMD (browser) build Supabase — gotowy bundle; ładuje global 'supabase' -->
+  <!-- UMD (browser) build Supabase — gotowy bundle; wystawia global 'supabase' -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
-    // Bezpieczne wystawienie globalu: jeśli bundle expose'uje inną nazwę, spróbujemy ją przypisać do window.supabase
+    // pewne zabezpieczenie: jeśli bundle nie wystawił dokładnie window.supabase, spróbujemy przypisać
     (function(){
       try {
         if (typeof window.supabase === 'undefined') {
-          // możliwe nazwy globalne w różnych bundlach
           window.supabase = window['supabase'] || window['supabase-js'] || window['Supabase'] || null;
         }
       } catch(e) {
@@ -73,7 +72,7 @@
     })();
   </script>
 
-  <!-- Twój skrypt aplikacji (cache-bust param zmieniaj jak wprowadzisz zmiany) -->
-  <script src="script.js?v=3"></script>
+  <!-- Twój skrypt aplikacji (cache-bust param — zwiększ gdy deployujesz nową wersję) -->
+  <script src="script.js?v=4"></script>
 </body>
 </html>

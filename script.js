@@ -2,7 +2,7 @@
 // script.js — robust bootstrap
 // -----------------------------
 
-// ---------- Wklej tutaj swoje dane Supabase ----------
+// ---------- Wklej tutaj swoje dane Supabase (UWAŻNIE wklej dokładnie URL bez duplikatów) ----------
 const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 // ----------------------------------------------------
@@ -30,7 +30,7 @@ const COLUMNS = [
 
 let sb = null;
 
-/* ========== helper: czekaj na global window.supabase ========== */
+/* helper: poczekaj na global window.supabase.createClient (UMD) */
 function waitForSupabaseGlobal(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
@@ -50,7 +50,7 @@ function waitForSupabaseGlobal(timeoutMs = 10000) {
   });
 }
 
-/* =================== DANE / UI =================== */
+/* ========== DANE / UI (ładowanie, zapisy, rysowanie tabeli) ========== */
 
 async function loadEmployees() {
   const { data, error } = await sb.from('employees').select('*').order('name', { ascending: true });
@@ -108,19 +108,17 @@ function buildTableFor(date) {
   });
 }
 
-/* =================== PRZYPISANIA =================== */
+/* przypisywanie */
 async function saveAssignment(date, machine, role, empId) {
-  const del = await sb.from('assignments').delete().eq('date', date).eq('machine_number', machine).eq('role', role);
-  if (del.error) console.error('delete assignment error', del.error);
+  await sb.from('assignments').delete().eq('date', date).eq('machine_number', machine).eq('role', role);
   if (empId) {
-    const ins = await sb.from('assignments').insert([{ date, machine_number: machine, role, employee_id: empId }]);
-    if (ins.error) console.error('insert assignment error', ins.error);
+    await sb.from('assignments').insert([{ date, machine_number: machine, role, employee_id: empId }]);
   }
   await loadAssignmentsForDate(date);
   buildTableFor(date);
 }
 
-/* =================== MODAL PRZYPISANIA =================== */
+/* modal przypisania */
 let assignModal, assignTitle, assignInfo, assignList;
 function setupAssignModal() {
   assignModal = document.getElementById('assignModal');
@@ -159,7 +157,7 @@ function openAssignModal(date, machine, roleKey) {
   assignList.appendChild(clear);
 }
 
-/* =================== PANEL ADMINA =================== */
+/* panel admina */
 const setupAdminPanel = () => {
   const adminPanel = document.getElementById('adminPanel');
   const adminLoginBtn = document.getElementById('adminLoginBtn');
@@ -189,7 +187,7 @@ const setupAdminPanel = () => {
   };
 };
 
-/* =================== BLOKADA EDYCJI =================== */
+/* lock */
 async function checkLock() {
   const { data, error } = await sb.from('edit_lock').select('*').eq('active', true).maybeSingle();
   if (error) console.error('checkLock error', error);
@@ -202,18 +200,15 @@ async function checkLock() {
 }
 
 async function setLock(userName) {
-  const del = await sb.from('edit_lock').delete().neq('id', 0);
-  if (del.error) console.error('setLock delete error', del.error);
-  const ins = await sb.from('edit_lock').insert([{ active: true, locked_by: userName }]);
-  if (ins.error) console.error('setLock insert error', ins.error);
+  await sb.from('edit_lock').delete().neq('id', 0);
+  await sb.from('edit_lock').insert([{ active: true, locked_by: userName }]);
 }
 
 async function releaseLock() {
-  const del = await sb.from('edit_lock').delete().neq('id', 0);
-  if (del.error) console.error('releaseLock delete error', del.error);
+  await sb.from('edit_lock').delete().neq('id', 0);
 }
 
-/* =================== INICJALIZACJA =================== */
+/* init */
 async function initApp() {
   try {
     if (!(await checkLock())) return;
@@ -228,15 +223,13 @@ async function initApp() {
   }
 }
 
-/* =================== BOOTSTRAP =================== */
+/* bootstrap */
 async function bootstrap() {
-  // czekaj na DOM
   await new Promise(resolve => {
     if (document.readyState === 'complete' || document.readyState === 'interactive') return resolve();
     document.addEventListener('DOMContentLoaded', resolve);
   });
 
-  // referencje DOM
   dateInput = document.getElementById('dateInput');
   dateInput.value = new Date().toISOString().slice(0,10);
   tbody = document.getElementById('tbody');
@@ -245,7 +238,6 @@ async function bootstrap() {
   setupAssignModal();
   setupAdminPanel();
 
-  // czekaj na global supabase (UMD)
   try {
     console.log('Waiting for Supabase SDK to be available...');
     await waitForSupabaseGlobal(10000);
@@ -255,7 +247,6 @@ async function bootstrap() {
     return;
   }
 
-  // utwórz klienta
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log('Supabase client created.');
@@ -264,17 +255,14 @@ async function bootstrap() {
     return;
   }
 
-  // podpięcie przycisków
   document.getElementById('loadDay').onclick = async () => {
     const d = dateInput.value;
     await loadAssignmentsForDate(d);
     buildTableFor(d);
   };
 
-  // start
   await initApp();
 
-  // odblokowanie przy zamknięciu
   window.addEventListener('beforeunload', releaseLock);
 }
 
