@@ -1,5 +1,5 @@
 // -----------------------------
-// script.js — robust bootstrap
+// script.js — robust bootstrap (z realtime i poprawkami)
 // -----------------------------
 
 // ---------- Wklej tutaj swoje dane Supabase (UWAŻNIE wklej dokładnie URL bez duplikatów) ----------
@@ -49,6 +49,89 @@ function waitForSupabaseGlobal(timeoutMs = 10000) {
     }, interval);
   });
 }
+
+// -----------------------------
+// Realtime: subskrypcje assignments i edit_lock
+// -----------------------------
+let realtimeAssignmentsSub = null;
+let realtimeEditLockSub = null;
+// currentDate będzie ustawiana w bootstrap / przy kliknięciu 'Załaduj'
+let currentDate = null;
+
+function setupRealtime() {
+  // safety: jeśli już istnieją subskrypcje, najpierw je anuluj
+  try {
+    if (realtimeAssignmentsSub) {
+      try { realtimeAssignmentsSub.unsubscribe(); } catch(e){/*ignore*/ }
+      realtimeAssignmentsSub = null;
+    }
+    if (realtimeEditLockSub) {
+      try { realtimeEditLockSub.unsubscribe(); } catch(e){/*ignore*/ }
+      realtimeEditLockSub = null;
+    }
+  } catch(e) { console.warn('Error cleaning previous subs', e); }
+
+  // Subskrypcja zmian w tabeli assignments (wszystkie eventy)
+  realtimeAssignmentsSub = sb.channel('public:assignments')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'assignments' },
+      payload => {
+        console.log('realtime assignments event', payload);
+        try {
+          const record = payload.record || payload.new || null;
+          const old = payload.old || null;
+          const recDate = record && record.date ? record.date : (old ? old.date : null);
+          if (!currentDate || !recDate || String(recDate) === String(currentDate)) {
+            (async () => {
+              await loadAssignmentsForDate(currentDate);
+              buildTableFor(currentDate);
+            })();
+          }
+        } catch (err) {
+          console.error('realtime assignments handler error', err);
+        }
+      }
+    )
+    .subscribe(status => {
+      console.log('assignments realtime status', status);
+    });
+
+  // Subskrypcja zmian w tabeli edit_lock — update lock state w UI
+  realtimeEditLockSub = sb.channel('public:edit_lock')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'edit_lock' },
+      payload => {
+        console.log('realtime edit_lock event', payload);
+        (async () => {
+          try {
+            const { data, error } = await sb.from('edit_lock').select('*').maybeSingle();
+            if (error) { console.error('realtime fetch edit_lock error', error); return; }
+            if (data && data.active) {
+              document.body.classList.add('readonly');
+              console.log('Lock active by', data.locked_by);
+            } else {
+              document.body.classList.remove('readonly');
+              console.log('Lock released (realtime)');
+              if (currentDate) {
+                await loadAssignmentsForDate(currentDate);
+                buildTableFor(currentDate);
+              }
+            }
+          } catch (err) {
+            console.error('realtime edit_lock handler error', err);
+          }
+        })();
+      }
+    )
+    .subscribe(status => {
+      console.log('edit_lock realtime status', status);
+    });
+
+  console.log('Realtime subscriptions created.');
+}
+
 
 /* ========== DANE / UI (ładowanie, zapisy, rysowanie tabeli) ========== */
 
@@ -249,6 +332,8 @@ async function bootstrap() {
 
   try {
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    currentDate = dateInput.value;
+    setupRealtime();
     console.log('Supabase client created.');
   } catch (err) {
     console.error('Failed to create Supabase client:', err);
@@ -259,7 +344,16 @@ async function bootstrap() {
     const d = dateInput.value;
     await loadAssignmentsForDate(d);
     buildTableFor(d);
+    
   };
+
+  // podpięcie przycisku 'Załaduj' — ustawiamy currentDate i ładujemy dane
+document.getElementById('loadDay').onclick = async () => {
+  const d = dateInput.value;
+  currentDate = d;                // aktualizujemy globalną datę dla realtime
+  await loadAssignmentsForDate(d);
+  buildTableFor(d);
+};
 
   await initApp();
 
