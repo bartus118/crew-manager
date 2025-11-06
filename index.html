@@ -56,10 +56,16 @@
     </div>
   </div>
 
-  <!-- Supabase SDK (poprawny CDN z gotowym bundle) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+   <!-- Supabase: import modułu i przypisz createClient do window.supabase -->
+  <script type="module">
+    // importujemy createClient z modułowej wersji biblioteki i wystawiamy go globalnie
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/module/index.js';
+    // wystaw w global scope, aby stare skrypty działały (nasze script.js używa window.supabase.createClient)
+    window.supabase = { createClient };
+    console.log('module supabase loaded and window.supabase.createClient set');
+  </script>
 
-  <!-- Twój skrypt aplikacji (musi ładować się po SDK) -->
+  <!-- Twój skrypt aplikacji (musi ładować się po wystawieniu window.supabase) -->
   <script src="script.js"></script>
 </body>
 </html>
