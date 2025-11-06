@@ -359,19 +359,31 @@ const setupAdminPanel = () => {
   adminLoginBtn.onclick = () => adminPanel.style.display = 'flex';
   closeAdmin.onclick = () => adminPanel.style.display = 'none';
 
-  adminLogin.onclick = async () => {
-    const p = document.getElementById('adminPass').value;
-    if (p === ADMIN_PASSWORD) {
-      isAdmin = true;
-      adminMsg.textContent = "Zalogowano.";
-      adminSection.style.display = 'block';
-      // refresh admin specific UI
-      await refreshAdminMachineList();
-    } else {
-      adminMsg.textContent = "Błędne hasło.";
-    }
-  };
+ adminLogin.onclick = async () => {
+  const p = document.getElementById('adminPass').value;
+  if (p === ADMIN_PASSWORD) {
+    isAdmin = true;
+    adminMsg.textContent = "Zalogowano.";
+    adminSection.style.display = 'block';
 
+    // odśwież listę maszyn w panelu admina
+    await refreshAdminMachineList();
+
+    // PRZED: tabela była zbudowana zanim isAdmin=true — musimy ją przerysować,
+    // żeby selecty statusu powstały jako enabled (selectStatus.disabled = !isAdmin)
+    try {
+      await loadMachines();                       // pobierz aktualną listę (może się zmieniła)
+      if (currentDate) {
+        await loadAssignmentsForDate(currentDate); // przeładuj przypisania dla bieżącej daty
+      }
+      buildTableFor(currentDate);                  // przerysuj tabelę — teraz isAdmin === true
+    } catch (err) {
+      console.error('Error refreshing UI after admin login', err);
+    }
+  } else {
+    adminMsg.textContent = "Błędne hasło.";
+  }
+};
   document.getElementById('adminExportEmpBtn').onclick = async () => {
     const { data, error } = await sb.from('employees').select('*');
     if (error) return alert('Błąd: ' + error.message);
