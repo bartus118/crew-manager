@@ -118,6 +118,10 @@ function buildTableFor(date) {
     const tr = document.createElement('tr');
     tr.dataset.machine = m.number;
 
+    const effectiveStatus = m.status || vals[1] || 'Produkcja';
+    const statusCls = statusClassFor(effectiveStatus);
+    if (statusCls) tr.classList.add(statusCls); //
+
     // STATUS CLASS (do użycia dla dwóch komórek)
     const effectiveStatus = m.status || vals[1] || 'Produkcja';
     const statusCls = statusClassFor(effectiveStatus);
