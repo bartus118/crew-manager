@@ -1,206 +1,109 @@
-body {
-  font-family: "Segoe UI", Arial, sans-serif;
-  background: #f4f6f8;
-  margin: 0;
-  padding: 0;
-}
+/* ===========================================================
+   Obramowania całego wiersza (kolory wg statusu)
+   - Zamieniamy border-collapse na 'separate', żeby obramowania
+     wierszy były widoczne i nie kolidowały z obramowaniami komórek.
+   - Ustawiamy odstęp między wierszami (vertical gap).
+   - Zamiast "border" używamy box-shadow dla ładniejszego efektu.
+   =========================================================== */
 
-.top-bar {
-  background: #2c3e50;
-  color: white;
-  padding: 10px 15px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.btn {
-  padding: 6px 10px;
-  border: none;
-  background: #0078d4;
-  color: white;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-.btn:hover { background: #005a9e; }
-.btn.danger { background: #b71c1c; }
-.btn.danger:hover { background: #8e0000; }
-
+/* 1) Ustawienia tabeli: użyj 'separate' i dodaj vertical gap */
 table {
-  width: 100%;
-  border-collapse: collapse;
+  /* wcześniej: border-collapse: collapse; */
+  border-collapse: separate; /* pozwala na obramowania wierszy */
+  border-spacing: 0 8px;     /* odstęp pionowy między wierszami */
   margin-top: 10px;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
+  width: 100%;
+  background: transparent; /* tło przeniesione do wierszy */
 }
 
-th {
-  background: #34495e;
-  color: white;
-  padding: 8px;
-  text-align: center;
-  font-weight: 600;
-  border-right: 2px solid #2c3e50;
+/* 2) Styl dla każdego wiersza: wygląd 'karty' (białe tło + zaokrąglenie) */
+tbody tr {
+  background: #ffffff;          /* biały panel wewnątrz obramowania */
+  border-radius: 8px;           /* zaokrąglone rogi "karty" */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04); /* lekki cień */
+  transition: box-shadow 0.15s, transform 0.12s;
 }
 
-td {
-  border: 1px solid #ddd;
-  padding: 6px;
-  text-align: center;
-  transition: background 0.2s;
+/* hover podkreślenie wiersza (delikatne powiększenie) */
+tbody tr:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
 }
 
-/* Oddzielenie grup stanowisk */
-th:nth-child(2), td:nth-child(2) {
-  border-right: 2px solid #aaa;
-}
-th:nth-child(5), td:nth-child(5) {
-  border-right: 2px solid #aaa;
-}
-th:nth-child(7), td:nth-child(7) {
-  border-right: 2px solid #aaa;
+/* 3) Kolorowe 'obramowania' realizowane przez box-shadow (zewnętrzny obrys) */
+/* Uwaga: używamy dwa poziomy shadow — pierwszy to kolor obramowania, drugi to delikatny cień. */
+
+tr.status-prod {
+  box-shadow:
+    0 0 0 3px rgba(10,166,74,0.18),   /* zewnętrzne kolorowe obramowanie (zielone) */
+    0 6px 18px rgba(0,0,0,0.06);      /* główny cień */
 }
 
-/* Kolory stanu komórki */
-.disabled {
-  background: #333;
+tr.status-konserwacja {
+  box-shadow:
+    0 0 0 3px rgba(43,123,255,0.18),  /* niebieskie obramowanie */
+    0 6px 18px rgba(0,0,0,0.06);
+}
+
+tr.status-rozruch {
+  box-shadow:
+    0 0 0 3px rgba(255,138,0,0.18),   /* pomarańcz */
+    0 6px 18px rgba(0,0,0,0.06);
+}
+
+tr.status-bufor {
+  box-shadow:
+    0 0 0 3px rgba(229,57,53,0.18),   /* czerwone */
+    0 6px 18px rgba(0,0,0,0.06);
+}
+
+tr.status-stop {
+  box-shadow:
+    0 0 0 3px rgba(0,0,0,0.6),        /* czarne, mocniejsze */
+    0 6px 18px rgba(0,0,0,0.06);
   color: #fff;
 }
 
-.empty-cell {
-  background: #fff7a1; /* żółty */
+/* 4) Dopasowanie komórek wewnątrz wiersza: usuwamy widoczność obramowań komórek na krawędzi,
+      żeby 'karta' wyglądała czysto (ale zachowujemy wewnętrzne separatory). */
+tbody tr td {
+  border: none;           /* usuwamy standardowe bordery wewnętrzne */
+  padding: 10px 12px;
+  background: transparent; /* tło białe jest już na tr */
+  vertical-align: middle;
 }
 
-.assigned-cell {
-  background: #ffffff;
-}
+/* Zostawiamy delikatne przerywane linie wewnątrz, jeśli chcesz - można je dodać osobno */
+/* Jeśli chcesz mieć delikatne pionowe separatory między grupami, zostaw poniższe: */
+th:nth-child(2), td:nth-child(2) { border-right: 2px solid #eee; }
+th:nth-child(5), td:nth-child(5) { border-right: 2px solid #eee; }
+th:nth-child(7), td:nth-child(7) { border-right: 2px solid #eee; }
 
-/* Hover efekt dla całego wiersza */
-tbody tr:hover {
-  background: #eaf4ff;
-}
-
-/* Modal */
-.modal {
-  display: none;
-  position: fixed;
+/* 5) Przywróć styl nagłówka tak, żeby wyglądał dobrze nad kartami */
+thead th {
+  background: #34495e;
+  color: #fff;
+  padding: 10px;
+  position: sticky;
   top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
-  justify-content: center;
-  align-items: center;
+  z-index: 2;
 }
 
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 6px;
-  width: 400px;
-  max-height: 80%;
-  overflow-y: auto;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-}
+/* 6) Uwaga: klasa .disabled/.empty-cell/.assigned-cell nadal działa.
+        Jeżeli chcesz, żeby komórki nieaktywne pozostały ciemne (jak wcześniej), zdefiniuj: */
+td.disabled { background: #333; color: #fff; border-radius: 6px; padding: 10px; }
+td.empty-cell { background: #fff7a1; border-radius: 6px; padding: 10px; }
+td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
 
-.employee-btn {
-  background: #0078d4;
-  color: white;
+/* 7) Jeśli chcesz, aby select w kolumnie 'Status' był bardziej dopasowany do karty: */
+td select {
+  min-width: 160px;
   padding: 6px;
-  margin: 4px 0;
-  border-radius: 4px;
-  text-align: center;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.employee-btn:hover {
-  background: #005a9e;
-}
-
-/* Panel admina */
-.admin-machine-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fff;
-  padding: 6px 8px;
-  margin: 3px 0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.drag-handle { cursor: move; }
-
-.admin-machine-list {
-  margin-top: 10px;
-  border: 1px solid #ccc;
   border-radius: 6px;
-  padding: 5px;
-  background: #f9f9f9;
-}
-
-#adminSection h4 {
-  border-bottom: 2px solid #0078d4;
-  padding-bottom: 4px;
-  margin-top: 15px;
-}
-
-input[type="password"], input[type="text"] {
-  padding: 5px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 100%;
-  margin-bottom: 5px;
+  background: white;
 }
 
-/* ===== status cell colors & borders ===== */
-/* tylko komórki Maszyna + Status będą dostawać te klasy */
-
-.status-prod { /* Produkcja - zielony */
-  background: #e6f9ea; /* jasna zieleń tła */
-  color: #034d18;
-  border: 2px solid #0aa64a; /* obramowanie w zieleni */
-  box-shadow: inset 0 -2px 0 rgba(10,166,74,0.06);
-}
-
-.status-konserwacja { /* Konserwacja - niebieski */
-  background: #e8f1ff;
-  color: #08366b;
-  border: 2px solid #2b7bff;
-  box-shadow: inset 0 -2px 0 rgba(43,123,255,0.06);
-}
-
-.status-rozruch { /* Rozruch - pomarańcz */
-  background: #fff3e6;
-  color: #7a3b00;
-  border: 2px solid #ff8a00;
-  box-shadow: inset 0 -2px 0 rgba(255,138,0,0.06);
-}
-
-.status-stop { /* Stop - czarne */
-  background: #222222;
-  color: #ffffff;
-  border: 2px solid #000000;
-  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.06);
-}
-
-.status-bufor { /* Bufor - czerwony */
-  background: #ffe9e9;
-  color: #7a0f0f;
-  border: 2px solid #e53935;
-  box-shadow: inset 0 -2px 0 rgba(229,57,53,0.06);
-}
-
-/* drobne dostrojenie: wyrównanie i minimalne paddingi dla pokolorowanych komórek */
-td.status-prod, td.status-konserwacja, td.status-rozruch, td.status-stop, td.status-bufor,
-td.status-prod > select, td.status-konserwacja > select, td.status-rozruch > select,
-td.status-stop > select, td.status-bufor > select {
-  padding: 8px;
-  border-radius: 6px;
-}
-
-/* upewnij się że nie stracimy .disabled / .empty-cell - wyższy priorytet dla statusowych klas */
-td.disabled { color: #fff !important; background: #333 !important; border: 1px solid #2a2a2a !important; }
+/* ===========================================================
+   KONIEC: obramowania całych wierszy
+   =========================================================== */
