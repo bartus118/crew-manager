@@ -5,65 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Crew Manager</title>
   <link rel="stylesheet" href="style.css">
-  <!-- stable CDN entry -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Ładowanie biblioteki Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 </head>
+
 <body>
-  <header class="top-bar">
-    <div class="brand">Crew Manager</div>
-    <div class="controls">
-      <input type="date" id="dateInput" class="date-input">
+  <div id="app">
+    <!-- Górny pasek z datą i przyciskami -->
+    <div class="top-bar">
+      <input type="date" id="dateInput">
       <button id="loadDay" class="btn">Załaduj</button>
-      <button id="exportDayBtn" class="btn outline">Eksportuj CSV</button>
+      <button id="exportDayBtn" class="btn">Eksportuj CSV</button>
       <button id="adminLoginBtn" class="btn">Panel administratora</button>
     </div>
-  </header>
 
-  <main class="container">
-    <section class="panel card">
-      <table>
-        <thead><tr id="theadRow"></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </section>
-  </main>
+    <!-- Główna tabela grafików -->
+    <table>
+      <thead><tr id="theadRow"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
 
-  <!-- Modal przypisania -->
+  <!-- Modal przypisania pracownika -->
   <div id="assignModal" class="modal">
     <div class="modal-content">
-      <button class="modal-close" id="assignClose">&times;</button>
       <h3 id="assignTitle"></h3>
       <p id="assignInfo"></p>
-      <div id="assignList" class="listbox"></div>
+      <div id="assignList"></div>
+      <button id="assignClose" class="btn">Zamknij</button>
     </div>
   </div>
 
-  <!-- Panel admina -->
+  <!-- Panel administratora -->
   <div id="adminPanel" class="modal">
-    <div class="modal-content admin-modal">
-      <button class="modal-close" id="adminCloseNoLogin">&times;</button>
+    <div class="modal-content">
       <h3>Panel administratora</h3>
-      <div class="admin-login">
-        <input type="password" id="adminPass" placeholder="Hasło administratora">
-        <div class="admin-login-actions">
-          <button id="adminLogin" class="btn">Zaloguj</button>
-          <button id="adminCloseNoLoginBtn" class="btn outline">Zamknij</button>
-        </div>
-        <p id="adminMsg" class="muted"></p>
-      </div>
+      <input type="password" id="adminPass" placeholder="Hasło administratora">
+      <button id="adminLogin" class="btn">Zaloguj</button>
+      <button id="adminCloseNoLogin" class="btn">Zamknij</button>
+      <p id="adminMsg"></p>
 
-      <div id="adminSection" style="display:none; margin-top:12px;">
+      <div id="adminSection" style="display:none; margin-top:10px;">
         <h4>Zarządzanie maszynami</h4>
-        <div class="row">
-          <input type="text" id="newMachineNumber" placeholder="Numer nowej maszyny">
-          <button id="addMachineBtn" class="btn">Dodaj</button>
-        </div>
-        <div id="machineListEditable" class="admin-machine-list card"></div>
-        <div class="row" style="margin-top:8px;">
-          <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
-          <button id="adminExportEmpBtn" class="btn outline">Eksportuj pracowników</button>
-          <button id="closeAdmin" class="btn danger">Zamknij</button>
-        </div>
+        <input type="text" id="newMachineNumber" placeholder="Numer nowej maszyny">
+        <button id="addMachineBtn" class="btn">Dodaj maszynę</button>
+        <div id="machineListEditable" class="admin-machine-list"></div>
+        <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
+
+        <h4>Dane</h4>
+        <button id="adminExportEmpBtn" class="btn">Eksportuj pracowników</button>
+        <button id="closeAdmin" class="btn danger">Zamknij panel</button>
       </div>
     </div>
   </div>

@@ -1,101 +1,87 @@
+/* === Ogólne ustawienia strony === */
 body {
-  font-family: "Segoe UI", Arial, sans-serif;
-  background: #f4f6f8;
+  font-family: Arial, sans-serif;
+  background: #f2f2f2;
   margin: 0;
   padding: 0;
 }
 
+/* Pasek górny (data, przyciski) */
 .top-bar {
-  background: #2c3e50;
+  background: #333;
   color: white;
-  padding: 10px 15px;
+  padding: 10px;
   display: flex;
-  align-items: center;
   gap: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  align-items: center;
 }
 
+/* === Przyciski === */
 .btn {
-  padding: 6px 10px;
+  padding: 6px 12px;
   border: none;
   background: #0078d4;
   color: white;
-  cursor: pointer;
   border-radius: 4px;
-  transition: background 0.2s;
+  cursor: pointer;
 }
-.btn:hover { background: #005a9e; }
-.btn.danger { background: #b71c1c; }
-.btn.danger:hover { background: #8e0000; }
+.btn:hover {
+  background: #005a9e;
+}
+.btn.danger {
+  background: #b02a37;
+}
+.btn.danger:hover {
+  background: #8b1e2a;
+}
 
+/* === Tabela === */
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
 }
-
-th {
-  background: #34495e;
-  color: white;
-  padding: 8px;
-  text-align: center;
-  font-weight: 600;
-  border-right: 2px solid #2c3e50;
-}
-
-td {
-  border: 1px solid #ddd;
+th, td {
+  border: 1px solid #ccc;
   padding: 6px;
   text-align: center;
-  transition: background 0.2s;
+}
+th {
+  background: #e0e0e0;
 }
 
-/* Oddzielenie grup stanowisk */
-th:nth-child(2), td:nth-child(2) {
-  border-right: 2px solid #aaa;
-}
-th:nth-child(5), td:nth-child(5) {
-  border-right: 2px solid #aaa;
-}
-th:nth-child(7), td:nth-child(7) {
-  border-right: 2px solid #aaa;
+/* === Kolory komórek === */
+.disabled { background: #333; color: white; }
+.empty-cell { background: #ffec99; }
+.assigned-cell { background: white; }
+
+/* === Obramowania całych wierszy wg statusu === */
+tr.status-prod { border: 3px solid #0aa64a; }        /* Produkcja – zielony */
+tr.status-konserwacja { border: 3px solid #2b7bff; } /* Konserwacja – niebieski */
+tr.status-rozruch { border: 3px solid #ff8a00; }     /* Rozruch – pomarańczowy */
+tr.status-bufor { border: 3px solid #e53935; }       /* Bufor – czerwony */
+tr.status-stop { border: 3px solid #000; }           /* Stop – czarny */
+
+/* Delikatne oddzielenie wierszy */
+tr + tr { border-top: 2px solid #ddd; }
+
+/* Statusy (komórki maszyna + status) */
+td.status-prod, td.status-konserwacja, td.status-rozruch, td.status-stop, td.status-bufor {
+  font-weight: 500;
+  border-radius: 6px;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.05);
 }
 
-/* Kolory stanu komórki */
-.disabled {
-  background: #333;
-  color: #fff;
-}
-
-.empty-cell {
-  background: #fff7a1; /* żółty */
-}
-
-.assigned-cell {
-  background: #ffffff;
-}
-
-/* Hover efekt dla całego wiersza */
-tbody tr:hover {
-  background: #eaf4ff;
-}
-
-/* Modal */
+/* === Modal przypisania === */
 .modal {
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   background: rgba(0,0,0,0.5);
   justify-content: center;
   align-items: center;
 }
-
 .modal-content {
   background: white;
   padding: 20px;
@@ -103,122 +89,24 @@ tbody tr:hover {
   width: 400px;
   max-height: 80%;
   overflow-y: auto;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
-.employee-btn {
-  background: #0078d4;
-  color: white;
-  padding: 6px;
-  margin: 4px 0;
-  border-radius: 4px;
-  text-align: center;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.employee-btn:hover {
-  background: #005a9e;
+/* === Ikony statusów === */
+.status-icon {
+  margin-right: 6px;
+  font-size: 1.1em;
+  vertical-align: middle;
 }
 
-/* Panel admina */
+/* === Panel administratora === */
 .admin-machine-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: #fff;
-  padding: 6px 8px;
+  padding: 5px;
   margin: 3px 0;
   border: 1px solid #ccc;
   border-radius: 4px;
 }
-
 .drag-handle { cursor: move; }
-
-.admin-machine-list {
-  margin-top: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 5px;
-  background: #f9f9f9;
-}
-
-#adminSection h4 {
-  border-bottom: 2px solid #0078d4;
-  padding-bottom: 4px;
-  margin-top: 15px;
-}
-
-input[type="password"], input[type="text"] {
-  padding: 5px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 100%;
-  margin-bottom: 5px;
-}
-
-/* Status icon styling */
-.status-icon {
-  margin-right: 8px;
-  font-size: 1.05em;
-  vertical-align: middle;
-  display: inline-block;
-  line-height: 1;
-}
-
-/* when icon is inside colored td keep spacing */
-td .status-icon { margin-left: 2px; }
-
-/* Slightly tighten the status select so icon sits nicely */
-td select {
-  min-width: 160px;
-  padding: 6px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: transparent;
-}
-
-/* === Full-row border highlight by status === */
-tr.status-prod {
-  border: 3px solid #0aa64a; /* zielony */
-}
-tr.status-konserwacja {
-  border: 3px solid #2b7bff; /* niebieski */
-}
-tr.status-rozruch {
-  border: 3px solid #ff8a00; /* pomarańczowy */
-}
-tr.status-stop {
-  border: 3px solid #000000; /* czarny */
-}
-tr.status-bufor {
-  border: 3px solid #e53935; /* czerwony */
-}
-
-/* wzmocnienie oddzielenia wierszy */
-tr + tr {
-  margin-top: 4px;
-  border-top: 2px solid #ddd;
-}
-
-/* zachowaj tła w Maszyna + Status */
-td.status-prod,
-td.status-konserwacja,
-td.status-rozruch,
-td.status-stop,
-td.status-bufor {
-  font-weight: 500;
-  border-radius: 6px;
-  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.05);
-}
-
-/* poprawka paddingów */
-tr td {
-  padding: 6px;
-}
-
-/* ikony przy statusach */
-.status-icon {
-  margin-right: 8px;
-  font-size: 1.1em;
-  vertical-align: middle;
-}

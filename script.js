@@ -1,95 +1,146 @@
-// improved script.js — admin panel fixed + UI tweaks + safe Supabase init
+/* ================================================================
+   Crew Manager — wersja z ikonami statusów i pełnym obramowaniem wierszy
+   Autor: ChatGPT + Bartek
+   Opis: Zarządzanie obsadą maszyn produkcyjnych, integracja z Supabase.
+================================================================ */
 
+/* ------------------------
+   Konfiguracja Supabase
+------------------------- */
 const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 
-let sb = null;
-let employees = [];
-let machines = [];
-let assignments = {};
-let dateInput, tbody, theadRow;
-let currentDate = null;
+let sb = null; // klient Supabase
 
+/* ------------------------
+   Dane robocze w pamięci
+------------------------- */
+let employees = [];     // lista pracowników
+let machines = [];      // lista maszyn
+let assignments = {};   // przypisania (wg dat)
+let currentDate = null; // bieżąca data
+let dateInput, tbody, theadRow;
+
+/* ------------------------
+   Definicja kolumn tabeli
+------------------------- */
 const COLUMNS = [
-  {key:'maszyna', title:'Maszyna'},
-  {key:'status', title:'Status'},
-  {key:'mechanik_focke', title:'Mechanik Focke'},
-  {key:'mechanik_protos', title:'Mechanik Protos'},
-  {key:'operator_focke', title:'Operator Focke'},
-  {key:'operator_protos', title:'Operator Protos'},
-  {key:'pracownik_pomocniczy', title:'Pracownik pomocniczy'},
-  {key:'filtry', title:'Filtry'},
-  {key:'inserty', title:'Inserty'}
+  { key: 'maszyna', title: 'Maszyna' },
+  { key: 'status', title: 'Status' },
+  { key: 'mechanik_focke', title: 'Mechanik Focke' },
+  { key: 'mechanik_protos', title: 'Mechanik Protos' },
+  { key: 'operator_focke', title: 'Operator Focke' },
+  { key: 'operator_protos', title: 'Operator Protos' },
+  { key: 'pracownik_pomocniczy', title: 'Pracownik pomocniczy' },
+  { key: 'filtry', title: 'Filtry' },
+  { key: 'inserty', title: 'Inserty' }
 ];
 
-const MACHINE_STATUSES = ['Produkcja','Produkcja + Filtry','Produkcja + Inserty','Produkcja + Filtry + Inserty','Konserwacja','Rozruch','Bufor','Stop'];
+/* ------------------------
+   Dostępne statusy maszyn
+------------------------- */
+const MACHINE_STATUSES = [
+  'Produkcja',
+  'Produkcja + Filtry',
+  'Produkcja + Inserty',
+  'Produkcja + Filtry + Inserty',
+  'Konserwacja',
+  'Rozruch',
+  'Bufor',
+  'Stop'
+];
 
+/* ------------------------
+   Mapowanie aktywnych ról
+   (dla każdego typu statusu)
+------------------------- */
 const STATUS_ACTIVE_ROLES = {
-  'Produkcja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
-  'Produkcja + Filtry': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry'],
-  'Produkcja + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','inserty'],
-  'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
-  'Konserwacja': [], 'Rozruch': ['mechanik_focke','mechanik_protos','pracownik_pomocniczy'],
-  'Bufor': ['operator_focke','operator_protos'], 'Stop': []
+  'Produkcja': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy'],
+  'Produkcja + Filtry': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry'],
+  'Produkcja + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'inserty'],
+  'Produkcja + Filtry + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry', 'inserty'],
+  'Konserwacja': [],
+  'Rozruch': ['mechanik_focke', 'mechanik_protos', 'pracownik_pomocniczy'],
+  'Bufor': ['operator_focke', 'operator_protos'],
+  'Stop': []
 };
 
-const DEFAULT_MACHINES = ['11','12','15','16','17','18','21','22','24','25','26','27','28','31','32','33','34','35','94','96'];
+/* ================================================================
+   ŁADOWANIE DANYCH Z SUPABASE
+================================================================ */
 
-function waitForSupabaseGlobal(timeoutMs = 8000){
-  return new Promise((resolve,reject)=>{
-    if(window.supabase && typeof window.supabase.createClient==='function') return resolve(window.supabase);
-    let waited=0; const iv=setInterval(()=>{
-      if(window.supabase && typeof window.supabase.createClient==='function'){ clearInterval(iv); return resolve(window.supabase); }
-      waited+=200; if(waited>=timeoutMs){ clearInterval(iv); return reject(new Error('Timeout waiting for Supabase SDK')); }
-    },200);
+/* Pobiera wszystkich pracowników */
+async function loadEmployees() {
+  const { data, error } = await sb.from('employees').select('*');
+  if (error) console.error('Błąd pobierania pracowników:', error);
+  employees = data || [];
+}
+
+/* Pobiera listę maszyn (domyślny widok) */
+async function loadMachines() {
+  const { data, error } = await sb
+    .from('machines')
+    .select('*')
+    .order('ord', { ascending: true })
+    .eq('default_view', true);
+  if (error) console.error('Błąd pobierania maszyn:', error);
+  machines = data || [];
+}
+
+/* Pobiera przypisania dla wybranego dnia */
+async function loadAssignmentsForDate(date) {
+  const { data, error } = await sb.from('assignments').select('*').eq('date', date);
+  if (error) console.error('Błąd pobierania przypisań:', error);
+
+  const map = {};
+  machines.forEach(m => {
+    map[m.number] = [m.number, m.status || 'Produkcja'];
+    for (let i = 2; i < COLUMNS.length; i++) map[m.number].push('');
   });
+
+  (data || []).forEach(a => {
+    const emp = employees.find(e => e.id === a.employee_id);
+    const idx = COLUMNS.findIndex(c => c.key === a.role);
+    if (idx > -1 && emp) map[a.machine_number][idx] = emp.name;
+  });
+  assignments[date] = map;
 }
 
-async function initSupabase(){
-  try{
-    await waitForSupabaseGlobal();
-    sb = window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-    console.log('Supabase ready');
-  }catch(e){
-    console.warn('Supabase not available, running in offline mode', e);
-    sb = null;
-  }
+/* ================================================================
+   FUNKCJE WIZUALNE (TABELA I STATUSY)
+================================================================ */
+
+/* Zwraca nazwę klasy CSS dla koloru statusu */
+function statusClassFor(s) {
+  if (!s) return '';
+  const norm = s.toLowerCase();
+  if (norm.includes('produkcja')) return 'status-prod';
+  if (norm.includes('konserwacja')) return 'status-konserwacja';
+  if (norm.includes('rozruch')) return 'status-rozruch';
+  if (norm.includes('bufor')) return 'status-bufor';
+  if (norm.includes('stop')) return 'status-stop';
+  return '';
 }
 
-/* data loaders */
-async function loadEmployees(){
-  if(!sb) return employees=[];
-  try{ const {data,error}=await sb.from('employees').select('*').order('name',{ascending:true}); if(error){ console.error(error); employees=[]; } else employees=data||[]; } catch(e){ console.error(e); employees=[]; }
-}
-async function loadMachines(){
-  if(!sb){ machines = DEFAULT_MACHINES.map((n,i)=>({number:n,ord:i+1,status:'Produkcja'})); return; }
-  try{ const {data,error}=await sb.from('machines').select('*').order('ord',{ascending:true}).eq('default_view',true); if(error){ console.error(error); machines=DEFAULT_MACHINES.map((n,i)=>({number:n,ord:i+1,status:'Produkcja'})); } else machines = (data && data.length)?data: DEFAULT_MACHINES.map((n,i)=>({number:n,ord:i+1,status:'Produkcja'})); } catch(e){ console.error(e); machines=DEFAULT_MACHINES.map((n,i)=>({number:n,ord:i+1,status:'Produkcja'})); }
-}
-async function loadAssignmentsForDate(date){
-  if(!date) return; if(!sb){ assignments[date]={}; return; }
-  try{ const {data,error}=await sb.from('assignments').select('*').eq('date',date); if(error){ console.error(error); assignments[date]={}; return; } const map={}; machines.forEach(m=>{ map[m.number]=[m.number,m.status||'Produkcja']; for(let i=2;i<COLUMNS.length;i++) map[m.number].push(''); }); (data||[]).forEach(a=>{ const emp = employees.find(e=>e.id===a.employee_id); const idx = COLUMNS.findIndex(c=>c.key===a.role); if(idx>-1){ if(!map[a.machine_number]){ const row=[a.machine_number,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[a.machine_number]=row; } if(emp) map[a.machine_number][idx]=emp.name; } }); assignments[date]=map; }catch(e){ console.error(e); assignments[date]={}; }
-}
-
-/* UI rendering */
-// helper: zwraca emoji (ikonki) dla statusu (unicode)
+/* Zwraca ikonkę Unicode dla statusu */
 function getStatusIcon(status) {
   if (!status) return '';
-  const s = String(status).toLowerCase();
+  const s = status.toLowerCase();
 
-  // produkcja z ewentualnymi dodatkami
   if (s.includes('produkcja')) {
     const extras = [];
-    if (s.includes('filtr')) extras.push('🧰');    // filtry
-    if (s.includes('insert') || s.includes('inser')) extras.push('📦'); // inserty
+    if (s.includes('filtr')) extras.push('🧰');
+    if (s.includes('insert')) extras.push('📦');
     return '🟢' + (extras.length ? extras.join('') : '');
   }
   if (s.includes('konserwacja')) return '🔧';
   if (s.includes('rozruch')) return '🟠⚡';
   if (s.includes('bufor')) return '🔴⏸️';
   if (s.includes('stop')) return '⛔';
-  return ''; // default
+  return '';
 }
 
+/* Buduje tabelę dla wybranego dnia */
 function buildTableFor(date) {
   const dateData = assignments[date] || {};
   theadRow.innerHTML = '';
@@ -101,18 +152,6 @@ function buildTableFor(date) {
 
   tbody.innerHTML = '';
 
-  // helper: map status string -> css class
-  const statusClassFor = (s) => {
-    if (!s) return '';
-    const norm = String(s).toLowerCase();
-    if (norm.includes('produkcja')) return 'status-prod';
-    if (norm.includes('konserwacja')) return 'status-konserwacja';
-    if (norm.includes('rozruch')) return 'status-rozruch';
-    if (norm.includes('stop')) return 'status-stop';
-    if (norm.includes('bufor')) return 'status-bufor';
-    return '';
-  };
-
   machines.forEach(m => {
     const vals = dateData[m.number] || [m.number, m.status || 'Produkcja', '', '', '', '', '', '', ''];
     const tr = document.createElement('tr');
@@ -120,189 +159,154 @@ function buildTableFor(date) {
 
     const effectiveStatus = m.status || vals[1] || 'Produkcja';
     const statusCls = statusClassFor(effectiveStatus);
-    if (statusCls) tr.classList.add(statusCls); //
-
-    // STATUS CLASS (do użycia dla dwóch komórek)
-    const effectiveStatus = m.status || vals[1] || 'Produkcja';
-    const statusCls = statusClassFor(effectiveStatus);
+    if (statusCls) tr.classList.add(statusCls); // 🔹 kolor obramowania całego wiersza
     const statusIcon = getStatusIcon(effectiveStatus);
 
-    // 1) Maszyna (numer) — kolor/obramowanie wg statusu
+    /* --- kolumna 1: numer maszyny --- */
     const tdNum = document.createElement('td');
-    // pokaż też maleńką ikonkę obok numeru (opcjonalnie)
-    const spanNumIcon = document.createElement('span');
-    spanNumIcon.className = 'status-icon';
-    spanNumIcon.textContent = statusIcon;
-    tdNum.appendChild(spanNumIcon);
-    const spanNumText = document.createElement('span');
-    spanNumText.textContent = m.number;
-    tdNum.appendChild(spanNumText);
-
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'status-icon';
+    iconSpan.textContent = statusIcon;
+    tdNum.appendChild(iconSpan);
+    const textSpan = document.createElement('span');
+    textSpan.textContent = m.number;
+    tdNum.appendChild(textSpan);
     if (statusCls) tdNum.classList.add(statusCls);
     tr.appendChild(tdNum);
 
-    // 2) Status — ikonka + select (ikonka po lewej)
+    /* --- kolumna 2: status maszyny (z ikoną + select) --- */
     const tdStatus = document.createElement('td');
     if (statusCls) tdStatus.classList.add(statusCls);
+    const statusIconSpan = document.createElement('span');
+    statusIconSpan.className = 'status-icon';
+    statusIconSpan.textContent = statusIcon;
+    tdStatus.appendChild(statusIconSpan);
 
-    const spanIcon = document.createElement('span');
-    spanIcon.className = 'status-icon';
-    spanIcon.textContent = statusIcon;
-    tdStatus.appendChild(spanIcon);
-
-    const selectStatus = document.createElement('select');
+    const sel = document.createElement('select');
     MACHINE_STATUSES.forEach(st => {
       const opt = document.createElement('option');
       opt.value = st;
       opt.textContent = st;
-      if (effectiveStatus === st) opt.selected = true;
-      selectStatus.appendChild(opt);
+      if (st === effectiveStatus) opt.selected = true;
+      sel.appendChild(opt);
     });
-    selectStatus.onchange = async (e) => {
+
+    // po zmianie statusu — zapis do bazy i odświeżenie tabeli
+    sel.onchange = async e => {
       const newStatus = e.target.value;
-      // update local model
       m.status = newStatus;
-      // update DB if sb available
-      if (sb) {
-        try {
-          const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-          if (error) console.error('Failed to update machine status', error);
-        } catch (err) { console.error(err); }
-      }
-      // rebuild to apply new colors & icons
+      const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
+      if (error) console.error('Błąd zapisu statusu:', error);
       await loadAssignmentsForDate(date);
       buildTableFor(date);
     };
 
-    tdStatus.appendChild(selectStatus);
+    tdStatus.appendChild(sel);
     tr.appendChild(tdStatus);
 
-    // 3+) pozostałe kolumny: status-dependent interactivity + kolorowanie pustych/assigned/disabled
-    COLUMNS.slice(2).forEach((col, i) => {
-      const idx = i + 2; // index in vals
+    /* --- pozostałe kolumny --- */
+    COLUMNS.slice(2).forEach(col => {
       const td = document.createElement('td');
-      const roleKey = col.key;
-      const activeRoles = STATUS_ACTIVE_ROLES[m.status || effectiveStatus || 'Produkcja'] || [];
-      const isActive = activeRoles.includes(roleKey);
-      const cellValue = vals[idx] || '';
+      const active = (STATUS_ACTIVE_ROLES[m.status || 'Produkcja'] || []).includes(col.key);
+      const val = vals[COLUMNS.findIndex(c => c.key === col.key)] || '';
 
-      td.classList.remove('disabled', 'empty-cell', 'assigned-cell');
-
-      if (!isActive) {
-        td.classList.add('disabled'); // czarne
-        td.textContent = cellValue || '';
+      if (!active) {
+        td.classList.add('disabled');
+        td.textContent = val || '';
       } else {
-        if (!cellValue) {
-          td.classList.add('empty-cell'); // żółte
-          td.textContent = '';
-        } else {
-          td.classList.add('assigned-cell'); // białe
-          td.textContent = cellValue;
-        }
-
-        td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key, idx));
+        if (!val) td.classList.add('empty-cell');
+        else td.classList.add('assigned-cell');
+        td.textContent = val;
+        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key));
       }
-
       tr.appendChild(td);
     });
 
     tbody.appendChild(tr);
   });
-
-  // Also show any machines that have assignments for this date but are not in default view
-  Object.keys(dateData).forEach(num => {
-    if (!machines.find(mm => mm.number === num)) {
-      const vals = dateData[num];
-      const tr = document.createElement('tr');
-      tr.dataset.machine = num;
-
-      const tdNum = document.createElement('td');
-      tdNum.textContent = num + ' (inny)';
-      tr.appendChild(tdNum);
-
-      const tdStatus = document.createElement('td');
-      tdStatus.textContent = '—';
-      tr.appendChild(tdStatus);
-
-      COLUMNS.slice(2).forEach((col, i) => {
-        const idx = i + 2;
-        const td = document.createElement('td');
-        const cellValue = vals[idx] || '';
-        if (!cellValue) {
-          td.classList.add('empty-cell');
-          td.textContent = '';
-        } else {
-          td.classList.add('assigned-cell');
-          td.textContent = cellValue;
-        }
-        td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, num, col.key, idx));
-        tr.appendChild(td);
-      });
-
-      tbody.appendChild(tr);
-    }
-  });
 }
 
+/* ================================================================
+   PRZYPISYWANIE PRACOWNIKÓW
+================================================================ */
 
-/* assignments */
-async function saveAssignment(date,machine,role,empId){
-  if(!sb){ const map = assignments[date]||{}; map[machine]=map[machine]||[machine,'Produkcja','','','','','','','']; const idx=COLUMNS.findIndex(c=>c.key===role); if(idx>-1) map[machine][idx]=empId?(employees.find(e=>e.id===empId)?.name||'USER'):''; assignments[date]=map; buildTableFor(date); return; }
-  try{ await sb.from('assignments').delete().eq('date',date).eq('machine_number',machine).eq('role',role); if(empId) await sb.from('assignments').insert([{date,machine_number:machine,role,employee_id:empId}]); await loadAssignmentsForDate(date); buildTableFor(date); }catch(e){console.error(e);} }
+/* Zapisuje przypisanie (lub usuwa) */
+async function saveAssignment(date, machine, role, empId) {
+  await sb.from('assignments').delete().eq('date', date).eq('machine_number', machine).eq('role', role);
+  if (empId)
+    await sb.from('assignments').insert([{ date, machine_number: machine, role, employee_id: empId }]);
+  await loadAssignmentsForDate(date);
+  buildTableFor(date);
+}
 
-/* modal assign */
-let assignModal,assignTitle,assignInfo,assignList;
-function setupAssignModal(){ assignModal=document.getElementById('assignModal'); assignTitle=document.getElementById('assignTitle'); assignInfo=document.getElementById('assignInfo'); assignList=document.getElementById('assignList'); document.getElementById('assignClose').addEventListener('click',()=>assignModal.style.display='none'); assignModal.addEventListener('click',(e)=>{ if(e.target===assignModal) assignModal.style.display='none'; }); }
-function openAssignModal(date,machine,roleKey){ assignModal.style.display='flex'; assignTitle.textContent=`Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machine})`; assignInfo.textContent='Kliknij, aby przypisać pracownika.'; assignList.innerHTML=''; const list=employees.filter(e=>(e.roles||[]).includes(roleKey)); list.forEach(emp=>{ const b=document.createElement('div'); b.className='employee-btn'; b.textContent=emp.name+(emp.bu?(' · '+emp.bu):''); b.onclick=async()=>{ await saveAssignment(date,machine,roleKey,emp.id); assignModal.style.display='none'; }; assignList.appendChild(b); }); const clear=document.createElement('button'); clear.className='btn outline'; clear.textContent='Wyczyść przypisanie'; clear.onclick=async()=>{ await saveAssignment(date,machine,roleKey,null); assignModal.style.display='none'; }; assignList.appendChild(clear); }
+/* Modal przypisywania pracownika */
+let assignModal, assignTitle, assignList;
 
-/* admin */
-function setupAdminPanel(){
-  const adminPanel=document.getElementById('adminPanel');
-  const adminLoginBtn=document.getElementById('adminLoginBtn');
-  const adminLogin=document.getElementById('adminLogin');
-  const adminMsg=document.getElementById('adminMsg');
-  const adminSection=document.getElementById('adminSection');
-  const adminCloseNoLogin=document.getElementById('adminCloseNoLogin');
-  const adminCloseNoLoginBtn=document.getElementById('adminCloseNoLoginBtn');
-  const closeAdmin=document.getElementById('closeAdmin');
+function setupAssignModal() {
+  assignModal = document.getElementById('assignModal');
+  assignTitle = document.getElementById('assignTitle');
+  assignList = document.getElementById('assignList');
+  document.getElementById('assignClose').onclick = () => (assignModal.style.display = 'none');
+}
 
-  adminLoginBtn.onclick=()=>adminPanel.style.display='flex';
-  adminCloseNoLogin.addEventListener('click',()=>adminPanel.style.display='none');
-  adminCloseNoLoginBtn.addEventListener('click',()=>adminPanel.style.display='none');
-  adminPanel.addEventListener('click',(e)=>{ if(e.target===adminPanel) adminPanel.style.display='none'; });
+/* Otwiera modal z listą dostępnych pracowników */
+function openAssignModal(date, machine, roleKey) {
+  assignModal.style.display = 'flex';
+  assignTitle.textContent = `Przypisz ${roleKey} (Maszyna ${machine})`;
+  assignList.innerHTML = '';
 
-  adminLogin.onclick=async()=>{
-    const p=document.getElementById('adminPass').value;
-    if(p==='admin123'){ adminSection.style.display='block'; adminMsg.textContent='Zalogowano.'; await refreshAdminMachineList(); } else adminMsg.textContent='Błędne hasło.';
+  employees
+    .filter(e => (e.roles || []).includes(roleKey))
+    .forEach(emp => {
+      const b = document.createElement('div');
+      b.className = 'employee-btn';
+      b.textContent = emp.name;
+      b.onclick = async () => {
+        await saveAssignment(date, machine, roleKey, emp.id);
+        assignModal.style.display = 'none';
+      };
+      assignList.appendChild(b);
+    });
+
+  const clr = document.createElement('button');
+  clr.textContent = 'Wyczyść';
+  clr.className = 'btn';
+  clr.onclick = async () => {
+    await saveAssignment(date, machine, roleKey, null);
+    assignModal.style.display = 'none';
   };
-
-  document.getElementById('addMachineBtn').onclick=async()=>{
-    const num=document.getElementById('newMachineNumber').value.trim(); if(!num) return alert('Podaj numer maszyny');
-    if(!sb){ machines.push({number:num,ord:machines.length+1,status:'Produkcja'}); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); return; }
-    try{ const {data:cur} = await sb.from('machines').select('ord').order('ord',{ascending:false}).limit(1).maybeSingle(); const nextOrd = cur?.ord?cur.ord+1:1; const {error} = await sb.from('machines').insert([{number:num,ord:nextOrd,default_view:true,status:'Produkcja'}]); if(error) return alert('Błąd: '+error.message); document.getElementById('newMachineNumber').value=''; await loadMachines(); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); }catch(e){console.error(e);} };
-
-  document.getElementById('saveMachineOrderBtn').onclick=async()=>{ const box=document.getElementById('machineListEditable'); const rows=Array.from(box.querySelectorAll('.admin-machine-row')); for(let i=0;i<rows.length;i++){ const num=rows[i].dataset.number; if(!sb) continue; await sb.from('machines').update({ord:i+1,default_view:true}).eq('number',num); } await loadMachines(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); alert('Zapisano kolejność jako widok domyślny.'); };
-
-  document.getElementById('closeAdmin').onclick=()=>{ adminPanel.style.display='none'; };
-
+  assignList.appendChild(clr);
 }
 
-async function refreshAdminMachineList(){
-  const box=document.getElementById('machineListEditable'); box.innerHTML='';
-  if(!sb){ machines.forEach(m=>{ const row=document.createElement('div'); row.className='admin-machine-row'; row.dataset.number=m.number; row.innerHTML=`<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine">Usuń</button></div>`; box.appendChild(row); }); } else { try{ const {data} = await sb.from('machines').select('*').order('ord',{ascending:true}); (data||[]).forEach(m=>{ const row=document.createElement('div'); row.className='admin-machine-row'; row.dataset.number=m.number; row.innerHTML=`<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine">Usuń</button></div>`; box.appendChild(row); }); }catch(e){console.error(e);} }
-  box.querySelectorAll('.remove-machine').forEach(btn=>{ btn.onclick=async(e)=>{ const num=e.target.closest('.admin-machine-row').dataset.number; if(!confirm('Usunąć maszynę '+num+'?')) return; if(!sb){ machines = machines.filter(mm=>mm.number!==num); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); return; } await sb.from('machines').delete().eq('number',num); await loadMachines(); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); }; });
-  let dragSrc=null; box.querySelectorAll('.admin-machine-row').forEach(item=>{ item.draggable=true; item.addEventListener('dragstart',(e)=>{ dragSrc=item; }); item.addEventListener('dragover',(e)=>e.preventDefault()); item.addEventListener('drop',(e)=>{ e.preventDefault(); if(dragSrc && dragSrc!==item) box.insertBefore(dragSrc,item.nextSibling); }); });
+/* ================================================================
+   INICJALIZACJA APLIKACJI
+================================================================ */
+async function bootstrap() {
+  await new Promise(r => (document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', r) : r()));
+  dateInput = document.getElementById('dateInput');
+  tbody = document.getElementById('tbody');
+  theadRow = document.getElementById('theadRow');
+  dateInput.value = new Date().toISOString().slice(0, 10);
+
+  setupAssignModal();
+
+  // utworzenie klienta Supabase
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ładowanie danych i renderowanie tabeli
+  await loadEmployees();
+  await loadMachines();
+  currentDate = dateInput.value;
+  await loadAssignmentsForDate(currentDate);
+  buildTableFor(currentDate);
+
+  // przycisk "Załaduj"
+  document.getElementById('loadDay').onclick = async () => {
+    currentDate = dateInput.value;
+    await loadAssignmentsForDate(currentDate);
+    buildTableFor(currentDate);
+  };
 }
 
-async function refreshMainTable(){ await loadMachines(); if(currentDate) await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); }
-
-async function bootstrap(){
-  await new Promise(r=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',r):r()); dateInput=document.getElementById('dateInput'); tbody=document.getElementById('tbody'); theadRow=document.getElementById('theadRow'); dateInput.value=new Date().toISOString().slice(0,10);
-  setupAssignModal(); setupAdminPanel(); await initSupabase(); await loadEmployees(); await loadMachines(); currentDate = dateInput.value; await loadAssignmentsForDate(currentDate); buildTableFor(currentDate);
-  document.getElementById('loadDay').onclick=async()=>{ currentDate = dateInput.value; await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); };
-  const exportBtn=document.getElementById('exportDayBtn'); if(exportBtn) exportBtn.onclick=()=>{ const d=currentDate||dateInput.value; const data=assignments[d]||{}; const headers=['Data','Maszyna','Status',...COLUMNS.slice(2).map(c=>c.title)]; const rows=[headers.join(',')]; const machineList = machines.length?machines:Object.keys(data).map(k=>({number:k})); machineList.forEach(m=>{ const num=m.number||m; const vals=data[num]||[num,'Produkcja','','','','','','','']; rows.push([d,num,vals[1],...vals.slice(2)].join(',')); }); const blob=new Blob([rows.join('\n')],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`assignments-${d}.csv`; a.click(); };
-}
-
+/* Uruchomienie aplikacji */
 bootstrap();
