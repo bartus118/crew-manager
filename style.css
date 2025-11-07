@@ -215,3 +215,95 @@ td:first-child { font-weight: 700; }
   #app { padding: 0 8px; }
   table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+/* ================================================================
+   🔧 Naprawa modali (panel admina i przypisywanie pracowników)
+   — wersja dopasowana do Twojego układu
+================================================================ */
+
+/* Ogólny wygląd tła modala — półprzezroczyste tło na całą stronę */
+#assignModal,
+#adminPanel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);  /* lekko przyciemnione tło */
+  display: none;                    /* ukryte domyślnie */
+  align-items: center;              /* wyśrodkowanie pionowe */
+  justify-content: center;          /* wyśrodkowanie poziome */
+  z-index: 9999;                    /* ponad wszystkim */
+}
+
+/* Wnętrze okna modala */
+#assignModal .modal-content,
+#adminPanel .modal-content,
+#adminPanel .modal-box {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+  animation: fadeInModal 0.25s ease-out;
+}
+
+/* Prosty efekt wjazdu */
+@keyframes fadeInModal {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Nagłówek modala (np. tytuł przypisania) */
+#assignTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+/* Lista pracowników w modalu przypisania */
+#assignList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* Przyciski pracowników (ładne karty do kliknięcia) */
+.employee-btn {
+  background: #f4f6fc;
+  border: 1px solid #d4dff0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.employee-btn:hover {
+  background: #e3eaff;
+}
+
+/* Przycisk zamykania (krzyżyk lub „Zamknij”) */
+#assignClose,
+#closeAdmin,
+#adminCloseNoLogin {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 18px;
+  color: #444;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Treść w panelu admina */
+#adminSection {
+  margin-top: 10px;
+}
+
+/* Zapobieganie przewijaniu tła, gdy modal otwarty */
+body.modal-open {
+  overflow: hidden;
+}
