@@ -71,21 +71,146 @@ async function loadAssignmentsForDate(date){
 }
 
 /* UI rendering */
-function buildTableFor(date){
-  const dateData = assignments[date]||{};
-  theadRow.innerHTML=''; COLUMNS.forEach(c=>{ const th=document.createElement('th'); th.textContent=c.title; theadRow.appendChild(th); });
-  tbody.innerHTML='';
-  machines.forEach(m=>{
-    const vals = dateData[m.number] || [m.number,m.status||'Produkcja','','','','','','',''];
-    const tr=document.createElement('tr'); tr.dataset.machine=m.number;
-    const tdNum=document.createElement('td'); tdNum.textContent=m.number; tr.appendChild(tdNum);
-    const tdStatus=document.createElement('td'); const sel=document.createElement('select'); MACHINE_STATUSES.forEach(st=>{ const o=document.createElement('option'); o.value=st; o.textContent=st; if((m.status||'Produkcja')===st) o.selected=true; sel.appendChild(o); }); sel.onchange=async(e)=>{ const newStatus=e.target.value; if(!sb){ m.status=newStatus; await loadAssignmentsForDate(date); buildTableFor(date); return; } try{ const {error}=await sb.from('machines').update({status:newStatus}).eq('number',m.number); if(error) return console.error(error); m.status=newStatus; await loadAssignmentsForDate(date); buildTableFor(date); }catch(err){console.error(err);} }; tdStatus.appendChild(sel); tr.appendChild(tdStatus);
-    COLUMNS.slice(2).forEach((col,i)=>{ const idx=i+2; const td=document.createElement('td'); const active = (STATUS_ACTIVE_ROLES[m.status||'Produkcja']||[]).includes(col.key); const v = vals[idx]||''; td.classList.remove('disabled','empty-cell','assigned-cell'); if(!active){ td.classList.add('disabled'); td.textContent=v||''; } else { if(!v) td.classList.add('empty-cell'); else td.classList.add('assigned-cell'); td.textContent=v; td.style.cursor='pointer'; td.addEventListener('dblclick',()=>openAssignModal(date,m.number,col.key)); } tr.appendChild(td); });
+function buildTableFor(date) {
+  const dateData = assignments[date] || {};
+  theadRow.innerHTML = '';
+  COLUMNS.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c.title;
+    theadRow.appendChild(th);
+  });
+
+  tbody.innerHTML = '';
+
+  // helper: map status string -> css class
+  const statusClassFor = (s) => {
+    if (!s) return '';
+    const norm = String(s).toLowerCase();
+    if (norm.includes('produkcja')) return 'status-prod';
+    if (norm.includes('konserwacja')) return 'status-konserwacja';
+    if (norm.includes('rozruch')) return 'status-rozruch';
+    if (norm.includes('stop')) return 'status-stop';
+    if (norm.includes('bufor')) return 'status-bufor';
+    return '';
+  };
+
+  machines.forEach(m => {
+    const vals = dateData[m.number] || [m.number, m.status || 'Produkcja', '', '', '', '', '', '', ''];
+    const tr = document.createElement('tr');
+    tr.dataset.machine = m.number;
+
+    // STATUS CLASS (do użycia dla dwóch komórek)
+    const statusCls = statusClassFor(m.status || vals[1] || 'Produkcja');
+
+    // 1) Maszyna (numer) — kolor/obramowanie wg statusu
+    const tdNum = document.createElement('td');
+    tdNum.textContent = m.number;
+    if (statusCls) tdNum.classList.add(statusCls);
+    tr.appendChild(tdNum);
+
+    // 2) Status — select lub text — także kolorowany
+    const tdStatus = document.createElement('td');
+    // jeśli w Twoim kodzie status jest selectem (dla edycji) — zachowujemy to
+    const selectStatus = document.createElement('select');
+    MACHINE_STATUSES.forEach(st => {
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      if ((m.status || vals[1] || 'Produkcja') === st) opt.selected = true;
+      selectStatus.appendChild(opt);
+    });
+    // when status changes -> update machine.status and re-render (keeps DB update if sb present)
+    selectStatus.onchange = async (e) => {
+      const newStatus = e.target.value;
+      // Update local model first
+      m.status = newStatus;
+      // update DB if sb is available
+      if (sb) {
+        try {
+          const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
+          if (error) console.error('Failed to update machine status', error);
+        } catch (err) { console.error(err); }
+      }
+      // rebuild to apply new colors
+      await loadAssignmentsForDate(date);
+      buildTableFor(date);
+    };
+    // apply class to tdStatus (and to select container)
+    tdStatus.appendChild(selectStatus);
+    if (statusCls) tdStatus.classList.add(statusCls);
+    tr.appendChild(tdStatus);
+
+    // 3+) pozostałe kolumny: status-dependent interactivity + kolorowanie pustych/assigned/disabled
+    COLUMNS.slice(2).forEach((col, i) => {
+      const idx = i + 2; // index in vals
+      const td = document.createElement('td');
+      const roleKey = col.key;
+      const activeRoles = STATUS_ACTIVE_ROLES[m.status || 'Produkcja'] || [];
+      const isActive = activeRoles.includes(roleKey);
+      const cellValue = vals[idx] || '';
+
+      // reset classes
+      td.classList.remove('disabled', 'empty-cell', 'assigned-cell');
+
+      if (!isActive) {
+        td.classList.add('disabled'); // czarne
+        td.textContent = cellValue || '';
+      } else {
+        if (!cellValue) {
+          td.classList.add('empty-cell'); // żółte
+          td.textContent = '';
+        } else {
+          td.classList.add('assigned-cell'); // białe
+          td.textContent = cellValue;
+        }
+
+        // interactive only when active
+        td.style.cursor = 'pointer';
+        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key, idx));
+      }
+
+      tr.appendChild(td);
+    });
+
     tbody.appendChild(tr);
   });
-  // extra machines not in default view
-  Object.keys(dateData).forEach(num=>{ if(!machines.find(mm=>mm.number===num)){ const vals=dateData[num]; const tr=document.createElement('tr'); tr.dataset.machine=num; const tdNum=document.createElement('td'); tdNum.textContent=num+' (inny)'; tr.appendChild(tdNum); const tdStatus=document.createElement('td'); tdStatus.textContent='—'; tr.appendChild(tdStatus); COLUMNS.slice(2).forEach((col,i)=>{ const td=document.createElement('td'); const cellVal=vals[i+2]||''; if(!cellVal) td.classList.add('empty-cell'); else td.classList.add('assigned-cell'); td.textContent=cellVal; td.style.cursor='pointer'; td.addEventListener('dblclick',()=>openAssignModal(date,num,col.key)); tr.appendChild(td); }); tbody.appendChild(tr); } });
+
+  // Show any machines that have assignments for this date but are not in default view (kept unchanged)
+  Object.keys(dateData).forEach(num => {
+    if (!machines.find(mm => mm.number === num)) {
+      const vals = dateData[num];
+      const tr = document.createElement('tr');
+      tr.dataset.machine = num;
+
+      const tdNum = document.createElement('td');
+      tdNum.textContent = num + ' (inny)';
+      tr.appendChild(tdNum);
+
+      const tdStatus = document.createElement('td');
+      tdStatus.textContent = '—';
+      tr.appendChild(tdStatus);
+
+      COLUMNS.slice(2).forEach((col, i) => {
+        const idx = i + 2;
+        const td = document.createElement('td');
+        const cellValue = vals[idx] || '';
+        if (!cellValue) {
+          td.classList.add('empty-cell');
+          td.textContent = '';
+        } else {
+          td.classList.add('assigned-cell');
+          td.textContent = cellValue;
+        }
+        td.style.cursor = 'pointer';
+        td.addEventListener('dblclick', () => openAssignModal(date, num, col.key, idx));
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+    }
+  });
 }
+
 
 /* assignments */
 async function saveAssignment(date,machine,role,empId){

@@ -155,3 +155,52 @@ input[type="password"], input[type="text"] {
   width: 100%;
   margin-bottom: 5px;
 }
+
+/* ===== status cell colors & borders ===== */
+/* tylko komórki Maszyna + Status będą dostawać te klasy */
+
+.status-prod { /* Produkcja - zielony */
+  background: #e6f9ea; /* jasna zieleń tła */
+  color: #034d18;
+  border: 2px solid #0aa64a; /* obramowanie w zieleni */
+  box-shadow: inset 0 -2px 0 rgba(10,166,74,0.06);
+}
+
+.status-konserwacja { /* Konserwacja - niebieski */
+  background: #e8f1ff;
+  color: #08366b;
+  border: 2px solid #2b7bff;
+  box-shadow: inset 0 -2px 0 rgba(43,123,255,0.06);
+}
+
+.status-rozruch { /* Rozruch - pomarańcz */
+  background: #fff3e6;
+  color: #7a3b00;
+  border: 2px solid #ff8a00;
+  box-shadow: inset 0 -2px 0 rgba(255,138,0,0.06);
+}
+
+.status-stop { /* Stop - czarne */
+  background: #222222;
+  color: #ffffff;
+  border: 2px solid #000000;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.06);
+}
+
+.status-bufor { /* Bufor - czerwony */
+  background: #ffe9e9;
+  color: #7a0f0f;
+  border: 2px solid #e53935;
+  box-shadow: inset 0 -2px 0 rgba(229,57,53,0.06);
+}
+
+/* drobne dostrojenie: wyrównanie i minimalne paddingi dla pokolorowanych komórek */
+td.status-prod, td.status-konserwacja, td.status-rozruch, td.status-stop, td.status-bufor,
+td.status-prod > select, td.status-konserwacja > select, td.status-rozruch > select,
+td.status-stop > select, td.status-bufor > select {
+  padding: 8px;
+  border-radius: 6px;
+}
+
+/* upewnij się że nie stracimy .disabled / .empty-cell - wyższy priorytet dla statusowych klas */
+td.disabled { color: #fff !important; background: #333 !important; border: 1px solid #2a2a2a !important; }
