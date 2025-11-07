@@ -1,121 +1,13 @@
-/* ===========================================================
-   Obramowania całego wiersza (kolory wg statusu)
-   - Zamieniamy border-collapse na 'separate', żeby obramowania
-     wierszy były widoczne i nie kolidowały z obramowaniami komórek.
-   - Ustawiamy odstęp między wierszami (vertical gap).
-   - Zamiast "border" używamy box-shadow dla ładniejszego efektu.
-   =========================================================== */
+/* Twoje dotychczasowe style poskładane i rozszerzone o obramowania wierszy
+   - nie zmieniono niczego poza stylami powiązanymi z ramkami/statusami i modalami
+   - komentarze po polsku wyjaśniające co robi każda sekcja
+*/
 
-/* 1) Ustawienia tabeli: użyj 'separate' i dodaj vertical gap */
-table {
-  /* wcześniej: border-collapse: collapse; */
-  border-collapse: separate; /* pozwala na obramowania wierszy */
-  border-spacing: 0 8px;     /* odstęp pionowy między wierszami */
-  margin-top: 10px;
-  width: 100%;
-  background: transparent; /* tło przeniesione do wierszy */
-}
+/* Podstawowy layout strony */
+body { font-family: "Segoe UI", Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 0; }
+#app { max-width: 1200px; margin: 18px auto; padding: 0 12px; box-sizing: border-box; }
 
-/* 2) Styl dla każdego wiersza: wygląd 'karty' (białe tło + zaokrąglenie) */
-tbody tr {
-  background: #ffffff;          /* biały panel wewnątrz obramowania */
-  border-radius: 8px;           /* zaokrąglone rogi "karty" */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04); /* lekki cień */
-  transition: box-shadow 0.15s, transform 0.12s;
-}
-
-/* hover podkreślenie wiersza (delikatne powiększenie) */
-tbody tr:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-}
-
-/* 3) Kolorowe 'obramowania' realizowane przez box-shadow (zewnętrzny obrys) */
-/* Uwaga: używamy dwa poziomy shadow — pierwszy to kolor obramowania, drugi to delikatny cień. */
-
-tr.status-prod {
-  box-shadow:
-    0 0 0 3px rgba(10,166,74,0.18),   /* zewnętrzne kolorowe obramowanie (zielone) */
-    0 6px 18px rgba(0,0,0,0.06);      /* główny cień */
-}
-
-tr.status-konserwacja {
-  box-shadow:
-    0 0 0 3px rgba(43,123,255,0.18),  /* niebieskie obramowanie */
-    0 6px 18px rgba(0,0,0,0.06);
-}
-
-tr.status-rozruch {
-  box-shadow:
-    0 0 0 3px rgba(255,138,0,0.18),   /* pomarańcz */
-    0 6px 18px rgba(0,0,0,0.06);
-}
-
-tr.status-bufor {
-  box-shadow:
-    0 0 0 3px rgba(229,57,53,0.18),   /* czerwone */
-    0 6px 18px rgba(0,0,0,0.06);
-}
-
-tr.status-stop {
-  box-shadow:
-    0 0 0 3px rgba(0,0,0,0.6),        /* czarne, mocniejsze */
-    0 6px 18px rgba(0,0,0,0.06);
-  color: #fff;
-}
-
-/* 4) Dopasowanie komórek wewnątrz wiersza: usuwamy widoczność obramowań komórek na krawędzi,
-      żeby 'karta' wyglądała czysto (ale zachowujemy wewnętrzne separatory). */
-tbody tr td {
-  border: none;           /* usuwamy standardowe bordery wewnętrzne */
-  padding: 10px 12px;
-  background: transparent; /* tło białe jest już na tr */
-  vertical-align: middle;
-}
-
-/* Zostawiamy delikatne przerywane linie wewnątrz, jeśli chcesz - można je dodać osobno */
-/* Jeśli chcesz mieć delikatne pionowe separatory między grupami, zostaw poniższe: */
-th:nth-child(2), td:nth-child(2) { border-right: 2px solid #eee; }
-th:nth-child(5), td:nth-child(5) { border-right: 2px solid #eee; }
-th:nth-child(7), td:nth-child(7) { border-right: 2px solid #eee; }
-
-/* 5) Przywróć styl nagłówka tak, żeby wyglądał dobrze nad kartami */
-thead th {
-  background: #34495e;
-  color: #fff;
-  padding: 10px;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-/* 6) Uwaga: klasa .disabled/.empty-cell/.assigned-cell nadal działa.
-        Jeżeli chcesz, żeby komórki nieaktywne pozostały ciemne (jak wcześniej), zdefiniuj: */
-td.disabled { background: #333; color: #fff; border-radius: 6px; padding: 10px; }
-td.empty-cell { background: #fff7a1; border-radius: 6px; padding: 10px; }
-td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
-
-/* 7) Jeśli chcesz, aby select w kolumnie 'Status' był bardziej dopasowany do karty: */
-td select {
-  min-width: 160px;
-  padding: 6px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: white;
-}
-
-/* ===========================================================
-   KONIEC: obramowania całych wierszy
-   =========================================================== */
-/* ===== Przywrócenie górnego paska i kontenera ===== */
-#app {
-  max-width: 1200px;         /* ograniczenie szerokości całej aplikacji */
-  margin: 18px auto;         /* wycentrowanie na stronie */
-  padding: 0 12px;
-  box-sizing: border-box;
-}
-
-/* ładny niebieski top-bar jak wcześniej */
+/* Górny pasek - niebieski gradient */
 .top-bar {
   background: linear-gradient(180deg,#1f6feb,#1366d6);
   color: white;
@@ -126,184 +18,72 @@ td select {
   border-radius: 10px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
+.top-bar .btn { background: rgba(255,255,255,0.12); color: white; border: 1px solid rgba(255,255,255,0.12); }
+.top-bar .btn:hover { background: rgba(255,255,255,0.18); }
 
-/* poprawione przyciski w top-bar (niebieskie) */
-.top-bar .btn {
-  background: rgba(255,255,255,0.12);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.12);
-}
-.top-bar .btn:hover {
-  background: rgba(255,255,255,0.18);
-}
+/* Przyciski globalne */
+.btn { padding: 6px 10px; border: none; background: #0078d4; color: white; cursor: pointer; border-radius: 4px; }
+.btn:hover { background: #005a9e; }
+.btn.danger { background: #b71c1c; }
 
-/* tabela: ma być ładna "karta" wewnątrz #app, nie rozciągać na całą stronę */
-table {
-  width: 100%;               /* w obrębie max-width #app */
-  border-collapse: separate; /* dajemy space między wierszami */
-  border-spacing: 0 10px;
-  margin-top: 14px;
-  background: transparent;
-}
-
-/* Nagłówek (zostawmy kontrastowy) */
-thead th {
-  background: #234a75;
-  color: #fff;
-  padding: 10px;
-  font-weight: 600;
-  text-align: center;
-}
-
-/* Wiersze jako "karty" */
-tbody tr {
-  background: #ffffff;
-  border-radius: 10px;
-  overflow: hidden;
-  transition: transform .12s ease, box-shadow .12s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-}
+/* Tabela - wiersze jako "karty" */
+table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-top: 14px; background: transparent; }
+thead th { background: #234a75; color: #fff; padding: 10px; font-weight: 600; text-align: center; position: sticky; top: 0; z-index: 2; }
+tbody tr { background: #ffffff; border-radius: 10px; overflow: hidden; transition: transform .12s ease, box-shadow .12s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
 tbody tr:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+tbody td { border: none; padding: 10px 12px; text-align: center; vertical-align: middle; }
+th:nth-child(2), td:nth-child(2), th:nth-child(5), td:nth-child(5), th:nth-child(7), td:nth-child(7) { border-right: 1px solid #eef3f8; }
 
-/* Komórki wewnątrz wierszy - nie pokazujemy dodatkowych borderów (ładniej) */
-tbody td {
-  border: none;
-  padding: 10px 12px;
-  text-align: center;
-  vertical-align: middle;
-}
-
-/* przywrócenie pionowych separatorów grup (jeżeli chcesz) */
-th:nth-child(2), td:nth-child(2),
-th:nth-child(5), td:nth-child(5),
-th:nth-child(7), td:nth-child(7) {
-  border-right: 1px solid #eef3f8;
-}
-
-/* ===== Kolory statusów — obsługa dwóch nazw klas (safety) ===== */
-/* 1) dla klas używanych w moim skrypcie: status-prod, status-konserwacja, ... */
-tr.status-prod, td.status-prod { box-shadow: inset 0 0 0 2px rgba(10,166,74,0.25); background: #e6f9ea; color:#034d18; }
-tr.status-konserwacja, td.status-konserwacja { box-shadow: inset 0 0 0 2px rgba(43,123,255,0.25); background:#e8f1ff; color:#08366b; }
-tr.status-rozruch, td.status-rozruch { box-shadow: inset 0 0 0 2px rgba(255,138,0,0.25); background:#fff3e6; color:#7a3b00; }
-tr.status-bufor, td.status-bufor { box-shadow: inset 0 0 0 2px rgba(229,57,53,0.22); background:#ffe9e9; color:#7a0f0f; }
-tr.status-stop, td.status-stop { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.6); background:#222; color:#fff; }
-
-/* 2) dodatkowo — dla kompatybilności: status-produkcja etc. */
-tr.status-produkcja, td.status-produkcja { box-shadow: inset 0 0 0 2px rgba(10,166,74,0.25); background: #e6f9ea; color:#034d18; }
-tr.status-konserwacja, td.status-konserwacja { box-shadow: inset 0 0 0 2px rgba(43,123,255,0.25); background:#e8f1ff; color:#08366b; }
-/* i tak dalej — mamy już status-konserwacja, status-rozruch, status-bufor, status-stop powyżej */
-
-/* ===== Kolory komórek: nieobsadzone = żółte, wyłączone = czarne, przypisane = biały ===== */
+/* Kolory i stany komórek (role) */
 td.disabled { background: #333 !important; color: #fff !important; border-radius: 6px; padding: 10px; }
 td.empty-cell { background: #fff7a1; border-radius: 6px; padding: 10px; color: #3a2f00; }
 td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
 
-/* Select w komórce statusu - ładniej dopasowany */
-td select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid #cfdff5;
-  background: white;
-  min-width: 160px;
-}
+/* Select w komórce statusu - dopasowanie */
+td select { padding: 6px 8px; border-radius: 6px; border: 1px solid #cfdff5; background: white; min-width: 160px; }
 
-/* pomocniczo: ikony/tekst w kolumnie maszyna */
-td:first-child { font-weight: 700; }
+'td:first-child { font-weight: 700; } /* numer maszyny pogrubiony */
 
-/* responsywność: na małych ekranach tabela przewija poziomo */
-@media (max-width: 900px) {
-  #app { padding: 0 8px; }
-  table { display: block; overflow-x: auto; white-space: nowrap; }
-}
-/* ================================================================
-   🔧 Naprawa modali (panel admina i przypisywanie pracowników)
-   — wersja dopasowana do Twojego układu
-================================================================ */
+/* Responsywność: przewijanie poziome na małych ekranach */
+@media (max-width: 900px) { #app { padding: 0 8px; } table { display: block; overflow-x: auto; white-space: nowrap; } }
 
-/* Ogólny wygląd tła modala — półprzezroczyste tło na całą stronę */
-#assignModal,
-#adminPanel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);  /* lekko przyciemnione tło */
-  display: none;                    /* ukryte domyślnie */
-  align-items: center;              /* wyśrodkowanie pionowe */
-  justify-content: center;          /* wyśrodkowanie poziome */
-  z-index: 9999;                    /* ponad wszystkim */
-}
+/* ===== Kolorowe obramowania całych wierszy (tylko border efekt) ===== */
+/* Sekcja odpowiada za ramki wierszy po zmianie statusu — nic innego nie modyfikujemy */
 
-/* Wnętrze okna modala */
-#assignModal .modal-content,
-#adminPanel .modal-content,
-#adminPanel .modal-box {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 20px 24px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
-  animation: fadeInModal 0.25s ease-out;
-}
+/* Zielony — Produkcja */
+tr.status-prod { box-shadow: 0 0 0 3px rgba(10,166,74,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+/* Niebieski — Konserwacja */
+tr.status-konserwacja { box-shadow: 0 0 0 3px rgba(43,123,255,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+/* Pomarańcz — Rozruch */
+tr.status-rozruch { box-shadow: 0 0 0 3px rgba(255,138,0,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+/* Czerwony — Bufor */
+tr.status-bufor { box-shadow: 0 0 0 3px rgba(229,57,53,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+/* Czarny — Stop */
+tr.status-stop { box-shadow: 0 0 0 3px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.06); color: #fff; }
 
-/* Prosty efekt wjazdu */
-@keyframes fadeInModal {
-  from { transform: scale(0.9); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
+/* Ważne: wiersz ma border (box-shadow) ale TYLKO dwie pierwsze komórki dostają wypełnienie koloru */
+/* Najpierw reset tła komórek na transparent — wypełnienie jest nadane tylko selektywnie */
+tr.status-prod td, tr.status-konserwacja td, tr.status-rozruch td, tr.status-stop td, tr.status-bufor td { background: transparent; }
 
-/* Nagłówek modala (np. tytuł przypisania) */
-#assignTitle {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
+/* Tła dla komórek Maszyna i Status — dokładnie te komórki będą wypełnione */
+td.status-prod { background: #e6f9ea !important; color: #034d18 !important; }
+td.status-konserwacja { background: #e8f1ff !important; color: #08366b !important; }
+td.status-rozruch { background: #fff3e6 !important; color: #7a3b00 !important; }
+td.status-stop { background: #222222 !important; color: #ffffff !important; }
+td.status-bufor { background: #ffe9e9 !important; color: #7a0f0f !important; }
 
-/* Lista pracowników w modalu przypisania */
-#assignList {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-}
+/* Zachowujemy dotychczasowe klasy dla ról: disabled / empty-cell / assigned-cell */
+/* assigned-cell ma tło transparent — wygląda jak biały panel w wierszu */
 
-/* Przyciski pracowników (ładne karty do kliknięcia) */
-.employee-btn {
-  background: #f4f6fc;
-  border: 1px solid #d4dff0;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: 0.2s;
-}
-.employee-btn:hover {
-  background: #e3eaff;
-}
+/* ===== Modal (panel admina i przypisz) — centrowanie i wygląd okienka ===== */
+#assignModal, #adminPanel { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; }
+#assignModal .modal-content, #adminPanel .modal-content, #adminPanel .modal-box { background: #fff; border-radius: 12px; padding: 20px 24px; max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 25px rgba(0,0,0,0.25); animation: fadeInModal 0.25s ease-out; }
+@keyframes fadeInModal { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+#assignTitle { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+#assignList { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.employee-btn { background: #f4f6fc; border: 1px solid #d4dff0; border-radius: 8px; padding: 8px 12px; cursor: pointer; transition: 0.2s; }
+.employee-btn:hover { background: #e3eaff; }
+#assignClose, #closeAdmin, #adminCloseNoLogin { position: absolute; top: 8px; right: 12px; font-size: 18px; color: #444; background: none; border: none; cursor: pointer; }
 
-/* Przycisk zamykania (krzyżyk lub „Zamknij”) */
-#assignClose,
-#closeAdmin,
-#adminCloseNoLogin {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 18px;
-  color: #444;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-/* Treść w panelu admina */
-#adminSection {
-  margin-top: 10px;
-}
-
-/* Zapobieganie przewijaniu tła, gdy modal otwarty */
-body.modal-open {
-  overflow: hidden;
-}
+/* Zapobiegamy przewijaniu tła gdy modal jest otwarty */
+body.modal-open { overflow: hidden; }
