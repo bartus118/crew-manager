@@ -107,3 +107,111 @@ td select {
 /* ===========================================================
    KONIEC: obramowania całych wierszy
    =========================================================== */
+/* ===== Przywrócenie górnego paska i kontenera ===== */
+#app {
+  max-width: 1200px;         /* ograniczenie szerokości całej aplikacji */
+  margin: 18px auto;         /* wycentrowanie na stronie */
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+/* ładny niebieski top-bar jak wcześniej */
+.top-bar {
+  background: linear-gradient(180deg,#1f6feb,#1366d6);
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* poprawione przyciski w top-bar (niebieskie) */
+.top-bar .btn {
+  background: rgba(255,255,255,0.12);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.top-bar .btn:hover {
+  background: rgba(255,255,255,0.18);
+}
+
+/* tabela: ma być ładna "karta" wewnątrz #app, nie rozciągać na całą stronę */
+table {
+  width: 100%;               /* w obrębie max-width #app */
+  border-collapse: separate; /* dajemy space między wierszami */
+  border-spacing: 0 10px;
+  margin-top: 14px;
+  background: transparent;
+}
+
+/* Nagłówek (zostawmy kontrastowy) */
+thead th {
+  background: #234a75;
+  color: #fff;
+  padding: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Wiersze jako "karty" */
+tbody tr {
+  background: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform .12s ease, box-shadow .12s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+tbody tr:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+
+/* Komórki wewnątrz wierszy - nie pokazujemy dodatkowych borderów (ładniej) */
+tbody td {
+  border: none;
+  padding: 10px 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* przywrócenie pionowych separatorów grup (jeżeli chcesz) */
+th:nth-child(2), td:nth-child(2),
+th:nth-child(5), td:nth-child(5),
+th:nth-child(7), td:nth-child(7) {
+  border-right: 1px solid #eef3f8;
+}
+
+/* ===== Kolory statusów — obsługa dwóch nazw klas (safety) ===== */
+/* 1) dla klas używanych w moim skrypcie: status-prod, status-konserwacja, ... */
+tr.status-prod, td.status-prod { box-shadow: inset 0 0 0 2px rgba(10,166,74,0.25); background: #e6f9ea; color:#034d18; }
+tr.status-konserwacja, td.status-konserwacja { box-shadow: inset 0 0 0 2px rgba(43,123,255,0.25); background:#e8f1ff; color:#08366b; }
+tr.status-rozruch, td.status-rozruch { box-shadow: inset 0 0 0 2px rgba(255,138,0,0.25); background:#fff3e6; color:#7a3b00; }
+tr.status-bufor, td.status-bufor { box-shadow: inset 0 0 0 2px rgba(229,57,53,0.22); background:#ffe9e9; color:#7a0f0f; }
+tr.status-stop, td.status-stop { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.6); background:#222; color:#fff; }
+
+/* 2) dodatkowo — dla kompatybilności: status-produkcja etc. */
+tr.status-produkcja, td.status-produkcja { box-shadow: inset 0 0 0 2px rgba(10,166,74,0.25); background: #e6f9ea; color:#034d18; }
+tr.status-konserwacja, td.status-konserwacja { box-shadow: inset 0 0 0 2px rgba(43,123,255,0.25); background:#e8f1ff; color:#08366b; }
+/* i tak dalej — mamy już status-konserwacja, status-rozruch, status-bufor, status-stop powyżej */
+
+/* ===== Kolory komórek: nieobsadzone = żółte, wyłączone = czarne, przypisane = biały ===== */
+td.disabled { background: #333 !important; color: #fff !important; border-radius: 6px; padding: 10px; }
+td.empty-cell { background: #fff7a1; border-radius: 6px; padding: 10px; color: #3a2f00; }
+td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
+
+/* Select w komórce statusu - ładniej dopasowany */
+td select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #cfdff5;
+  background: white;
+  min-width: 160px;
+}
+
+/* pomocniczo: ikony/tekst w kolumnie maszyna */
+td:first-child { font-weight: 700; }
+
+/* responsywność: na małych ekranach tabela przewija poziomo */
+@media (max-width: 900px) {
+  #app { padding: 0 8px; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
