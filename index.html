@@ -1,27 +1,21 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crew Manager — Supabase</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crew Manager</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 </head>
 <body>
-  <h2>Crew Manager — widok główny</h2>
-
-  <div class="toolbar">
-    <div class="left">
-      <button class="btn" id="adminLoginBtn">Panel admina</button>
+  <div id="app">
+    <div class="top-bar">
+      <input type="date" id="dateInput">
+      <button id="loadDay" class="btn">Załaduj</button>
+      <button id="exportDayBtn" class="btn">Eksportuj CSV</button>
+      <button id="adminLoginBtn" class="btn">Panel administratora</button>
     </div>
-    <div class="right">
-      Data: <input type="date" id="dateInput" />
-      <button class="btn primary" id="loadDay">Załaduj</button>
-      <button class="btn" id="exportDayBtn">Eksportuj dzień (CSV)</button>
-    </div>
-  </div>
-
-  <div class="panel">
-    <table id="assignTable">
+    <table>
       <thead><tr id="theadRow"></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -30,9 +24,9 @@
   <!-- Modal przypisania -->
   <div id="assignModal" class="modal">
     <div class="modal-content">
-      <h3 id="assignTitle">Przypisz</h3>
-      <div id="assignInfo" class="muted"></div>
-      <div id="assignList" class="listbox"></div>
+      <h3 id="assignTitle"></h3>
+      <p id="assignInfo"></p>
+      <div id="assignList"></div>
       <button id="assignClose" class="btn">Zamknij</button>
     </div>
   </div>
@@ -40,49 +34,25 @@
   <!-- Panel admina -->
   <div id="adminPanel" class="modal">
     <div class="modal-content">
-      <h3>Panel administracyjny</h3>
-      <div id="adminLoginSection">
-        <input type="password" id="adminPass" placeholder="Hasło administratora">
-        <button class="btn primary" id="adminLogin">Zaloguj</button>
-        <div id="adminMsg" class="muted"></div>
-      </div>
+      <h3>Panel administratora</h3>
+      <input type="password" id="adminPass" placeholder="Hasło administratora">
+      <button id="adminLogin" class="btn">Zaloguj</button>
+      <p id="adminMsg"></p>
 
       <div id="adminSection" style="display:none;">
-        <h4>Akcje</h4>
-        <button class="btn" id="adminExportEmpBtn">Eksportuj pracowników</button>
-        <button class="btn" id="exportAll">Eksportuj wszystkie dane</button>
-        <button class="btn" id="importAll">Importuj dane</button>
+        <h4>Zarządzanie maszynami</h4>
+        <input type="text" id="newMachineNumber" placeholder="Numer nowej maszyny">
+        <button id="addMachineBtn" class="btn">Dodaj maszynę</button>
+        <div id="machineListEditable" class="admin-machine-list"></div>
+        <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
 
-        <h4>Maszyny (edycja)</h4>
-        <div id="adminMachineEditor">
-          <input id="newMachineNumber" placeholder="numer maszyny (np. 55)" />
-          <button class="btn" id="addMachineBtn">Dodaj maszynę</button>
-          <div id="machineListEditable" class="listbox"></div>
-          <button class="btn primary" id="saveMachineOrderBtn">Zapisz kolejność (widok domyślny)</button>
-        </div>
-
-        <button class="btn danger" id="forceUnlockBtn">Wymuś odblokowanie</button>
-        <button class="btn danger" id="closeAdmin">Zamknij</button>
+        <h4>Dane</h4>
+        <button id="adminExportEmpBtn" class="btn">Eksportuj pracowników</button>
+        <button id="closeAdmin" class="btn danger">Zamknij</button>
       </div>
     </div>
   </div>
 
-  <!-- UMD (browser) build Supabase — gotowy bundle; wystawia global 'supabase' -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script>
-    (function(){
-      try {
-        if (typeof window.supabase === 'undefined') {
-          window.supabase = window['supabase'] || window['supabase-js'] || window['Supabase'] || null;
-        }
-      } catch(e) {
-        window.supabase = null;
-      }
-      console.log('UMD supabase global present?', !!window.supabase);
-    })();
-  </script>
-
-  <!-- Twój skrypt aplikacji (zmień wersję ?v= przy deploy) -->
-  <script src="script.js?v=1"></script>
+  <script src="script.js"></script>
 </body>
 </html>
