@@ -95,86 +95,91 @@ function buildTableFor(date) {
   };
 
   machines.forEach(m => {
-    const vals = dateData[m.number] || [m.number, m.status || 'Produkcja', '', '', '', '', '', '', ''];
-    const tr = document.createElement('tr');
-    tr.dataset.machine = m.number;
+  const vals = data[m.number] || [m.number, m.status || 'Produkcja'];
+  const tr = document.createElement('tr');
+  tr.dataset.machine = m.number;
 
-    // STATUS CLASS (do użycia dla dwóch komórek)
-    const statusCls = statusClassFor(m.status || vals[1] || 'Produkcja');
+  // 👉 Ustaw klasę zależną od statusu
+  const status = (m.status || 'Produkcja').toLowerCase();
+  tr.classList.remove('status-produkcja', 'status-konserwacja', 'status-rozruch', 'status-stop', 'status-bufor');
+  if (status.includes('produkcja')) tr.classList.add('status-produkcja');
+  else if (status === 'konserwacja') tr.classList.add('status-konserwacja');
+  else if (status === 'rozruch') tr.classList.add('status-rozruch');
+  else if (status === 'stop') tr.classList.add('status-stop');
+  else if (status === 'bufor') tr.classList.add('status-bufor');
 
-    // 1) Maszyna (numer) — kolor/obramowanie wg statusu
-    const tdNum = document.createElement('td');
-    tdNum.textContent = m.number;
-    if (statusCls) tdNum.classList.add(statusCls);
-    tr.appendChild(tdNum);
+  // kolumna: numer maszyny
+  const tdNum = document.createElement('td');
+  tdNum.textContent = m.number;
+  tr.appendChild(tdNum);
 
-    // 2) Status — select lub text — także kolorowany
-    const tdStatus = document.createElement('td');
-    // jeśli w Twoim kodzie status jest selectem (dla edycji) — zachowujemy to
-    const selectStatus = document.createElement('select');
-    MACHINE_STATUSES.forEach(st => {
-      const opt = document.createElement('option');
-      opt.value = st;
-      opt.textContent = st;
-      if ((m.status || vals[1] || 'Produkcja') === st) opt.selected = true;
-      selectStatus.appendChild(opt);
-    });
-    // when status changes -> update machine.status and re-render (keeps DB update if sb present)
-    selectStatus.onchange = async (e) => {
-      const newStatus = e.target.value;
-      // Update local model first
-      m.status = newStatus;
-      // update DB if sb is available
-      if (sb) {
-        try {
-          const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-          if (error) console.error('Failed to update machine status', error);
-        } catch (err) { console.error(err); }
-      }
-      // rebuild to apply new colors
+  // kolumna: status (select)
+  const tdStatus = document.createElement('td');
+  const sel = document.createElement('select');
+  MACHINE_STATUSES.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st;
+    opt.textContent = st;
+    if (st === m.status) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = async (e) => {
+    const res = await sb.from('machines').update({ status: e.target.value }).eq('number', m.number);
+    if (!res.error) {
+      await loadMachines();
       await loadAssignmentsForDate(date);
       buildTableFor(date);
-    };
-    // apply class to tdStatus (and to select container)
-    tdStatus.appendChild(selectStatus);
-    if (statusCls) tdStatus.classList.add(statusCls);
-    tr.appendChild(tdStatus);
+    }
+  };
+  tdStatus.appendChild(sel);
+  tr.appendChild(tdStatus);
 
-    // 3+) pozostałe kolumny: status-dependent interactivity + kolorowanie pustych/assigned/disabled
-    COLUMNS.slice(2).forEach((col, i) => {
-      const idx = i + 2; // index in vals
-      const td = document.createElement('td');
-      const roleKey = col.key;
-      const activeRoles = STATUS_ACTIVE_ROLES[m.status || 'Produkcja'] || [];
-      const isActive = activeRoles.includes(roleKey);
-      const cellValue = vals[idx] || '';
-
-      // reset classes
-      td.classList.remove('disabled', 'empty-cell', 'assigned-cell');
-
-      if (!isActive) {
-        td.classList.add('disabled'); // czarne
-        td.textContent = cellValue || '';
-      } else {
-        if (!cellValue) {
-          td.classList.add('empty-cell'); // żółte
-          td.textContent = '';
-        } else {
-          td.classList.add('assigned-cell'); // białe
-          td.textContent = cellValue;
-        }
-
-        // interactive only when active
-        td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key, idx));
-      }
-
-      tr.appendChild(td);
-    });
-
-    tbody.appendChild(tr);
+  // pozostałe kolumny
+  COLUMNS.slice(2).forEach(col => {
+    const td = document.createElement('td');
+    const active = STATUS_ACTIVE_ROLES[m.status || 'Produkcja']?.includes(col.key);
+    const val = vals[COLUMNS.findIndex(c => c.key === col.key)] || '';
+    td.textContent = val;
+    td.className = !active ? 'disabled' : (val ? 'assigned-cell' : 'empty-cell');
+    if (active) td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key));
+    tr.appendChild(td);
   });
 
+  tbody.appendChild(tr);
+});
+
+🎨 Dodaj do style.css
+
+Na samym końcu pliku dopisz:
+
+/* === Kolorowe obramowania całych wierszy w zależności od statusu === */
+tr.status-produkcja {
+  border: 3px solid #2ecc71; /* zielony */
+}
+
+tr.status-konserwacja {
+  border: 3px solid #3498db; /* niebieski */
+}
+
+tr.status-rozruch {
+  border: 3px solid #f39c12; /* pomarańczowy */
+}
+
+tr.status-stop {
+  border: 3px solid #2c2c2c; /* czarny */
+  color: white;
+  background-color: #2c2c2c;
+}
+
+tr.status-bufor {
+  border: 3px solid #e74c3c; /* czerwony */
+}
+
+/* Żeby granice między wierszami były wyraźne */
+tbody tr {
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
   // Show any machines that have assignments for this date but are not in default view (kept unchanged)
   Object.keys(dateData).forEach(num => {
     if (!machines.find(mm => mm.number === num)) {
