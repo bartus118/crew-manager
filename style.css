@@ -155,3 +155,24 @@ input[type="password"], input[type="text"] {
   width: 100%;
   margin-bottom: 5px;
 }
+
+/* Status icon styling */
+.status-icon {
+  margin-right: 8px;
+  font-size: 1.05em;
+  vertical-align: middle;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* when icon is inside colored td keep spacing */
+td .status-icon { margin-left: 2px; }
+
+/* Slightly tighten the status select so icon sits nicely */
+td select {
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: transparent;
+}
