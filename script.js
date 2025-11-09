@@ -1,6 +1,8 @@
 /**
  * script.js — Crew Manager
  * Wersja: online-only edycja + usuwanie przypisań gdy rola przestaje być aktywna.
+ *
+ * WAŻNE: Zmiana — openAssignModal pokazuje WSZYSTKICH pracowników (możesz przypisać dowolnego).
  */
 
 /* -------------------- KONFIGURACJA SUPABASE (wstaw swoje dane) -------------------- */
@@ -16,80 +18,110 @@ let dateInput, tbody, theadRow;
 let currentDate = null;
 
 const COLUMNS = [
-  {key:'maszyna', title:'Maszyna'},
-  {key:'status', title:'Status'},
-  {key:'mechanik_focke', title:'Mechanik Focke'},
-  {key:'mechanik_protos', title:'Mechanik Protos'},
-  {key:'operator_focke', title:'Operator Focke'},
-  {key:'operator_protos', title:'Operator Protos'},
-  {key:'pracownik_pomocniczy', title:'Pracownik pomocniczy'},
-  {key:'filtry', title:'Filtry'},
-  {key:'inserty', title:'Inserty'}
+  { key: 'maszyna', title: 'Maszyna' },
+  { key: 'status', title: 'Status' },
+  { key: 'mechanik_focke', title: 'Mechanik Focke' },
+  { key: 'mechanik_protos', title: 'Mechanik Protos' },
+  { key: 'operator_focke', title: 'Operator Focke' },
+  { key: 'operator_protos', title: 'Operator Protos' },
+  { key: 'pracownik_pomocniczy', title: 'Pracownik pomocniczy' },
+  { key: 'filtry', title: 'Filtry' },
+  { key: 'inserty', title: 'Inserty' }
 ];
 
 const MACHINE_STATUSES = [
-  'Produkcja','Produkcja + Filtry','Produkcja + Inserty',
-  'Produkcja + Filtry + Inserty','Konserwacja','Rozruch','Bufor','Stop'
+  'Produkcja',
+  'Produkcja + Filtry',
+  'Produkcja + Inserty',
+  'Produkcja + Filtry + Inserty',
+  'Konserwacja',
+  'Rozruch',
+  'Bufor',
+  'Stop'
 ];
 
 const STATUS_ACTIVE_ROLES = {
-  'Produkcja': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy'],
-  'Produkcja + Filtry': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry'],
-  'Produkcja + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','inserty'],
-  'Produkcja + Filtry + Inserty': ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','filtry','inserty'],
-  'Konserwacja': [], 
-  'Rozruch': ['mechanik_focke','mechanik_protos','pracownik_pomocniczy'],
-  'Bufor': ['operator_focke','operator_protos'],
+  'Produkcja': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy'],
+  'Produkcja + Filtry': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry'],
+  'Produkcja + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'inserty'],
+  'Produkcja + Filtry + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry', 'inserty'],
+  'Konserwacja': [],
+  'Rozruch': ['mechanik_focke', 'mechanik_protos', 'pracownik_pomocniczy'],
+  'Bufor': ['operator_focke', 'operator_protos'],
   'Stop': []
 };
 
 const DEFAULT_MACHINES = ['11','12','15','16','17','18','21','22','24','25','26','27','28','31','32','33','34','35','94','96'];
 
 /* -------------------- wait for global supabase SDK -------------------- */
-function waitForSupabaseGlobal(timeoutMs = 8000){
-  return new Promise((resolve,reject)=>{
-    if(window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
-    let waited=0; const iv=setInterval(()=>{
-      if(window.supabase && typeof window.supabase.createClient === 'function'){ clearInterval(iv); return resolve(window.supabase); }
-      waited+=200; if(waited>=timeoutMs){ clearInterval(iv); return reject(new Error('Timeout waiting for Supabase SDK')); }
-    },200);
+function waitForSupabaseGlobal(timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
+    let waited = 0;
+    const iv = setInterval(() => {
+      if (window.supabase && typeof window.supabase.createClient === 'function') { clearInterval(iv); return resolve(window.supabase); }
+      waited += 200;
+      if (waited >= timeoutMs) { clearInterval(iv); return reject(new Error('Timeout waiting for Supabase SDK')); }
+    }, 200);
   });
 }
 
 async function initSupabase(){
-  try{ await waitForSupabaseGlobal(); sb = window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY); console.log('Supabase ready'); }
-  catch(e){ console.warn('Supabase not available — offline mode', e); sb = null; }
+  try {
+    await waitForSupabaseGlobal();
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase ready');
+  } catch (e) {
+    console.warn('Supabase not available — offline mode', e);
+    sb = null;
+  }
 }
 
-async function loadEmployees(){ if(!sb){ employees = []; return; } try{ const {data,error} = await sb.from('employees').select('*').order('name',{ascending:true}); if(error){ console.error('loadEmployees error', error); employees = []; } else employees = data || []; } catch(e){ console.error(e); employees = []; } }
+async function loadEmployees(){
+  if(!sb){ employees = []; return; }
+  try {
+    const { data, error } = await sb.from('employees').select('*').order('name', { ascending: true });
+    if (error) { console.error('loadEmployees error', error); employees = []; }
+    else employees = data || [];
+  } catch (e) {
+    console.error(e);
+    employees = [];
+  }
+}
 
 async function loadMachines(){
   if(!sb){
-    machines = DEFAULT_MACHINES.map((n,i)=>({number:String(n),ord:i+1,status:'Produkcja'}));
+    machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
     return;
   }
   try{
-    const {data,error} = await sb.from('machines').select('*').order('ord',{ascending:true}).eq('default_view',true);
-    if(error){ console.error('loadMachines error', error); machines = DEFAULT_MACHINES.map((n,i)=>({number:String(n),ord:i+1,status:'Produkcja'})); }
-    else machines = (data && data.length) ? data.map(d=>({number:String(d.number),ord:d.ord||9999,status:d.status||'Produkcja'})) : DEFAULT_MACHINES.map((n,i)=>({number:String(n),ord:i+1,status:'Produkcja'}));
-  } catch(e){ console.error(e); machines = DEFAULT_MACHINES.map((n,i)=>({number:String(n),ord:i+1,status:'Produkcja'})); }
+    const { data, error } = await sb.from('machines').select('*').order('ord', { ascending: true }).eq('default_view', true);
+    if (error) { console.error('loadMachines error', error); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
+    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+  } catch (e) {
+    console.error(e);
+    machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+  }
 }
 
-async function loadAssignmentsForDate(date){ 
-  if(!date) return; 
-  if(!sb){ assignments[date] = {}; return; } 
-  try{ 
-    const {data,error} = await sb.from('assignments').select('*').eq('date',date); 
-    if(error){ console.error('loadAssignmentsForDate error', error); assignments[date] = {}; return; } 
-    const map = {}; 
-    machines.forEach(m=>{ map[m.number] = [m.number, m.status || 'Produkcja']; for(let i=2;i<COLUMNS.length;i++) map[m.number].push(''); }); 
+async function loadAssignmentsForDate(date){
+  if(!date) return;
+  if(!sb){ assignments[date] = {}; return; }
+  try{
+    const { data, error } = await sb.from('assignments').select('*').eq('date', date);
+    if(error){ console.error('loadAssignmentsForDate error', error); assignments[date] = {}; return; }
+
+    const map = {};
+    machines.forEach(m=>{
+      map[m.number] = [m.number, m.status || 'Produkcja'];
+      for(let i=2;i<COLUMNS.length;i++) map[m.number].push('');
+    });
 
     (data||[]).forEach(a=>{
       // jeśli napotkamy maszynę której nie ma w machines — dodajemy ją na stałe
       if(!machines.find(mm => String(mm.number) === String(a.machine_number))){
         const newMachine = { number: String(a.machine_number), ord: machines.length+1, status: 'Produkcja' };
         machines.push(newMachine);
-        // persist to DB (async)
         sb.from('machines').insert([{ number: newMachine.number, ord: newMachine.ord, default_view:true, status: newMachine.status }])
           .then(res => { if(res.error) console.warn('sync new machine error', res.error); })
           .catch(err => console.warn('sync new machine error', err));
@@ -97,38 +129,66 @@ async function loadAssignmentsForDate(date){
         for(let i=2;i<COLUMNS.length;i++) map[newMachine.number].push('');
       }
 
-      const emp = employees.find(e=>e.id===a.employee_id);
-      const idx = COLUMNS.findIndex(c=>c.key===a.role);
-      if(idx>-1){
+      const emp = employees.find(e=>e.id === a.employee_id);
+      const idx = COLUMNS.findIndex(c=>c.key === a.role);
+      if(idx > -1){
         if(!map[a.machine_number]){ const row=[a.machine_number,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[a.machine_number]=row; }
-        if(emp) map[a.machine_number][idx]=emp.name;
+        if(emp) map[a.machine_number][idx] = emp.name;
       }
     });
 
-    assignments[date]=map;
-  } catch(e){ console.error(e); assignments[date] = {}; } 
+    assignments[date] = map;
+  } catch(e){
+    console.error(e);
+    assignments[date] = {};
+  }
 }
 
-function statusClassFor(status){ if(!status) return ''; const s = String(status).toLowerCase(); if(s.includes('produkcja')) return 'status-prod'; if(s.includes('konserwacja')) return 'status-konserwacja'; if(s.includes('rozruch')) return 'status-rozruch'; if(s.includes('bufor')) return 'status-bufor'; if(s.includes('stop')) return 'status-stop'; return ''; }
+function statusClassFor(status){
+  if(!status) return '';
+  const s = String(status).toLowerCase();
+  if(s.includes('produkcja')) return 'status-prod';
+  if(s.includes('konserwacja')) return 'status-konserwacja';
+  if(s.includes('rozruch')) return 'status-rozruch';
+  if(s.includes('bufor')) return 'status-bufor';
+  if(s.includes('stop')) return 'status-stop';
+  return '';
+}
 
 function buildTableFor(date){
   const dateData = assignments[date] || {};
   theadRow.innerHTML = '';
-  COLUMNS.forEach(c=>{ const th = document.createElement('th'); th.textContent = c.title; theadRow.appendChild(th); });
+  COLUMNS.forEach(c=>{
+    const th = document.createElement('th');
+    th.textContent = c.title;
+    theadRow.appendChild(th);
+  });
   tbody.innerHTML = '';
 
   machines.forEach(m => {
     const vals = dateData[m.number] || [m.number, m.status || 'Produkcja'];
-    const tr = document.createElement('tr'); tr.dataset.machine = m.number;
+    const tr = document.createElement('tr');
+    tr.dataset.machine = m.number;
 
     const effectiveStatus = m.status || vals[1] || 'Produkcja';
     const statusCls = statusClassFor(effectiveStatus);
     if(statusCls) tr.classList.add(statusCls);
 
-    const tdNum = document.createElement('td'); tdNum.textContent = m.number; if(statusCls) tdNum.classList.add(statusCls); tr.appendChild(tdNum);
+    const tdNum = document.createElement('td');
+    tdNum.textContent = m.number;
+    if(statusCls) tdNum.classList.add(statusCls);
+    tr.appendChild(tdNum);
 
-    const tdStatus = document.createElement('td'); if(statusCls) tdStatus.classList.add(statusCls);
-    const selectStatus = document.createElement('select'); MACHINE_STATUSES.forEach(st=>{ const opt=document.createElement('option'); opt.value=st; opt.textContent=st; if((m.status||effectiveStatus)===st) opt.selected=true; selectStatus.appendChild(opt); });
+    const tdStatus = document.createElement('td');
+    if(statusCls) tdStatus.classList.add(statusCls);
+    const selectStatus = document.createElement('select');
+    MACHINE_STATUSES.forEach(st=>{
+      const opt = document.createElement('option');
+      opt.value = st;
+      opt.textContent = st;
+      if((m.status || effectiveStatus) === st) opt.selected = true;
+      selectStatus.appendChild(opt);
+    });
 
     /* ---------- ZMIANA: przy zmianie statusu usuń przypisania do ról, które przestają być aktywne ---------- */
     selectStatus.onchange = async (e) => {
@@ -208,7 +268,8 @@ function buildTableFor(date){
       buildTableFor(date);
     };
 
-    tdStatus.appendChild(selectStatus); tr.appendChild(tdStatus);
+    tdStatus.appendChild(selectStatus);
+    tr.appendChild(tdStatus);
 
     COLUMNS.slice(2).forEach(col => {
       const td = document.createElement('td');
@@ -216,8 +277,16 @@ function buildTableFor(date){
       const idx = COLUMNS.findIndex(c => c.key === col.key);
       const val = vals[idx] || '';
 
-      if(!active){ td.classList.add('disabled'); td.textContent = val || ''; }
-      else { if(!val) td.classList.add('empty-cell'); else td.classList.add('assigned-cell'); td.textContent = val; td.style.cursor = 'pointer'; td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key)); }
+      if(!active){
+        td.classList.add('disabled');
+        td.textContent = val || '';
+      } else {
+        if(!val) td.classList.add('empty-cell');
+        else td.classList.add('assigned-cell');
+        td.textContent = val;
+        td.style.cursor = 'pointer';
+        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key));
+      }
 
       tr.appendChild(td);
     });
@@ -239,19 +308,349 @@ async function saveAssignment(date,machine,role,empId){
   } catch(e){ console.error('saveAssignment error', e); }
 }
 
+/* -------------------- MODAL PRZYPISANIA -------------------- */
 let assignModal, assignTitle, assignInfo, assignList;
-function setupAssignModal(){ assignModal=document.getElementById('assignModal'); assignTitle=document.getElementById('assignTitle'); assignInfo=document.getElementById('assignInfo'); assignList=document.getElementById('assignList'); document.getElementById('assignClose').addEventListener('click',()=>{ assignModal.style.display='none'; document.body.classList.remove('modal-open'); }); assignModal.addEventListener('click',(e)=>{ if(e.target===assignModal){ assignModal.style.display='none'; document.body.classList.remove('modal-open'); } }); }
-function openAssignModal(date,machine,roleKey){ assignModal.style.display='flex'; document.body.classList.add('modal-open'); assignTitle.textContent=`Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machine})`; assignInfo.textContent='Kliknij, aby przypisać pracownika.'; assignList.innerHTML=''; const list = employees.filter(e=>(e.roles||[]).includes(roleKey)); list.forEach(emp=>{ const b=document.createElement('div'); b.className='employee-btn'; b.textContent = emp.name + (emp.bu?(' · '+emp.bu):''); b.onclick = async()=>{ await saveAssignment(date,machine,roleKey,emp.id); assignModal.style.display='none'; document.body.classList.remove('modal-open'); }; assignList.appendChild(b); }); const clear = document.createElement('button'); clear.className='btn'; clear.textContent='Wyczyść przypisanie'; clear.onclick=async()=>{ await saveAssignment(date,machine,roleKey,null); assignModal.style.display='none'; document.body.classList.remove('modal-open'); }; assignList.appendChild(clear); }
+function setupAssignModal(){
+  assignModal = document.getElementById('assignModal');
+  assignTitle = document.getElementById('assignTitle');
+  assignInfo = document.getElementById('assignInfo');
+  assignList = document.getElementById('assignList');
 
-function setupAdminPanel(){ const adminPanel=document.getElementById('adminPanel'); const adminLoginBtn=document.getElementById('adminLoginBtn'); const adminLogin=document.getElementById('adminLogin'); const adminMsg=document.getElementById('adminMsg'); const adminSection=document.getElementById('adminSection'); const adminCloseNoLogin=document.getElementById('adminCloseNoLogin'); const adminCloseNoLoginBtn=document.getElementById('adminCloseNoLoginBtn'); const closeAdmin=document.getElementById('closeAdmin'); adminLoginBtn.onclick=()=>{ adminPanel.style.display='flex'; document.body.classList.add('modal-open'); }; if(adminCloseNoLogin) adminCloseNoLogin.addEventListener('click',()=>{ adminPanel.style.display='none'; document.body.classList.remove('modal-open'); }); if(adminCloseNoLoginBtn) adminCloseNoLoginBtn.addEventListener('click',()=>{ adminPanel.style.display='none'; document.body.classList.remove('modal-open'); }); adminPanel.addEventListener('click',(e)=>{ if(e.target===adminPanel){ adminPanel.style.display='none'; document.body.classList.remove('modal-open'); } }); adminLogin.onclick=async()=>{ const p=document.getElementById('adminPass').value; if(p==='admin123'){ adminSection.style.display='block'; adminMsg.textContent='Zalogowano.'; await refreshAdminMachineList(); } else adminMsg.textContent='Błędne hasło.'; }; const addBtn=document.getElementById('addMachineBtn'); if(addBtn) addBtn.onclick=async()=>{ if(!sb){ alert('Brak połączenia z serwerem — dodawanie maszyn jest zablokowane. Połącz się z Supabase, aby dodać nową maszynę.'); return; } const num=document.getElementById('newMachineNumber').value.trim(); if(!num) return alert('Podaj numer maszyny'); try{ const {data:exists} = await sb.from('machines').select('*').eq('number',num).limit(1); if(exists && exists.length){ alert('Maszyna o takim numerze już istnieje w bazie.'); return; } const {data:cur} = await sb.from('machines').select('ord').order('ord',{ascending:false}).limit(1).maybeSingle(); const nextOrd = cur?.ord?cur.ord+1:(machines.length?machines[machines.length-1].ord+1:1); const {error} = await sb.from('machines').insert([{number:String(num),ord:nextOrd,default_view:true,status:'Produkcja'}]); if(error) return alert('Błąd: '+error.message); document.getElementById('newMachineNumber').value=''; await loadMachines(); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); } catch(e){ console.error('addMachine error', e); } }; const saveOrderBtn=document.getElementById('saveMachineOrderBtn'); if(saveOrderBtn) saveOrderBtn.onclick=async()=>{ if(!sb){ alert('Brak połączenia z serwerem — zapis kolejności jest zablokowany.'); return; } const box=document.getElementById('machineListEditable'); const rows=Array.from(box.querySelectorAll('.admin-machine-row')); for(let i=0;i<rows.length;i++){ const num=rows[i].dataset.number; if(!sb) continue; await sb.from('machines').update({ord:i+1,default_view:true}).eq('number',num); } await loadMachines(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); alert('Zapisano kolejność jako widok domyślny.'); }; const exportBtn=document.getElementById('adminExportEmpBtn'); if(exportBtn) exportBtn.onclick=async()=>{ if(!sb) return alert('Brak połączenia z Supabase.'); const {data,error} = await sb.from('employees').select('*'); if(error) return alert('Błąd: '+error.message); const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='employees.json'; a.click(); }; if(closeAdmin) closeAdmin.onclick=()=>{ adminPanel.style.display='none'; document.body.classList.remove('modal-open'); }; }
+  const closeBtn = document.getElementById('assignClose');
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{
+    assignModal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  });
 
-async function refreshAdminMachineList(){ const box=document.getElementById('machineListEditable'); if(!box) return; box.innerHTML=''; if(!sb){ machines.forEach(m=>{ const row=document.createElement('div'); row.className='admin-machine-row'; row.dataset.number=m.number; row.innerHTML=`<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine" disabled>Usuń</button></div>`; box.appendChild(row); }); } else { try{ const {data} = await sb.from('machines').select('*').order('ord',{ascending:true}); (data||[]).forEach(m=>{ const row=document.createElement('div'); row.className='admin-machine-row'; row.dataset.number=m.number; row.innerHTML=`<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine">Usuń</button></div>`; box.appendChild(row); }); } catch(e){ console.error('refreshAdminMachineList error', e); } } box.querySelectorAll('.remove-machine').forEach(btn=>{ btn.onclick=async(e)=>{ const num=e.target.closest('.admin-machine-row').dataset.number; if(!confirm('Usunąć maszynę '+num+'?')) return; if(!sb){ alert('Brak połączenia z serwerem — usuwanie jest zablokowane.'); return; } try{ await sb.from('machines').delete().eq('number',num); await loadMachines(); await refreshAdminMachineList(); await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); } catch(err){ console.error('remove machine error', err); } }; }); let dragSrc=null; box.querySelectorAll('.admin-machine-row').forEach(item=>{ item.draggable=true; item.addEventListener('dragstart',(e)=>{ dragSrc=item; e.dataTransfer.effectAllowed='move'; }); item.addEventListener('dragover',(e)=>e.preventDefault()); item.addEventListener('drop',(e)=>{ e.preventDefault(); if(dragSrc && dragSrc!==item) box.insertBefore(dragSrc,item.nextSibling); }); }); }
+  assignModal.addEventListener('click', (e)=>{
+    if(e.target === assignModal){
+      assignModal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+    }
+  });
+}
 
-function exportDayToCSV(date){ if(!date){ alert('Wybierz datę przed eksportem.'); return; } const dateData = assignments[date] || {}; const roleTitles = COLUMNS.slice(2).map(c=>c.title); const headers = ['Data','Maszyna','Status',...roleTitles]; const rows=[headers.join(',')]; const machineList = machines.length?machines:Object.keys(dateData).map(k=>({number:k})); machineList.forEach(m=>{ const machineNumber = m.number||m; const vals = dateData[machineNumber] || [machineNumber,'Gotowa','','','','','','','']; const row = [date,machineNumber,vals[1]||'Gotowa',...vals.slice(2)]; rows.push(row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')); }); const csvContent = rows.join('\r\n'); const filename = `assignments-${date}.csv`; const blob = new Blob([csvContent],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); }
+/**
+ * openAssignModal(date, machine, roleKey)
+ * - pokaże modal z listą WSZYSTKICH pracowników (bez filtrów)
+ * - kliknięcie przypisze pracownika do danej maszyny/roli
+ */
+function openAssignModal(date, machine, roleKey){
+  // pokaż modal i zablokuj przewijanie tła
+  assignModal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+
+  // nagłówek i krótka informacja
+  assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machine})`;
+  assignInfo.textContent = 'Kliknij pracownika, aby przypisać.';
+
+  // wyczyść listę i dodaj wszystkich pracowników (bez filtrowania po rolach)
+  assignList.innerHTML = '';
+  const list = employees.slice(); // kopia pełnej listy
+
+  list.forEach(emp => {
+    const b = document.createElement('div');
+    b.className = 'employee-btn';
+    b.textContent = emp.name + (emp.bu ? (' · ' + emp.bu) : '');
+
+    // przypisanie po kliknięciu
+    b.onclick = async () => {
+      await saveAssignment(date, machine, roleKey, emp.id);
+      assignModal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+    };
+
+    assignList.appendChild(b);
+  });
+
+  // przycisk do czyszczenia przypisania
+  const clear = document.createElement('button');
+  clear.className = 'btn';
+  clear.textContent = 'Wyczyść przypisanie';
+  clear.onclick = async () => {
+    await saveAssignment(date, machine, roleKey, null);
+    assignModal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  };
+
+  assignList.appendChild(clear);
+}
+
+/* -------------------- PANEL ADMINA -------------------- */
+function setupAdminPanel(){
+  const adminPanel = document.getElementById('adminPanel');
+  const adminLoginBtn = document.getElementById('adminLoginBtn');
+  const adminLogin = document.getElementById('adminLogin');
+  const adminMsg = document.getElementById('adminMsg');
+  const adminSection = document.getElementById('adminSection');
+  const adminCloseNoLogin = document.getElementById('adminCloseNoLogin');
+  const adminCloseNoLoginBtn = document.getElementById('adminCloseNoLoginBtn');
+  const closeAdmin = document.getElementById('closeAdmin');
+
+  // otwórz panel — będzie zablokowany jeśli offline przez enforceOnlineMode
+  if(adminLoginBtn) adminLoginBtn.onclick = ()=>{
+    adminPanel.style.display = 'flex';
+    document.body.classList.add('modal-open');
+  };
+
+  if(adminCloseNoLogin) adminCloseNoLogin.addEventListener('click', ()=>{
+    adminPanel.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  });
+
+  if(adminCloseNoLoginBtn) adminCloseNoLoginBtn.addEventListener('click', ()=>{
+    adminPanel.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  });
+
+  adminPanel.addEventListener('click', (e)=>{
+    if(e.target === adminPanel){
+      adminPanel.style.display = 'none';
+      document.body.classList.remove('modal-open');
+    }
+  });
+
+  // proste logowanie admin (lokalne)
+  if(adminLogin) adminLogin.onclick = async ()=>{
+    const p = document.getElementById('adminPass').value;
+    if(p === 'admin123'){
+      adminSection.style.display = 'block';
+      adminMsg.textContent = 'Zalogowano.';
+      await refreshAdminMachineList();
+    } else {
+      adminMsg.textContent = 'Błędne hasło.';
+    }
+  };
+
+  // Dodawanie maszyny (tylko online) — handler
+  const addBtn = document.getElementById('addMachineBtn');
+  if(addBtn) addBtn.onclick = async () => {
+    if(!sb){
+      alert('Brak połączenia z serwerem — dodawanie maszyn jest zablokowane. Połącz się z Supabase, aby dodać nową maszynę.');
+      return;
+    }
+    const num = document.getElementById('newMachineNumber').value.trim();
+    if(!num) return alert('Podaj numer maszyny');
+
+    try{
+      const { data: exists } = await sb.from('machines').select('*').eq('number', num).limit(1);
+      if(exists && exists.length){
+        alert('Maszyna o takim numerze już istnieje w bazie.');
+        return;
+      }
+
+      const { data: cur } = await sb.from('machines').select('ord').order('ord',{ascending:false}).limit(1).maybeSingle();
+      const nextOrd = cur?.ord ? cur.ord + 1 : (machines.length ? machines[machines.length-1].ord + 1 : 1);
+      const { error } = await sb.from('machines').insert([{ number: String(num), ord: nextOrd, default_view:true, status:'Produkcja' }]);
+      if(error) return alert('Błąd: ' + error.message);
+
+      document.getElementById('newMachineNumber').value = '';
+      await loadMachines();
+      await refreshAdminMachineList();
+      await loadAssignmentsForDate(currentDate);
+      buildTableFor(currentDate);
+    }catch(e){
+      console.error('addMachine error', e);
+    }
+  };
+
+  // zapis kolejności maszyn (tylko online)
+  const saveOrderBtn = document.getElementById('saveMachineOrderBtn');
+  if(saveOrderBtn) saveOrderBtn.onclick = async ()=>{
+    if(!sb){
+      alert('Brak połączenia z serwerem — zapis kolejności jest zablokowany.');
+      return;
+    }
+    const box = document.getElementById('machineListEditable');
+    const rows = Array.from(box.querySelectorAll('.admin-machine-row'));
+    for(let i=0;i<rows.length;i++){
+      const num = rows[i].dataset.number;
+      if(!sb) continue;
+      await sb.from('machines').update({ ord: i+1, default_view:true }).eq('number', num);
+    }
+    await loadMachines();
+    await loadAssignmentsForDate(currentDate);
+    buildTableFor(currentDate);
+    alert('Zapisano kolejność jako widok domyślny.');
+  };
+
+  // eksport pracowników (tylko online)
+  const exportBtn = document.getElementById('adminExportEmpBtn');
+  if(exportBtn) exportBtn.onclick = async ()=>{
+    if(!sb) return alert('Brak połączenia z Supabase.');
+    const { data, error } = await sb.from('employees').select('*');
+    if(error) return alert('Błąd: ' + error.message);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'employees.json';
+    a.click();
+  };
+
+  if(closeAdmin) closeAdmin.onclick = ()=>{
+    adminPanel.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  };
+}
+
+async function refreshAdminMachineList(){
+  const box = document.getElementById('machineListEditable');
+  if(!box) return;
+  box.innerHTML = '';
+
+  if(!sb){
+    machines.forEach(m=>{
+      const row = document.createElement('div');
+      row.className = 'admin-machine-row';
+      row.dataset.number = m.number;
+      row.innerHTML = `<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine" disabled>Usuń</button></div>`;
+      box.appendChild(row);
+    });
+  } else {
+    try{
+      const { data } = await sb.from('machines').select('*').order('ord',{ascending:true});
+      (data||[]).forEach(m=>{
+        const row = document.createElement('div');
+        row.className = 'admin-machine-row';
+        row.dataset.number = m.number;
+        row.innerHTML = `<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine">Usuń</button></div>`;
+        box.appendChild(row);
+      });
+    }catch(e){
+      console.error('refreshAdminMachineList error', e);
+    }
+  }
+
+  box.querySelectorAll('.remove-machine').forEach(btn=>{
+    btn.onclick = async (e) => {
+      const num = e.target.closest('.admin-machine-row').dataset.number;
+      if(!confirm('Usunąć maszynę ' + num + '?')) return;
+      if(!sb){
+        alert('Brak połączenia z serwerem — usuwanie jest zablokowane.');
+        return;
+      }
+      try{
+        await sb.from('machines').delete().eq('number', num);
+        await loadMachines();
+        await refreshAdminMachineList();
+        await loadAssignmentsForDate(currentDate);
+        buildTableFor(currentDate);
+      }catch(err){
+        console.error('remove machine error', err);
+      }
+    };
+  });
+
+  // drag & drop klient-side
+  let dragSrc = null;
+  box.querySelectorAll('.admin-machine-row').forEach(item=>{
+    item.draggable = true;
+    item.addEventListener('dragstart', (e)=>{ dragSrc = item; e.dataTransfer.effectAllowed = 'move'; });
+    item.addEventListener('dragover', (e)=> e.preventDefault());
+    item.addEventListener('drop', (e)=>{
+      e.preventDefault();
+      if(dragSrc && dragSrc !== item) box.insertBefore(dragSrc, item.nextSibling);
+    });
+  });
+}
+
+function exportDayToCSV(date){
+  if(!date){ alert('Wybierz datę przed eksportem.'); return; }
+  const dateData = assignments[date] || {};
+  const roleTitles = COLUMNS.slice(2).map(c=>c.title);
+  const headers = ['Data','Maszyna','Status', ...roleTitles];
+  const rows = [ headers.join(',') ];
+  const machineList = machines.length ? machines : Object.keys(dateData).map(k=>({ number: k }));
+
+  machineList.forEach(m=>{
+    const machineNumber = m.number || m;
+    const vals = dateData[machineNumber] || [machineNumber, 'Gotowa', '','','','','','',''];
+    const row = [ date, machineNumber, vals[1] || 'Gotowa', ...vals.slice(2) ];
+    rows.push(row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  });
+
+  const csvContent = rows.join('\r\n');
+  const filename = `assignments-${date}.csv`;
+  const blob = new Blob([csvContent], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
 
 let _origOpenAssignModal = null;
-function enforceOnlineMode(){ const controlsToDisable = ['addMachineBtn','saveMachineOrderBtn','adminExportEmpBtn','adminLogin','adminLoginBtn','exportDayBtn']; const existing = document.getElementById('offlineBanner'); if(existing) existing.remove(); if(!sb){ const banner = document.createElement('div'); banner.id='offlineBanner'; banner.style.cssText='position:fixed;left:0;right:0;top:0;padding:10px 14px;background:#ffefc3;color:#5a3b00;text-align:center;z-index:10000;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.06);'; banner.textContent='Brak połączenia z Supabase. Tryb edycji jest zablokowany.'; document.body.appendChild(banner); window.scrollTo(0,0); controlsToDisable.forEach(id=>{ const el=document.getElementById(id); if(el){ el.disabled=true; el.classList && el.classList.add('disabled-btn'); } }); if(!_origOpenAssignModal) _origOpenAssignModal = window.openAssignModal || openAssignModal; window.openAssignModal = function(){ alert('Brak połączenia z serwerem — przypisywanie jest zablokowane.'); }; } else { const b=document.getElementById('offlineBanner'); if(b) b.remove(); controlsToDisable.forEach(id=>{ const el=document.getElementById(id); if(el){ el.disabled=false; el.classList && el.classList.remove('disabled-btn'); } }); if(_origOpenAssignModal){ window.openAssignModal = _origOpenAssignModal; _origOpenAssignModal = null; } } }
+function enforceOnlineMode(){
+  const controlsToDisable = ['addMachineBtn','saveMachineOrderBtn','adminExportEmpBtn','adminLogin','adminLoginBtn','exportDayBtn'];
+  const existing = document.getElementById('offlineBanner');
+  if(existing) existing.remove();
 
-async function bootstrap(){ await new Promise(r=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',r):r()); dateInput=document.getElementById('dateInput'); tbody=document.getElementById('tbody'); theadRow=document.getElementById('theadRow'); dateInput.value=new Date().toISOString().slice(0,10); setupAssignModal(); setupAdminPanel(); await initSupabase(); await loadEmployees(); await loadMachines(); currentDate = dateInput.value; await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); enforceOnlineMode(); const loadBtn=document.getElementById('loadDay'); if(loadBtn) loadBtn.onclick=async()=>{ currentDate = dateInput.value; await loadAssignmentsForDate(currentDate); buildTableFor(currentDate); }; const exportBtn=document.getElementById('exportDayBtn'); if(exportBtn) exportBtn.onclick=()=>exportDayToCSV(currentDate || dateInput.value); }
+  if(!sb){
+    const banner = document.createElement('div');
+    banner.id = 'offlineBanner';
+    banner.style.cssText = 'position:fixed;left:0;right:0;top:0;padding:10px 14px;background:#ffefc3;color:#5a3b00;text-align:center;z-index:10000;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.06);';
+    banner.textContent = 'Brak połączenia z Supabase. Tryb edycji jest zablokowany.';
+    document.body.appendChild(banner);
+    window.scrollTo(0,0);
+
+    controlsToDisable.forEach(id=>{
+      const el = document.getElementById(id);
+      if(el){
+        el.disabled = true;
+        el.classList && el.classList.add('disabled-btn');
+      }
+    });
+
+    if(!_origOpenAssignModal) _origOpenAssignModal = window.openAssignModal || openAssignModal;
+    window.openAssignModal = function(){ alert('Brak połączenia z serwerem — przypisywanie jest zablokowane.'); };
+  } else {
+    const b = document.getElementById('offlineBanner');
+    if(b) b.remove();
+
+    controlsToDisable.forEach(id=>{
+      const el = document.getElementById(id);
+      if(el){
+        el.disabled = false;
+        el.classList && el.classList.remove('disabled-btn');
+      }
+    });
+
+    if(_origOpenAssignModal){
+      window.openAssignModal = _origOpenAssignModal;
+      _origOpenAssignModal = null;
+    }
+  }
+}
+
+async function bootstrap(){
+  await new Promise(r=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',r):r());
+  dateInput = document.getElementById('dateInput');
+  tbody = document.getElementById('tbody');
+  theadRow = document.getElementById('theadRow');
+
+  dateInput.value = new Date().toISOString().slice(0,10);
+
+  setupAssignModal();
+  setupAdminPanel();
+
+  await initSupabase();
+  await loadEmployees();
+  await loadMachines();
+
+  currentDate = dateInput.value;
+  await loadAssignmentsForDate(currentDate);
+  buildTableFor(currentDate);
+
+  enforceOnlineMode();
+
+  const loadBtn = document.getElementById('loadDay');
+  if(loadBtn) loadBtn.onclick = async ()=>{
+    currentDate = dateInput.value;
+    await loadAssignmentsForDate(currentDate);
+    buildTableFor(currentDate);
+  };
+
+  const exportBtn = document.getElementById('exportDayBtn');
+  if(exportBtn) exportBtn.onclick = ()=> exportDayToCSV(currentDate || dateInput.value);
+}
 
 bootstrap();
