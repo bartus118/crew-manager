@@ -442,7 +442,7 @@ function openAssignModal(date, machine, roleKey) {
 
     // wspólna prawa kolumna (ostatnia)
     const thGlobal = document.createElement('th');
-    thGlobal.textContent = 'Pomocniczy / Filtry / Inserty (globalnie)';
+    thGlobal.textContent = 'Pomocniczy / Filtry / Inserty';
     thGlobal.style.padding = '8px';
     thGlobal.style.textAlign = 'center';
     thGlobal.style.borderLeft = '1px solid rgba(0,0,0,0.06)';
@@ -561,7 +561,7 @@ function openAssignModal(date, machine, roleKey) {
         const title = document.createElement('div');
         title.style.fontWeight = '700';
         title.style.marginBottom = '6px';
-        title.textContent = 'Pomocniczy / Filtry / Inserty (wszyscy BU)';
+       
         tdGlobal.appendChild(title);
 
         if (globalHelpers.length === 0) {
