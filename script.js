@@ -330,51 +330,287 @@ function setupAssignModal(){
   });
 }
 
-/**
- * openAssignModal(date, machine, roleKey)
- * - pokaże modal z listą WSZYSTKICH pracowników (bez filtrów)
- * - kliknięcie przypisze pracownika do danej maszyny/roli
- */
-function openAssignModal(date, machine, roleKey){
+function openAssignModal(date, machine, roleKey) {
   // pokaż modal i zablokuj przewijanie tła
   assignModal.style.display = 'flex';
   document.body.classList.add('modal-open');
 
-  // nagłówek i krótka informacja
+  // nagłówek
   assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machine})`;
-  assignInfo.textContent = 'Kliknij pracownika, aby przypisać.';
+  assignInfo.textContent = 'Kliknij nazwisko, aby przypisać. Ostatnia kolumna: wszyscy pomocniczy/filtry/inserty (globalnie).';
 
-  // wyczyść listę i dodaj wszystkich pracowników (bez filtrowania po rolach)
+  // wyczyść zawartość modala
   assignList.innerHTML = '';
-  const list = employees.slice(); // kopia pełnej listy
 
-  list.forEach(emp => {
-    const b = document.createElement('div');
-    b.className = 'employee-btn';
-    b.textContent = emp.name + (emp.bu ? (' · ' + emp.bu) : '');
-
-    // przypisanie po kliknięciu
-    b.onclick = async () => {
-      await saveAssignment(date, machine, roleKey, emp.id);
-      assignModal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-    };
-
-    assignList.appendChild(b);
+  // przygotuj mapowanie BU -> pracownicy
+  const buMap = new Map();
+  employees.forEach(emp => {
+    const bu = (emp.bu && String(emp.bu).trim()) ? String(emp.bu).trim() : 'Inne';
+    if (!buMap.has(bu)) buMap.set(bu, []);
+    buMap.get(bu).push(emp);
   });
 
-  // przycisk do czyszczenia przypisania
+  // roleColumns: 4 główne kolumny per-BU + jedna kolumna dla "pracownik_pomocniczy"
+  const roleCols = [
+    { key: 'mechanik_focke', title: 'Mechanik Focke' },
+    { key: 'mechanik_protos', title: 'Mechanik Protos' },
+    { key: 'operator_focke', title: 'Operator Focke' },
+    { key: 'operator_protos', title: 'Operator Protos' },
+    { key: 'pracownik_pomocniczy', title: 'Prac. pomocniczy' }
+  ];
+
+  // helperRoles: te role będą pokazane w jednej wspólnej kolumnie
+  const helperRoles = ['pracownik_pomocniczy', 'filtry', 'inserty'];
+
+  // top bar: info + BU select + close
+  const topRow = document.createElement('div');
+  topRow.style.display = 'flex';
+  topRow.style.justifyContent = 'space-between';
+  topRow.style.alignItems = 'center';
+  topRow.style.gap = '8px';
+  topRow.style.marginBottom = '8px';
+
+  const leftInfo = document.createElement('div');
+  leftInfo.className = 'small-muted';
+  leftInfo.textContent = `Data: ${date} • Maszyna: ${machine} • Rola: ${roleKey.replace('_',' ')}`;
+  topRow.appendChild(leftInfo);
+
+  const controls = document.createElement('div');
+  controls.style.display = 'flex';
+  controls.style.alignItems = 'center';
+  controls.style.gap = '8px';
+
+  const buSelect = document.createElement('select');
+  buSelect.style.padding = '6px';
+  buSelect.style.borderRadius = '6px';
+  buSelect.style.border = '1px solid #d4dff0';
+  const optAll = document.createElement('option');
+  optAll.value = '__all';
+  optAll.textContent = 'Wszystkie BU';
+  buSelect.appendChild(optAll);
+  Array.from(buMap.keys()).sort().forEach(bu => {
+    const o = document.createElement('option');
+    o.value = bu;
+    o.textContent = bu;
+    buSelect.appendChild(o);
+  });
+  controls.appendChild(buSelect);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn outline';
+  closeBtn.textContent = 'Zamknij';
+  closeBtn.onclick = () => { assignModal.style.display = 'none'; document.body.classList.remove('modal-open'); };
+  controls.appendChild(closeBtn);
+
+  topRow.appendChild(controls);
+  assignList.appendChild(topRow);
+
+  // kontener tabeli (większy)
+  const wrap = document.createElement('div');
+  wrap.className = 'assign-big-table-wrap';
+  wrap.style.maxHeight = '70vh';
+  wrap.style.overflow = 'auto';
+  assignList.appendChild(wrap);
+
+  // funkcja renderująca tabelę
+  function renderTable(filterBU = '__all') {
+    wrap.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.className = 'assign-big-table';
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.fontSize = '13px';
+
+    // thead
+    const thead = document.createElement('thead');
+    const thr = document.createElement('tr');
+
+    // BU header
+    const thBU = document.createElement('th'); thBU.textContent = 'BU'; thBU.style.width = '90px'; thBU.style.padding='8px'; thBU.style.textAlign='center';
+    thr.appendChild(thBU);
+
+    // role headers
+    roleCols.forEach(rc => {
+      const th = document.createElement('th');
+      th.textContent = rc.title;
+      th.style.padding = '8px';
+      th.style.textAlign = 'center';
+      th.style.borderLeft = '1px solid rgba(0,0,0,0.06)';
+      thr.appendChild(th);
+    });
+
+    // wspólna prawa kolumna (ostatnia)
+    const thGlobal = document.createElement('th');
+    thGlobal.textContent = 'Pomocniczy / Filtry / Inserty (globalnie)';
+    thGlobal.style.padding = '8px';
+    thGlobal.style.textAlign = 'center';
+    thGlobal.style.borderLeft = '1px solid rgba(0,0,0,0.06)';
+    thr.appendChild(thGlobal);
+
+    thead.appendChild(thr);
+    table.appendChild(thead);
+
+    // tbody
+    const tbodyTable = document.createElement('tbody');
+
+    // lista BU do wyświetlenia
+    const buKeys = Array.from(buMap.keys()).sort();
+    const visibleBU = buKeys.filter(bu => filterBU === '__all' ? true : bu === filterBU);
+
+    // przygotuj globalną listę helperów (unikaty) — Map zapewnia unikalność
+    const globalHelpersMap = new Map();
+    employees.forEach(emp => {
+      const empRoles = (emp.roles || []).map(r => String(r));
+      const nameLower = String(emp.name || '').toLowerCase();
+      const hasHelperRole = empRoles.some(r => helperRoles.includes(r)) || helperRoles.some(hr => nameLower.includes(hr));
+      if (hasHelperRole) globalHelpersMap.set(emp.id, emp);
+    });
+    const globalHelpers = Array.from(globalHelpersMap.values()).sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+
+    // utwórz wiersze - po jednym wierszu na BU
+    for (let i = 0; i < visibleBU.length; i++) {
+      const bu = visibleBU[i];
+      const empList = buMap.get(bu) || [];
+
+      // zgrupuj pracowników BU po rolach, ale dbamy o unikalność — użyjemy Set id
+      const roleToList = {};
+      roleCols.forEach(rc => roleToList[rc.key] = []);
+      const roleToSet = {};
+      roleCols.forEach(rc => roleToSet[rc.key] = new Set());
+
+      empList.forEach(emp => {
+        const empRoles = (emp.roles || []).map(r => String(r));
+        // dodawaj jedynie jeśli jeszcze nie dodany do danej roli
+        empRoles.forEach(r => {
+          if (roleToList[r] && !roleToSet[r].has(emp.id)) {
+            roleToList[r].push(emp);
+            roleToSet[r].add(emp.id);
+          }
+        });
+
+        // heurystyka po nazwie — dodaj tylko jeśli nie było wcześniej w tej roli
+        const name = (emp.name || '').toLowerCase();
+        if (name.includes('mechanik_focke') && !roleToSet['mechanik_focke'].has(emp.id)) {
+          roleToList['mechanik_focke'].push(emp); roleToSet['mechanik_focke'].add(emp.id);
+        }
+        if (name.includes('mechanik_protos') && !roleToSet['mechanik_protos'].has(emp.id)) {
+          roleToList['mechanik_protos'].push(emp); roleToSet['mechanik_protos'].add(emp.id);
+        }
+        if (name.includes('operator_focke') && !roleToSet['operator_focke'].has(emp.id)) {
+          roleToList['operator_focke'].push(emp); roleToSet['operator_focke'].add(emp.id);
+        }
+        if (name.includes('operator_protos') && !roleToSet['operator_protos'].has(emp.id)) {
+          roleToList['operator_protos'].push(emp); roleToSet['operator_protos'].add(emp.id);
+        }
+        if (name.includes('pracownik_pomocniczy') && !roleToSet['pracownik_pomocniczy'].has(emp.id)) {
+          roleToList['pracownik_pomocniczy'].push(emp); roleToSet['pracownik_pomocniczy'].add(emp.id);
+        }
+      });
+
+      const tr = document.createElement('tr');
+
+      // BU cell
+      const tdBU = document.createElement('td');
+      tdBU.textContent = bu;
+      tdBU.style.fontWeight = '700';
+      tdBU.style.padding = '8px';
+      tdBU.style.textAlign = 'center';
+      tr.appendChild(tdBU);
+
+      // role columns (listy imion)
+      roleCols.forEach(rc => {
+        const td = document.createElement('td');
+        td.style.padding = '6px';
+        td.style.verticalAlign = 'top';
+        td.style.borderLeft = '1px solid rgba(0,0,0,0.03)';
+        td.className = 'td-names';
+
+        // convert to unique list just in case, and sort
+        const unique = Array.from(new Map((roleToList[rc.key]||[]).map(p => [p.id, p])).values());
+        const names = unique.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+
+        if (names.length === 0) {
+          const span = document.createElement('div'); span.className = 'muted'; span.textContent = '—'; td.appendChild(span);
+        } else {
+          names.forEach(emp => {
+            const div = document.createElement('div');
+            div.className = 'emp-name';
+            div.textContent = emp.name;
+            // kliknięcie przypisuje pracownika do roleKey
+            div.onclick = async () => {
+              await saveAssignment(date, machine, roleKey, emp.id);
+              assignModal.style.display = 'none';
+              document.body.classList.remove('modal-open');
+            };
+            td.appendChild(div);
+          });
+        }
+        tr.appendChild(td);
+      });
+
+      // ostatnia globalna kolumna: dodamy tylko w pierwszym wierszu z odpowiednim rowspan
+      if (i === 0) {
+        const tdGlobal = document.createElement('td');
+        tdGlobal.style.padding = '8px';
+        tdGlobal.style.verticalAlign = 'top';
+        tdGlobal.style.borderLeft = '1px solid rgba(0,0,0,0.06)';
+        tdGlobal.setAttribute('rowspan', String(visibleBU.length || 1));
+        tdGlobal.className = 'td-global-helpers';
+
+        const title = document.createElement('div');
+        title.style.fontWeight = '700';
+        title.style.marginBottom = '6px';
+        title.textContent = 'Pomocniczy / Filtry / Inserty (wszyscy BU)';
+        tdGlobal.appendChild(title);
+
+        if (globalHelpers.length === 0) {
+          const m = document.createElement('div'); m.className = 'muted'; m.textContent = '—'; tdGlobal.appendChild(m);
+        } else {
+          globalHelpers.forEach(emp => {
+            const d = document.createElement('div');
+            d.className = 'emp-name';
+            d.textContent = emp.name;
+            d.onclick = async () => {
+              await saveAssignment(date, machine, roleKey, emp.id);
+              assignModal.style.display = 'none';
+              document.body.classList.remove('modal-open');
+            };
+            tdGlobal.appendChild(d);
+          });
+        }
+
+        tr.appendChild(tdGlobal);
+      }
+
+      tbodyTable.appendChild(tr);
+    } // koniec for visibleBU
+
+    table.appendChild(tbodyTable);
+    wrap.appendChild(table);
+  } // koniec renderTable
+
+  // inicjalne renderowanie
+  renderTable('__all');
+
+  // obsługa filtra BU
+  buSelect.addEventListener('change', (e) => renderTable(e.target.value));
+
+  // przycisk do czyszczenia przypisania (na dole)
   const clear = document.createElement('button');
   clear.className = 'btn';
+  clear.style.marginTop = '12px';
+  clear.style.width = '100%';
   clear.textContent = 'Wyczyść przypisanie';
   clear.onclick = async () => {
     await saveAssignment(date, machine, roleKey, null);
     assignModal.style.display = 'none';
     document.body.classList.remove('modal-open');
   };
-
   assignList.appendChild(clear);
 }
+
+
 
 /* -------------------- PANEL ADMINA -------------------- */
 function setupAdminPanel(){
