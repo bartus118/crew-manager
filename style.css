@@ -42,7 +42,7 @@ td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
 /* Select w komórce statusu - dopasowanie */
 td select { padding: 6px 8px; border-radius: 6px; border: 1px solid #cfdff5; background: white; min-width: 160px; }
 
-'td:first-child { font-weight: 700; } /* numer maszyny pogrubiony */
+td:first-child { font-weight: 700; } /* numer maszyny pogrubiony */
 
 /* Responsywność: przewijanie poziome na małych ekranach */
 @media (max-width: 900px) { #app { padding: 0 8px; } table { display: block; overflow-x: auto; white-space: nowrap; } }
