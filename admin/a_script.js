@@ -423,21 +423,18 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- renderEditableOrderList (używane przez zakładkę Kolejność)
+  
+  
+    /* -------------------- renderEditableOrderList (używane przez zakładkę Kolejność)
      Tutaj tylko pokazujemy maker/paker obok numeru, tak aby kolejność nadal była widoczna.
-  */
-  /* -------------------- renderEditableOrderList (używane przez zakładkę Kolejność)
-     Tutaj tylko pokazujemy maker/paker obok numeru, tak aby kolejność nadal była widoczna.
-     Poprawiona wersja: usuwa stare placeholdery, zabezpiecza przed podwójnym podpinaniem eventów.
+     WERSJA BEZ PRZYCISKU "USUŃ".
   */
   async function renderEditableOrderList(){
     const el = document.getElementById('machineListEditable');
     if(!el) return;
 
-    // USUŃ WSZYSTKIE STARE PLACEHOLDERY (jeśli zostały po poprzednich renderach)
+    // usuń stare placeholdery
     el.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
-
-    // wyczyść zawartość kontenera (bez pozostawiania starych listenerów na elementach)
     el.innerHTML = '';
 
     if(!sb){
@@ -453,23 +450,22 @@ const AdminMachines = (function(){
         return;
       }
 
-      // placeholder używany podczas drag&drop (jeden egzemplarz)
+      // placeholder
       const placeholder = document.createElement('div');
       placeholder.className = 'drag-placeholder';
       placeholder.style.height = '0px';
       placeholder.style.transition = 'height 120ms ease, opacity 120ms ease';
-      placeholder.style.opacity = '0.98';
-      placeholder.style.border = '2px dashed rgba(96,165,250,0.9)';
-      placeholder.style.background = 'rgba(219,234,254,0.35)';
+      placeholder.style.opacity = '0.9';
+      placeholder.style.border = '2px dashed rgba(96,165,250,0.8)';
+      placeholder.style.background = 'rgba(219,234,254,0.3)';
       placeholder.style.borderRadius = '8px';
       placeholder.style.margin = '6px 0';
 
-      // UTWÓRZ WIERSZE
+      // utwórz wiersze
       machines.forEach(m=>{
         const row = document.createElement('div');
         row.className = 'admin-machine-row';
         row.dataset.number = m.number;
-        // style "karta" - mogą być nadpisane przez CSS, tam jest OK
         row.style.display = 'flex';
         row.style.justifyContent = 'space-between';
         row.style.alignItems = 'center';
@@ -479,27 +475,27 @@ const AdminMachines = (function(){
         row.style.transition = 'background 120ms ease, transform 120ms ease';
         row.draggable = true;
 
+        // zawartość tylko: uchwyt + numer + maker/paker
         const left = document.createElement('div');
         left.style.display = 'flex';
         left.style.alignItems = 'center';
-        left.innerHTML = `<span class="drag-handle" style="cursor:grab;margin-right:8px;">⇅</span><strong>${m.number}</strong><span style="margin-left:8px;color:#6b7280;font-size:13px;"> (${m.maker||''}/${m.paker||''})</span>`;
-
-        const right = document.createElement('div');
-        right.innerHTML = `<button class="btn small danger remove-machine" disabled>Usuń</button>`;
+        left.innerHTML = `
+          <span class="drag-handle" style="cursor:grab;margin-right:8px;">⇅</span>
+          <strong>${m.number}</strong>
+          <span style="margin-left:8px;color:#6b7280;font-size:13px;">(${m.maker||''}/${m.paker||''})</span>
+        `;
 
         row.appendChild(left);
-        row.appendChild(right);
         el.appendChild(row);
       });
 
-      // FUNKCJE POMOCNICZE
+      // pomocnicze funkcje
       function removeAllPlaceholders() {
         el.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
       }
       function clearDragClasses() {
         el.querySelectorAll('.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
       }
-
       function getDragAfterElement(container, y) {
         const draggableElements = [...container.querySelectorAll('.admin-machine-row:not(.dragging)')];
         return draggableElements.find(child => {
@@ -508,18 +504,16 @@ const AdminMachines = (function(){
         }) || null;
       }
 
-      // DRAG & DROP HANDLERS (podpinamy poprzez przypisanie, nie addEventListener, żeby nie dublować)
+      // drag & drop
       let dragSrc = null;
 
-      // przypnij eventy bezpośrednio do elementów (nie kumulują się, bo elementy są nowe przy każdym renderze)
       el.querySelectorAll('.admin-machine-row').forEach(item=>{
         item.addEventListener('dragstart', (e) => {
           dragSrc = item;
           item.classList.add('dragging');
           const h = item.getBoundingClientRect().height;
           placeholder.style.height = `${h}px`;
-          // jeżeli placeholder jeszcze nie w DOM, nie dodajemy go tutaj — dodamy w dragover
-          try { e.dataTransfer.setData('text/plain', 'moving'); } catch(err){ /* ignore */ }
+          try { e.dataTransfer.setData('text/plain', 'moving'); } catch(err){}
           e.dataTransfer.effectAllowed = 'move';
         });
 
@@ -529,20 +523,11 @@ const AdminMachines = (function(){
           clearDragClasses();
           dragSrc = null;
         });
-
-        item.addEventListener('dragenter', () => {
-          if(item !== dragSrc) item.classList.add('drag-over');
-        });
-        item.addEventListener('dragleave', () => {
-          item.classList.remove('drag-over');
-        });
       });
 
-      // przypisanie na kontener — używamy właściwości, aby nadpisać wcześniejsze handlery
       el.ondragover = (e) => {
         e.preventDefault();
         const after = getDragAfterElement(el, e.clientY);
-        // usuń inne placeholdery (bezpiecznie)
         el.querySelectorAll('.drag-placeholder').forEach(p => { if(p !== placeholder) p.remove(); });
         if(after === null){
           if(el.lastElementChild !== placeholder) el.appendChild(placeholder);
@@ -558,12 +543,10 @@ const AdminMachines = (function(){
           el.insertBefore(dragSrc, placeholder);
           placeholder.remove();
         }
-        // cleanup klas
         clearDragClasses();
         dragSrc = null;
       };
 
-      // globalny ondragend na document — nadpisujemy, żeby mieć pewność
       document.ondragend = () => {
         if(dragSrc) dragSrc.classList.remove('dragging');
         removeAllPlaceholders();
@@ -571,13 +554,13 @@ const AdminMachines = (function(){
         dragSrc = null;
       };
 
-      // po renderze: upewnij się, że w DOM nie ma starych placeholderów (druga defensywa)
       removeAllPlaceholders();
     }catch(e){
       console.error('renderEditableOrderList error', e);
       el.appendChild(makeMuted('Błąd ładowania listy. Sprawdź konsolę.'));
     }
   }
+
 
 
   function refreshOrderViewSafe(){
