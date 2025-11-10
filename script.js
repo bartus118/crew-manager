@@ -45,9 +45,9 @@ const STATUS_ACTIVE_ROLES = {
   'Produkcja + Filtry': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry'],
   'Produkcja + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'inserty'],
   'Produkcja + Filtry + Inserty': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'filtry', 'inserty'],
-  'Konserwacja': [],
-  'Rozruch': ['mechanik_focke', 'mechanik_protos', 'pracownik_pomocniczy'],
-  'Bufor': ['operator_focke', 'operator_protos'],
+  'Konserwacja': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy'],
+  'Rozruch': ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy'],
+  'Bufor': ['mechanik_focke', 'mechanik_protos'],
   'Stop': []
 };
 
@@ -285,7 +285,7 @@ function buildTableFor(date){
         else td.classList.add('assigned-cell');
         td.textContent = val;
         td.style.cursor = 'pointer';
-        td.addEventListener('dblclick', () => openAssignModal(date, m.number, col.key));
+        td.addEventListener('click', () => openAssignModal(date, m.number, col.key));
       }
 
       tr.appendChild(td);
