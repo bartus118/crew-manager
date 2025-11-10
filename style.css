@@ -126,18 +126,41 @@ td:first-child { font-weight: 700; }
 }
 
 /* -------------------- Obramowania wierszy zależne od statusu -------------------- */
-/* Ramka (box-shadow) wyróżnia cały wiersz — ale tła dostają tylko dwie pierwsze komórki */
+/* Prawdziwa ramka wokół całego wiersza — 4px, z odstępem między wierszami */
+
+tbody tr {
+  background: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
 
 /* Zielony — Produkcja */
-tr.status-prod { box-shadow: 0 0 0 3px rgba(10,166,74,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+tr.status-prod {
+  border: 2px solid rgba(10,166,74,0.6);
+}
+
 /* Niebieski — Konserwacja */
-tr.status-konserwacja { box-shadow: 0 0 0 3px rgba(43,123,255,0.18), 0 6px 18px rgba(0,0,0,0.06); }
-/* Pomarańcz — Rozruch */
-tr.status-rozruch { box-shadow: 0 0 0 3px rgba(255,138,0,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+tr.status-konserwacja {
+  border: 2px solid rgba(43,123,255,0.6);
+}
+
+/* Pomarańczowy — Rozruch */
+tr.status-rozruch {
+  border: 2px solid rgba(255,138,0,0.6);
+}
+
 /* Czerwony — Bufor */
-tr.status-bufor { box-shadow: 0 0 0 3px rgba(229,57,53,0.18), 0 6px 18px rgba(0,0,0,0.06); }
+tr.status-bufor {
+  border: 2px solid rgba(229,57,53,0.6);
+}
+
 /* Czarny — Stop */
-tr.status-stop { box-shadow: 0 0 0 3px rgba(0,0,0,0.6), 0 6px 18px rgba(0,0,0,0.06); color: #fff; }
+tr.status-stop {
+  border: 2px solid rgba(0,0,0,0.9);
+  color: #fff;
+}
+
 
 /* reset tła komórek w wierszu — ale nie nadpisujemy pól .empty-cell ani .assigned-cell */
 tr.status-prod td:not(.empty-cell):not(.assigned-cell),
