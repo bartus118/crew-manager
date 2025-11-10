@@ -70,24 +70,21 @@
         <button id="tabModify" class="btn ghost">Modyfikacja maszyn</button>
       </div>
 
-      <!-- 🔸 SEKCJA KOLEJNOŚCI MASZYN (pierwotny panel) -->
+       <!-- 🔸 SEKCJA KOLEJNOŚCI MASZYN (pierwotny panel) -->
       <div id="adminOrderSection">
         <h4>Kolejność wyświetlania maszyn</h4>
         <div class="muted">Przeciągaj, aby zmienić kolejność. Zapisz, aby ustawić nowy domyślny widok.</div>
 
+        <!-- ZAPISZ KOLEJNOŚĆ (przycisk nad listą lub pod, wg preferencji) -->
         <div class="row" style="margin-top:8px;">
-          <input type="text" id="newMachineNumber" placeholder="Numer nowej maszyny">
-          <button id="addMachineBtn" class="btn">Dodaj</button>
-        </div>
-
-        <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px;"></div>
-
-        <div class="row" style="margin-top:8px;gap:8px;">
           <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
-          <button id="adminExportEmpBtn" class="btn outline">Eksportuj pracowników</button>
         </div>
+
+        <!-- lista edytowalna -->
+        <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px;"></div>
       </div>
 
+       
       <!-- 🔸 SEKCJA MODYFIKACJI MASZYN (nowy moduł, ukryty na starcie) -->
       <div id="adminMachinesSection" style="display:none;">
         <h4>Modyfikacja maszyn</h4>

@@ -537,4 +537,38 @@ table td:active,
   background: #f7fbff;
 }
 
+/* --- Drag & drop: wizualizacja + animacja FLIP --- */
+.admin-machine-row {
+  transition: transform 220ms ease, box-shadow 160ms ease, background 160ms ease;
+  will-change: transform;
+  position: relative; /* potrzebne dla płynnej animacji */
+}
+
+.admin-machine-row.dragging {
+  opacity: 0.65;
+  transform: scale(0.99);
+  box-shadow: 0 12px 30px rgba(59,130,246,0.14);
+  z-index: 30000;
+}
+
+/* Zmodyfikowane: usuń tło, zostaw subtelny obrys */
+.admin-machine-row.drag-over {
+  border: 2px dashed rgba(59,130,246,0.8);
+  /* tło usunięte aby nie dublować placeholdera */
+  background: transparent;
+  border-radius: 8px;
+}
+
+
+.drag-placeholder {
+  border: 2px dashed rgba(96,165,250,0.9);
+  background: rgba(219,234,254,0.35);
+  border-radius: 8px;
+  margin: 6px 0;
+  transition: height 120ms ease, opacity 120ms ease;
+  opacity: 0.95;
+  box-sizing: border-box;
+}
+
+
 /* koniec pliku */
