@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Kolejność maszyn (Crew Manager)</title>
+  <style>
+    :root{--bg:#f7fafc;--card:#ffffff;--muted:#6b7280;--accent:#2563eb}
+    body{font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:#0f172a}
+    .container{max-width:980px;margin:0 auto}
+    h1{font-size:20px;margin:0 0 14px}
+    .card{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.06);margin-bottom:16px}
+    .muted{color:var(--muted);font-size:13px}
+    #machineList{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+    .mrow{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid rgba(15,23,42,0.06);background:#fff;cursor:grab}
+    .mrow.dragging{opacity:0.6}
+    .drag-handle{cursor:grab;margin-right:10px}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,0.12)}
+    .small{font-size:13px;padding:6px 8px}
+    .status{font-size:13px;color:var(--muted)}
+    .hint{font-size:13px;color:var(--muted);margin-top:6px}
+    input[type="text"]{padding:8px;border-radius:8px;border:1px solid #e6eef8}
+  </style>
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Panel admina — kolejność maszyn</h1>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700">Porządek maszyn (widok domyślny)</div>
+          <div class="muted">Przeciągnij, aby zmienić kolejność; kliknij "Zapisz kolejność", żeby zapisać w bazie.</div>
+        </div>
+        <div class="controls">
+          <button id="reloadBtn" class="btn ghost small">Odśwież</button>
+          <button id="saveOrderBtn" class="btn small">Zapisz kolejność</button>
+        </div>
+      </div>
+
+      <div id="machineList" style="margin-top:12px"></div>
+
+      <div class="hint">Uwaga: zapisywanie zmieni pole <code>ord</code> dla maszyn i ustawi <code>default_view = true</code>.</div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700">Szybkie sprawdzenie</div>
+      <div class="muted">Po zapisie odśwież główną stronę aby zobaczyć zmiany.</div>
+    </div>
+  </div>
+
+  <!-- lokalny skrypt panelu admina -->
+  <script src="./a_script.js"></script>
+</body>
+</html>

@@ -1,8 +1,13 @@
 /**
- * script.js — Crew Manager
- * Wersja: online-only edycja + usuwanie przypisań gdy rola przestaje być aktywna.
+ * script.js — Crew Manager (wersja oczyszczona)
  *
- * WAŻNE: Zmiana — openAssignModal pokazuje WSZYSTKICH pracowników (możesz przypisać dowolnego).
+ * Uwaga:
+ * - Usunięto stary modal panelu admina (HTML + powiązane funkcje), ponieważ
+ *   zarządzanie panelem przeniesiono do /admin/a_index.html i admin/a_script.js.
+ * - Nie wprowadzałem logicznych zmian w działaniu aplikacji — tylko usunąłem
+ *   zbędne odwołania i zakomentowałem/usunąłem nieużywane fragmenty.
+ *
+ * Komentarze po polsku wyjaśniają co zostało usunięte/zmienione.
  */
 
 /* -------------------- KONFIGURACJA SUPABASE (wstaw swoje dane) -------------------- */
@@ -17,6 +22,7 @@ let assignments = {};
 let dateInput, tbody, theadRow;
 let currentDate = null;
 
+/* -------------------- KONFIGURACJA KOLUMN I STATUSÓW -------------------- */
 const COLUMNS = [
   { key: 'maszyna', title: 'Maszyna' },
   { key: 'status', title: 'Status' },
@@ -53,7 +59,7 @@ const STATUS_ACTIVE_ROLES = {
 
 const DEFAULT_MACHINES = ['11','12','15','16','17','18','21','22','24','25','26','27','28','31','32','33','34','35','94','96'];
 
-/* -------------------- wait for global supabase SDK -------------------- */
+/* -------------------- pomoc: czekaj na globalne supabase (CDN) -------------------- */
 function waitForSupabaseGlobal(timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
@@ -77,6 +83,7 @@ async function initSupabase(){
   }
 }
 
+/* -------------------- ŁADOWANIE DANYCH -------------------- */
 async function loadEmployees(){
   if(!sb){ employees = []; return; }
   try {
@@ -96,14 +103,19 @@ async function loadMachines(){
   }
   try{
     const { data, error } = await sb.from('machines').select('*').order('ord', { ascending: true }).eq('default_view', true);
-    if (error) { console.error('loadMachines error', error); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
-    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    if (error) {
+      console.error('loadMachines error', error);
+      machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    } else {
+      machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    }
   } catch (e) {
     console.error(e);
     machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
   }
 }
 
+/* -------------------- ŁADOWANIE PRZYPISAŃ DLA DANEJ DATY -------------------- */
 async function loadAssignmentsForDate(date){
   if(!date) return;
   if(!sb){ assignments[date] = {}; return; }
@@ -118,13 +130,16 @@ async function loadAssignmentsForDate(date){
     });
 
     (data||[]).forEach(a=>{
-      // jeśli napotkamy maszynę której nie ma w machines — dodajemy ją na stałe
+      // jeżeli napotkamy maszynę której nie ma w machines — dodajemy ją (synchronizacja)
       if(!machines.find(mm => String(mm.number) === String(a.machine_number))){
         const newMachine = { number: String(a.machine_number), ord: machines.length+1, status: 'Produkcja' };
         machines.push(newMachine);
-        sb.from('machines').insert([{ number: newMachine.number, ord: newMachine.ord, default_view:true, status: newMachine.status }])
-          .then(res => { if(res.error) console.warn('sync new machine error', res.error); })
-          .catch(err => console.warn('sync new machine error', err));
+        // próbujemy zsynchronizować do DB — jeśli online
+        if (sb) {
+          sb.from('machines').insert([{ number: newMachine.number, ord: newMachine.ord, default_view:true, status: newMachine.status }])
+            .then(res => { if(res.error) console.warn('sync new machine error', res.error); })
+            .catch(err => console.warn('sync new machine error', err));
+        }
         map[newMachine.number] = [newMachine.number, newMachine.status];
         for(let i=2;i<COLUMNS.length;i++) map[newMachine.number].push('');
       }
@@ -144,6 +159,7 @@ async function loadAssignmentsForDate(date){
   }
 }
 
+/* -------------------- NARZĘDZIA UI -------------------- */
 function statusClassFor(status){
   if(!status) return '';
   const s = String(status).toLowerCase();
@@ -155,6 +171,7 @@ function statusClassFor(status){
   return '';
 }
 
+/* Budowa głównej tabeli z przypisaniami */
 function buildTableFor(date){
   const dateData = assignments[date] || {};
   theadRow.innerHTML = '';
@@ -190,35 +207,31 @@ function buildTableFor(date){
       selectStatus.appendChild(opt);
     });
 
-    /* ---------- ZMIANA: przy zmianie statusu usuń przypisania do ról, które przestają być aktywne ---------- */
+    /* ---------- ZMIANA STATUSU: usuń przypisania nieaktywnych ról ---------- */
     selectStatus.onchange = async (e) => {
       const newStatus = e.target.value;
       const newCls = statusClassFor(newStatus);
 
-      // poprzedni status (przed zmianą) — używamy go, by znaleźć role, które były aktywne
       const prevStatus = m.status || effectiveStatus || 'Produkcja';
       const prevRoles = (STATUS_ACTIVE_ROLES[prevStatus] || []);
       const nextRoles = (STATUS_ACTIVE_ROLES[newStatus] || []);
-
-      // role, które były aktywne, a teraz przestają być potrzebne
       const rolesToRemove = prevRoles.filter(r => !nextRoles.includes(r));
 
-      // --- Usuń wizualnie stare klasy statusowe z wiersza / komórek ---
+      // usuń stare klasy statusowe
       tr.classList.remove('status-prod','status-konserwacja','status-rozruch','status-stop','status-bufor');
       tdNum.classList.remove('status-prod','status-konserwacja','status-rozruch','status-stop','status-bufor');
       tdStatus.classList.remove('status-prod','status-konserwacja','status-rozruch','status-stop','status-bufor');
 
       if(newCls){ tr.classList.add(newCls); tdNum.classList.add(newCls); tdStatus.classList.add(newCls); }
 
-      // Jeśli są role do usunięcia — najpierw usuwamy przypisania z modelu i (jeśli online) z DB
+      // usuń przypisania w modelu i w DB (jeśli online)
       if(rolesToRemove.length > 0){
-        // usuń z lokalnego modelu assignments (jeśli istnieje dla tej daty)
         try{
           if(assignments[date] && assignments[date][m.number]){
             rolesToRemove.forEach(roleKey => {
               const idx = COLUMNS.findIndex(c => c.key === roleKey);
               if(idx > -1 && typeof assignments[date][m.number][idx] !== 'undefined'){
-                assignments[date][m.number][idx] = ''; // usuń przypisanie w modelu
+                assignments[date][m.number][idx] = '';
               }
             });
           }
@@ -226,7 +239,6 @@ function buildTableFor(date){
           console.warn('Błąd podczas lokalnego usuwania przypisań', err);
         }
 
-        // jeśli jesteśmy online, usuń rekordy w DB (asynchronicznie, po kolei)
         if(sb){
           for(const roleKey of rolesToRemove){
             try{
@@ -242,20 +254,17 @@ function buildTableFor(date){
         }
       }
 
-      // zaktualizuj lokalny model statusu maszyny
+      // aktualizuj lokalny model statusu oraz DB
       m.status = newStatus;
 
-      // zapisz zmianę statusu do DB jeśli online; jeśli nie — zablokujemy i przywrócimy widok
       if(!sb){
         alert('Brak połączenia z serwerem — zmiana statusu jest zablokowana.');
-        // przywróć poprzedni widok/stan tabeli
         await loadMachines();
         await loadAssignmentsForDate(date);
         buildTableFor(date);
         return;
       }
 
-      // zapisz status maszyny w DB
       try{
         const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
         if(error) console.error('update machine status error', error);
@@ -263,7 +272,6 @@ function buildTableFor(date){
         console.error('update machine status catch', err);
       }
 
-      // odśwież widok z DB (po usunięciu ewentualnych przypisań)
       await loadAssignmentsForDate(date);
       buildTableFor(date);
     };
@@ -271,6 +279,7 @@ function buildTableFor(date){
     tdStatus.appendChild(selectStatus);
     tr.appendChild(tdStatus);
 
+    /* kolumny ról */
     COLUMNS.slice(2).forEach(col => {
       const td = document.createElement('td');
       const active = (STATUS_ACTIVE_ROLES[m.status || effectiveStatus] || []).includes(col.key);
@@ -295,6 +304,7 @@ function buildTableFor(date){
   });
 }
 
+/* -------------------- ZAPIS PRZYPISANIA DO BAZY -------------------- */
 async function saveAssignment(date,machine,role,empId){
   if(!sb){
     alert('Brak połączenia z serwerem — zapisywanie przypisań jest zablokowane. Proszę połącz się z Supabase i spróbuj ponownie.');
@@ -308,7 +318,7 @@ async function saveAssignment(date,machine,role,empId){
   } catch(e){ console.error('saveAssignment error', e); }
 }
 
-/* -------------------- MODAL PRZYPISANIA -------------------- */
+/* -------------------- MODAL PRZYPISANIA (UI) -------------------- */
 let assignModal, assignTitle, assignInfo, assignList;
 function setupAssignModal(){
   assignModal = document.getElementById('assignModal');
@@ -330,6 +340,8 @@ function setupAssignModal(){
   });
 }
 
+/* openAssignModal(...) - funkcja tworzy listę pracowników i pozwala przypisać ich do roli.
+   Funkcja korzysta z globalnych zmiennych employees oraz saveAssignment() */
 function openAssignModal(date, machine, roleKey) {
   // pokaż modal i zablokuj przewijanie tła
   assignModal.style.display = 'flex';
@@ -610,186 +622,7 @@ function openAssignModal(date, machine, roleKey) {
   assignList.appendChild(clear);
 }
 
-
-
-/* -------------------- PANEL ADMINA -------------------- */
-function setupAdminPanel(){
-  const adminPanel = document.getElementById('adminPanel');
-  const adminLoginBtn = document.getElementById('adminLoginBtn');
-  const adminLogin = document.getElementById('adminLogin');
-  const adminMsg = document.getElementById('adminMsg');
-  const adminSection = document.getElementById('adminSection');
-  const adminCloseNoLogin = document.getElementById('adminCloseNoLogin');
-  const adminCloseNoLoginBtn = document.getElementById('adminCloseNoLoginBtn');
-  const closeAdmin = document.getElementById('closeAdmin');
-
-  // otwórz panel — będzie zablokowany jeśli offline przez enforceOnlineMode
-  if(adminLoginBtn) adminLoginBtn.onclick = ()=>{
-    adminPanel.style.display = 'flex';
-    document.body.classList.add('modal-open');
-  };
-
-  if(adminCloseNoLogin) adminCloseNoLogin.addEventListener('click', ()=>{
-    adminPanel.style.display = 'none';
-    document.body.classList.remove('modal-open');
-  });
-
-  if(adminCloseNoLoginBtn) adminCloseNoLoginBtn.addEventListener('click', ()=>{
-    adminPanel.style.display = 'none';
-    document.body.classList.remove('modal-open');
-  });
-
-  adminPanel.addEventListener('click', (e)=>{
-    if(e.target === adminPanel){
-      adminPanel.style.display = 'none';
-      document.body.classList.remove('modal-open');
-    }
-  });
-
-  // proste logowanie admin (lokalne)
-  if(adminLogin) adminLogin.onclick = async ()=>{
-    const p = document.getElementById('adminPass').value;
-    if(p === 'admin123'){
-      adminSection.style.display = 'block';
-      adminMsg.textContent = 'Zalogowano.';
-      await refreshAdminMachineList();
-    } else {
-      adminMsg.textContent = 'Błędne hasło.';
-    }
-  };
-
-  // Dodawanie maszyny (tylko online) — handler
-  const addBtn = document.getElementById('addMachineBtn');
-  if(addBtn) addBtn.onclick = async () => {
-    if(!sb){
-      alert('Brak połączenia z serwerem — dodawanie maszyn jest zablokowane. Połącz się z Supabase, aby dodać nową maszynę.');
-      return;
-    }
-    const num = document.getElementById('newMachineNumber').value.trim();
-    if(!num) return alert('Podaj numer maszyny');
-
-    try{
-      const { data: exists } = await sb.from('machines').select('*').eq('number', num).limit(1);
-      if(exists && exists.length){
-        alert('Maszyna o takim numerze już istnieje w bazie.');
-        return;
-      }
-
-      const { data: cur } = await sb.from('machines').select('ord').order('ord',{ascending:false}).limit(1).maybeSingle();
-      const nextOrd = cur?.ord ? cur.ord + 1 : (machines.length ? machines[machines.length-1].ord + 1 : 1);
-      const { error } = await sb.from('machines').insert([{ number: String(num), ord: nextOrd, default_view:true, status:'Produkcja' }]);
-      if(error) return alert('Błąd: ' + error.message);
-
-      document.getElementById('newMachineNumber').value = '';
-      await loadMachines();
-      await refreshAdminMachineList();
-      await loadAssignmentsForDate(currentDate);
-      buildTableFor(currentDate);
-    }catch(e){
-      console.error('addMachine error', e);
-    }
-  };
-
-  // zapis kolejności maszyn (tylko online)
-  const saveOrderBtn = document.getElementById('saveMachineOrderBtn');
-  if(saveOrderBtn) saveOrderBtn.onclick = async ()=>{
-    if(!sb){
-      alert('Brak połączenia z serwerem — zapis kolejności jest zablokowany.');
-      return;
-    }
-    const box = document.getElementById('machineListEditable');
-    const rows = Array.from(box.querySelectorAll('.admin-machine-row'));
-    for(let i=0;i<rows.length;i++){
-      const num = rows[i].dataset.number;
-      if(!sb) continue;
-      await sb.from('machines').update({ ord: i+1, default_view:true }).eq('number', num);
-    }
-    await loadMachines();
-    await loadAssignmentsForDate(currentDate);
-    buildTableFor(currentDate);
-    alert('Zapisano kolejność jako widok domyślny.');
-  };
-
-  // eksport pracowników (tylko online)
-  const exportBtn = document.getElementById('adminExportEmpBtn');
-  if(exportBtn) exportBtn.onclick = async ()=>{
-    if(!sb) return alert('Brak połączenia z Supabase.');
-    const { data, error } = await sb.from('employees').select('*');
-    if(error) return alert('Błąd: ' + error.message);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'employees.json';
-    a.click();
-  };
-
-  if(closeAdmin) closeAdmin.onclick = ()=>{
-    adminPanel.style.display = 'none';
-    document.body.classList.remove('modal-open');
-  };
-}
-
-async function refreshAdminMachineList(){
-  const box = document.getElementById('machineListEditable');
-  if(!box) return;
-  box.innerHTML = '';
-
-  if(!sb){
-    machines.forEach(m=>{
-      const row = document.createElement('div');
-      row.className = 'admin-machine-row';
-      row.dataset.number = m.number;
-      row.innerHTML = `<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine" disabled>Usuń</button></div>`;
-      box.appendChild(row);
-    });
-  } else {
-    try{
-      const { data } = await sb.from('machines').select('*').order('ord',{ascending:true});
-      (data||[]).forEach(m=>{
-        const row = document.createElement('div');
-        row.className = 'admin-machine-row';
-        row.dataset.number = m.number;
-        row.innerHTML = `<div style="display:flex;align-items:center;"><span class="drag-handle">⇅</span><strong style="margin-left:8px;">${m.number}</strong></div><div><button class="btn small danger remove-machine">Usuń</button></div>`;
-        box.appendChild(row);
-      });
-    }catch(e){
-      console.error('refreshAdminMachineList error', e);
-    }
-  }
-
-  box.querySelectorAll('.remove-machine').forEach(btn=>{
-    btn.onclick = async (e) => {
-      const num = e.target.closest('.admin-machine-row').dataset.number;
-      if(!confirm('Usunąć maszynę ' + num + '?')) return;
-      if(!sb){
-        alert('Brak połączenia z serwerem — usuwanie jest zablokowane.');
-        return;
-      }
-      try{
-        await sb.from('machines').delete().eq('number', num);
-        await loadMachines();
-        await refreshAdminMachineList();
-        await loadAssignmentsForDate(currentDate);
-        buildTableFor(currentDate);
-      }catch(err){
-        console.error('remove machine error', err);
-      }
-    };
-  });
-
-  // drag & drop klient-side
-  let dragSrc = null;
-  box.querySelectorAll('.admin-machine-row').forEach(item=>{
-    item.draggable = true;
-    item.addEventListener('dragstart', (e)=>{ dragSrc = item; e.dataTransfer.effectAllowed = 'move'; });
-    item.addEventListener('dragover', (e)=> e.preventDefault());
-    item.addEventListener('drop', (e)=>{
-      e.preventDefault();
-      if(dragSrc && dragSrc !== item) box.insertBefore(dragSrc, item.nextSibling);
-    });
-  });
-}
-
+/* -------------------- EXPORT CSV DLA DNIA -------------------- */
 function exportDayToCSV(date){
   if(!date){ alert('Wybierz datę przed eksportem.'); return; }
   const dateData = assignments[date] || {};
@@ -814,8 +647,10 @@ function exportDayToCSV(date){
   a.click();
 }
 
+/* -------------------- TRYB OFFLINE / ZABLOKOWANIE PRZYCISKÓW -------------------- */
 let _origOpenAssignModal = null;
 function enforceOnlineMode(){
+  // lista id elementów, które blokujemy w trybie offline
   const controlsToDisable = ['addMachineBtn','saveMachineOrderBtn','adminExportEmpBtn','adminLogin','adminLoginBtn','exportDayBtn'];
   const existing = document.getElementById('offlineBanner');
   if(existing) existing.remove();
@@ -857,16 +692,33 @@ function enforceOnlineMode(){
   }
 }
 
+/* -------------------- OBSŁUGA PRZYCISKU "PANEL ADMINISTRATORA" -------------------- */
+/* Używamy istniejącego przycisku #adminLoginBtn — prompt + przekierowanie do admin/a_index.html */
+document.addEventListener('DOMContentLoaded', () => {
+  const adminLoginBtn = document.getElementById('adminLoginBtn');
+  if (adminLoginBtn) {
+    adminLoginBtn.addEventListener('click', () => {
+      const pass = prompt('Podaj hasło administratora:');
+      if (pass === 'admin123') {
+        window.location.href = './admin/a_index.html';
+      } else if (pass !== null) {
+        alert('Błędne hasło!');
+      }
+    });
+  }
+});
+
+/* -------------------- BOOTSTRAP (inicjalizacja) -------------------- */
 async function bootstrap(){
   await new Promise(r=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',r):r());
   dateInput = document.getElementById('dateInput');
   tbody = document.getElementById('tbody');
   theadRow = document.getElementById('theadRow');
 
+  // ustaw dziś jako domyślną datę w polu
   dateInput.value = new Date().toISOString().slice(0,10);
 
   setupAssignModal();
-  setupAdminPanel();
 
   await initSupabase();
   await loadEmployees();
