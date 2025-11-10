@@ -700,8 +700,10 @@ document.addEventListener('DOMContentLoaded', () => {
     adminLoginBtn.addEventListener('click', () => {
       const pass = prompt('Podaj hasło administratora:');
       if (pass === 'admin123') {
-        window.location.href = './admin/a_index.html';
-      } else if (pass !== null) {
+  // ustawiamy flagę sesji, aby admin/a_index.html od razu uznał użytkownika za zalogowanego
+  try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e) { console.warn('sessionStorage niedostępne', e); }
+  window.location.href = './admin/a_index.html';
+  } else if (pass !== null) {
         alert('Błędne hasło!');
       }
     });

@@ -1,60 +1,106 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin — Kolejność maszyn (Crew Manager)</title>
-  <style>
-    :root{--bg:#f7fafc;--card:#ffffff;--muted:#6b7280;--accent:#2563eb}
-    body{font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:#0f172a}
-    .container{max-width:980px;margin:0 auto}
-    h1{font-size:20px;margin:0 0 14px}
-    .card{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.06);margin-bottom:16px}
-    .muted{color:var(--muted);font-size:13px}
-    #machineList{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-    .mrow{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid rgba(15,23,42,0.06);background:#fff;cursor:grab}
-    .mrow.dragging{opacity:0.6}
-    .drag-handle{cursor:grab;margin-right:10px}
-    .controls{display:flex;gap:8px;align-items:center}
-    .btn{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
-    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,0.12)}
-    .small{font-size:13px;padding:6px 8px}
-    .status{font-size:13px;color:var(--muted)}
-    .hint{font-size:13px;color:var(--muted);margin-top:6px}
-    input[type="text"]{padding:8px;border-radius:8px;border:1px solid #e6eef8}
-  </style>
-
-  <!-- Supabase CDN -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel administratora — Crew Manager</title>
+  <link rel="stylesheet" href="../style.css">
+  <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Minimalne style dla modala logowania (lokalnie, żeby nie ruszać style.css) -->
+  <style>
+    /* overlay modal auth */
+    #adminAuthModal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(12,18,24,0.6);
+      z-index: 20000;
+    }
+    #adminAuthModal .auth-box {
+      background: #fff;
+      padding: 18px;
+      border-radius: 10px;
+      width: 320px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.3);
+      text-align: left;
+    }
+    #adminAuthModal h3 { margin:0 0 8px; font-size:18px; }
+    #adminAuthModal .desc { color:#6b7280; font-size:13px; margin-bottom:12px; }
+    #adminAuthModal input[type="password"] {
+      width:100%; padding:10px; border-radius:8px; border:1px solid #e6eef8; box-sizing:border-box;
+      margin-bottom:10px;
+    }
+    #adminAuthModal .actions { display:flex; gap:8px; justify-content:flex-end; }
+    #adminAuthModal .muted { color:#6b7280; font-size:13px; margin-top:8px; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Panel admina — kolejność maszyn</h1>
-
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:700">Porządek maszyn (widok domyślny)</div>
-          <div class="muted">Przeciągnij, aby zmienić kolejność; kliknij "Zapisz kolejność", żeby zapisać w bazie.</div>
-        </div>
-        <div class="controls">
-          <button id="reloadBtn" class="btn ghost small">Odśwież</button>
-          <button id="saveOrderBtn" class="btn small">Zapisz kolejność</button>
-        </div>
+  <!-- AUTH MODAL: blokuje cały panel dopóki nie zostanie wprowadzone hasło -->
+  <div id="adminAuthModal" aria-hidden="true" style="display:none;">
+    <div class="auth-box" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <h3 id="authTitle">Logowanie — panel administratora</h3>
+      <div class="desc">Wprowadź hasło, aby uzyskać dostęp do panelu administracyjnego.</div>
+      <input id="adminAuthPass" type="password" placeholder="Hasło administratora" autocomplete="current-password" />
+      <div class="actions">
+        <button id="adminAuthCancel" class="btn ghost">Anuluj</button>
+        <button id="adminAuthBtn" class="btn">Zaloguj</button>
       </div>
-
-      <div id="machineList" style="margin-top:12px"></div>
-
-      <div class="hint">Uwaga: zapisywanie zmieni pole <code>ord</code> dla maszyn i ustawi <code>default_view = true</code>.</div>
-    </div>
-
-    <div class="card">
-      <div style="font-weight:700">Szybkie sprawdzenie</div>
-      <div class="muted">Po zapisie odśwież główną stronę aby zobaczyć zmiany.</div>
+      <div class="muted">Sesja ważna do zamknięcia karty przeglądarki.</div>
     </div>
   </div>
 
-  <!-- lokalny skrypt panelu admina -->
+  <header class="top-bar">
+    <div class="brand">Panel administratora</div>
+    <div class="controls">
+      <button id="backToMainBtn" class="btn outline">Powrót do strony głównej</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel card">
+      <h3 style="margin-bottom:16px;">Zarządzanie maszynami i konfiguracją</h3>
+
+      <!-- 🔹 ZAKŁADKI ADMINA -->
+      <div id="adminTabs" style="display:flex;gap:8px;margin-bottom:12px;">
+        <button id="tabOrder" class="btn active">Kolejność maszyn</button>
+        <button id="tabModify" class="btn ghost">Modyfikacja maszyn</button>
+      </div>
+
+      <!-- 🔸 SEKCJA KOLEJNOŚCI MASZYN (pierwotny panel) -->
+      <div id="adminOrderSection">
+        <h4>Kolejność wyświetlania maszyn</h4>
+        <div class="muted">Przeciągaj, aby zmienić kolejność. Zapisz, aby ustawić nowy domyślny widok.</div>
+
+        <div class="row" style="margin-top:8px;">
+          <input type="text" id="newMachineNumber" placeholder="Numer nowej maszyny">
+          <button id="addMachineBtn" class="btn">Dodaj</button>
+        </div>
+
+        <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px;"></div>
+
+        <div class="row" style="margin-top:8px;gap:8px;">
+          <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
+          <button id="adminExportEmpBtn" class="btn outline">Eksportuj pracowników</button>
+        </div>
+      </div>
+
+      <!-- 🔸 SEKCJA MODYFIKACJI MASZYN (nowy moduł, ukryty na starcie) -->
+      <div id="adminMachinesSection" style="display:none;">
+        <h4>Modyfikacja maszyn</h4>
+        <div class="muted">Tutaj możesz dodawać, usuwać i edytować statusy maszyn.</div>
+
+        <div id="adminMachinesApp" class="card" style="margin-top:10px;padding:10px;">
+          <!-- zawartość generowana dynamicznie przez AdminMachines -->
+        </div>
+      </div>
+
+    </section>
+  </main>
+
   <script src="./a_script.js"></script>
 </body>
 </html>
