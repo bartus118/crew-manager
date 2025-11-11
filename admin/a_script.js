@@ -1,11 +1,10 @@
 /**
  * admin/a_script.js
  *
- * Moduł administracyjny — Modyfikacja maszyn (wersja z poprawionymi selectami dla urządzeń)
+ * Moduł administracyjny — Modyfikacja maszyn
+ * Dodatkowo: automatyczne zapisywanie kolejności po przeciągnięciu (drop).
  *
- * Zmiany:
- * - osobne listy opcji dla celafoniarka / pakieciarka / kartoniarka
- * - selecty w formularzu dodawania i w modalu edycji używają teraz tych list
+ * UWAGA: podmień cały plik admin/a_script.js na poniższy.
  */
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
@@ -44,12 +43,16 @@ function showAuthModal() {
   const passInput = document.getElementById('adminAuthPass');
   const okBtn = document.getElementById('adminAuthBtn');
   const cancelBtn = document.getElementById('adminAuthCancel');
+
   if(!modal) return;
+
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
   passInput.value = '';
   passInput.focus();
+
   function closeModal() { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+
   async function tryLogin() {
     const v = (passInput.value || '');
     if (v === ADMIN_PASSWORD) {
@@ -69,6 +72,7 @@ function showAuthModal() {
       alert('Błędne hasło.'); passInput.focus();
     }
   }
+
   okBtn.onclick = tryLogin;
   cancelBtn.onclick = () => { window.location.href = '../index.html'; };
   passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
@@ -119,8 +123,6 @@ const AdminMachines = (function(){
 
   const MAKER_OPTIONS = ['P100','P70'];
   const PAKER_OPTIONS = ['F550','F350','GD','GDX'];
-
-  // oddzielne listy opcji zgodnie z prośbą
   const CELA_OPTIONS = ['', '751','753'];
   const PAK_OPTIONS  = ['', '411','413','707'];
   const KART_OPTIONS = ['', '487','489'];
@@ -159,7 +161,6 @@ const AdminMachines = (function(){
     label.style.fontSize = '13px';
     label.style.fontWeight = '600';
     label.textContent = labelText;
-    label.appendChild(document.createElement('br'));
     controlEl.style.width = '100%';
     wrap.appendChild(label);
     wrap.appendChild(controlEl);
@@ -174,6 +175,49 @@ const AdminMachines = (function(){
     return wrap;
   }
 
+  /* -------------------- ZAPIS KOLEJNOŚCI - pomocnicza funkcja -------------------- */
+  async function saveOrderFromRows(rows) {
+    if (!rows || rows.length === 0) return;
+    if (!sb) {
+      // offline - pokaz krótki komunikat
+      console.warn('Brak połączenia z serwerem — nie można zapisać kolejności.');
+      return;
+    }
+    try {
+      // sequentialne zapisywanie (bez agresywnego równoległego wywoływania)
+      for (let i = 0; i < rows.length; i++) {
+        const num = rows[i].dataset.number;
+        // ochrona: jeśli brak num -> skip
+        if (!num) continue;
+        // aktualizuj ord
+        // eslint-disable-next-line no-await-in-loop
+        const { error } = await sb.from('machines').update({ ord: i+1, default_view: true }).eq('number', String(num));
+        if (error) {
+          console.warn('Błąd aktualizacji ord dla', num, error);
+        }
+      }
+      // potwierdzenie w konsoli i krótkie info UI (alert zastępujemy konsolą dla nieinwazyjności)
+      console.log('Kolejność maszyn zapisana.');
+      // opcjonalnie: małe powiadomienie użytkownikowi
+      const b = document.createElement('div');
+      b.textContent = 'Zapisano kolejność';
+      b.style.position = 'fixed';
+      b.style.right = '14px';
+      b.style.bottom = '14px';
+      b.style.background = '#0b74d1';
+      b.style.color = 'white';
+      b.style.padding = '8px 12px';
+      b.style.borderRadius = '8px';
+      b.style.boxShadow = '0 6px 18px rgba(11,116,209,0.18)';
+      b.style.zIndex = 21000;
+      document.body.appendChild(b);
+      setTimeout(()=>{ b.remove(); }, 1800);
+    } catch (e) {
+      console.error('saveOrderFromRows error', e);
+    }
+  }
+
+  /* -------------------- renderList (tabela z drag handle) -------------------- */
   async function renderList(){
     if(!wrapEl) return;
     wrapEl.innerHTML = '';
@@ -260,12 +304,14 @@ const AdminMachines = (function(){
         return;
       }
 
+      // tabela maszyn: pierwsza kolumna = uchwyt drag (≡)
       const table = document.createElement('table');
       table.style.width = '100%';
       table.style.borderCollapse = 'collapse';
       table.style.marginTop = '6px';
       const thead = document.createElement('thead');
       thead.innerHTML = `<tr style="text-align:left;">
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
         <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
         <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
         <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
@@ -277,16 +323,71 @@ const AdminMachines = (function(){
       table.appendChild(thead);
       const tbody = document.createElement('tbody');
 
+      // placeholder używany podczas przeciągania
+      const placeholder = document.createElement('tr');
+      placeholder.className = 'drag-placeholder';
+      placeholder.style.height = '0';
+      placeholder.style.background = 'rgba(96,165,250,0.06)';
+      placeholder.innerHTML = `<td colspan="8" style="padding:0;border:none;"></td>`;
+
       machinesCache.forEach(m => {
         const tr = document.createElement('tr');
-        const td = (text) => { const t = document.createElement('td'); t.style.padding='8px'; t.style.borderBottom='1px solid rgba(0,0,0,0.04)'; t.textContent = text; return t; };
+        tr.className = 'admin-machine-row';
+        tr.dataset.number = m.number;
+        tr.style.background = '#fff';
 
-        tr.appendChild(td(m.number || ''));
-        tr.appendChild(td(m.maker || ''));
-        tr.appendChild(td(m.paker || ''));
-        tr.appendChild(td(m.celafoniarka || ''));
-        tr.appendChild(td(m.pakieciarka || ''));
-        tr.appendChild(td(m.kartoniarka || ''));
+        // kolumna: drag-handle (tylko za nią zaczyna się drag)
+        const tdHandle = document.createElement('td');
+        tdHandle.style.padding = '8px';
+        tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdHandle.style.textAlign = 'center';
+        tdHandle.style.cursor = 'grab';
+        const handle = document.createElement('span');
+        handle.className = 'drag-handle';
+        handle.title = 'Przeciągnij, aby zmienić pozycję';
+        handle.style.userSelect = 'none';
+        handle.style.fontSize = '16px';
+        handle.style.lineHeight = '1';
+        handle.textContent = '≡';
+        handle.draggable = true;
+        tdHandle.appendChild(handle);
+        tr.appendChild(tdHandle);
+
+        const tdNum = document.createElement('td');
+        tdNum.style.padding = '8px';
+        tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdNum.textContent = m.number || '';
+        tr.appendChild(tdNum);
+
+        const tdMaker = document.createElement('td');
+        tdMaker.style.padding = '8px';
+        tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdMaker.textContent = m.maker || '';
+        tr.appendChild(tdMaker);
+
+        const tdPaker = document.createElement('td');
+        tdPaker.style.padding = '8px';
+        tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPaker.textContent = m.paker || '';
+        tr.appendChild(tdPaker);
+
+        const tdCela = document.createElement('td');
+        tdCela.style.padding = '8px';
+        tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdCela.textContent = m.celafoniarka || '';
+        tr.appendChild(tdCela);
+
+        const tdPak = document.createElement('td');
+        tdPak.style.padding = '8px';
+        tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPak.textContent = m.pakieciarka || '';
+        tr.appendChild(tdPak);
+
+        const tdKart = document.createElement('td');
+        tdKart.style.padding = '8px';
+        tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdKart.textContent = m.kartoniarka || '';
+        tr.appendChild(tdKart);
 
         const tdActions = document.createElement('td');
         tdActions.style.padding = '8px';
@@ -297,7 +398,6 @@ const AdminMachines = (function(){
         editBtn.textContent = 'Edytuj';
         editBtn.onclick = () => openEditModal(m);
 
-        // Usuń zostawiam, ale można łatwo usunąć jeśli chcesz
         const delBtn = document.createElement('button');
         delBtn.className = 'btn danger small';
         delBtn.style.marginLeft = '8px';
@@ -312,11 +412,68 @@ const AdminMachines = (function(){
         tdActions.appendChild(editBtn);
         tdActions.appendChild(delBtn);
         tr.appendChild(tdActions);
+
+        // OBSŁUGA DRAG NA HANDLE
+        handle.addEventListener('dragstart', (e) => {
+          tr.classList.add('dragging');
+          try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
+          e.dataTransfer.effectAllowed = 'move';
+          const h = tr.getBoundingClientRect().height;
+          placeholder.style.height = `${h}px`;
+        });
+
+        handle.addEventListener('dragend', () => {
+          tr.classList.remove('dragging');
+          if (tbody.contains(placeholder)) placeholder.remove();
+        });
+
         tbody.appendChild(tr);
       });
 
       table.appendChild(tbody);
       wrapEl.appendChild(table);
+
+      // DRAG & DROP dla tabeli (placeholder tr) + automatyczne zapisywanie po drop
+      function getDragAfterRow(container, y) {
+        const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
+        return draggableRows.find(row => {
+          const box = row.getBoundingClientRect();
+          return y < box.top + box.height / 2;
+        }) || null;
+      }
+
+      tbody.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const after = getDragAfterRow(tbody, e.clientY);
+        if (after === null) {
+          if (tbody.lastElementChild !== placeholder) tbody.appendChild(placeholder);
+        } else {
+          if (after !== placeholder) tbody.insertBefore(placeholder, after);
+        }
+      });
+
+      tbody.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        const dragging = tbody.querySelector('tr.dragging');
+        if (!dragging) return;
+        if (placeholder.parentElement) {
+          tbody.insertBefore(dragging, placeholder);
+          placeholder.remove();
+        }
+        // cleanup
+        tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
+        // automatyczne zapisanie kolejności -> zbierz aktualne wiersze i zapisz
+        const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
+        await saveOrderFromRows(rows);
+      });
+
+      // global cleanup
+      document.ondragend = () => {
+        const dragging = tbody.querySelector('tr.dragging');
+        if (dragging) dragging.classList.remove('dragging');
+        if (tbody.contains(placeholder)) placeholder.remove();
+      };
+
     }catch(e){
       console.error('AdminMachines.renderList error', e);
       wrapEl.innerHTML = '';
@@ -324,6 +481,7 @@ const AdminMachines = (function(){
     }
   }
 
+  /* -------------------- CRUD -------------------- */
   async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
     if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
@@ -380,6 +538,7 @@ const AdminMachines = (function(){
     }
   }
 
+  /* -------------------- lista edytowalna kolejności (zakładka Kolejność) */
   async function renderEditableOrderList(){
     const el = document.getElementById('machineListEditable');
     if(!el) return;
@@ -390,6 +549,7 @@ const AdminMachines = (function(){
       const { data } = await sb.from('machines').select('*').order('ord',{ascending:true});
       const machines = data || [];
       if(!machines.length){ el.appendChild(makeMuted('Brak maszyn w bazie.')); return; }
+
       const placeholder = document.createElement('div');
       placeholder.className = 'drag-placeholder';
       placeholder.style.height = '0px';
@@ -405,12 +565,11 @@ const AdminMachines = (function(){
         row.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
         row.style.background = '#fff';
         row.style.transition = 'background 120ms ease, transform 120ms ease';
-        row.draggable = true;
 
         const left = document.createElement('div');
         left.style.display = 'flex';
         left.style.alignItems = 'center';
-        left.innerHTML = `<span class="drag-handle" style="cursor:grab;margin-right:8px;">⇅</span>
+        left.innerHTML = `<span class="drag-handle" style="cursor:grab;margin-right:8px;">≡</span>
                           <strong>${m.number}</strong>
                           <span style="margin-left:8px;color:#6b7280;font-size:13px;">
                             (${m.maker||''}/${m.paker||''}${m.celafoniarka? ' • ' + m.celafoniarka : ''}${m.pakieciarka? ' • ' + m.pakieciarka : ''}${m.kartoniarka? ' • ' + m.kartoniarka : ''})
@@ -429,24 +588,25 @@ const AdminMachines = (function(){
 
       let dragSrc = null;
       el.querySelectorAll('.admin-machine-row').forEach(item=>{
-        item.addEventListener('dragstart', (e) => {
+        const handle = item.querySelector('.drag-handle');
+        if(!handle) return;
+        handle.draggable = true;
+        handle.addEventListener('dragstart', (e) => {
           dragSrc = item;
           item.classList.add('dragging');
           const h = item.getBoundingClientRect().height;
           placeholder.style.height = `${h}px`;
-          try { e.dataTransfer.setData('text/plain', 'moving'); } catch(err){}
+          try { e.dataTransfer.setData('text/plain', 'moving'); } catch (err) {}
           e.dataTransfer.effectAllowed = 'move';
         });
-        item.addEventListener('dragend', () => {
+        handle.addEventListener('dragend', () => {
           if (dragSrc) dragSrc.classList.remove('dragging');
           if (placeholder.parentElement) placeholder.remove();
           dragSrc = null;
         });
-        item.addEventListener('dragenter', () => { if(item !== dragSrc) item.classList.add('drag-over'); });
-        item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
       });
 
-      el.ondragover = (e) => {
+      el.addEventListener('dragover', (e) => {
         e.preventDefault();
         const after = getDragAfterElement(el, e.clientY);
         if(after === null){
@@ -454,21 +614,24 @@ const AdminMachines = (function(){
         } else {
           if(after !== placeholder) el.insertBefore(placeholder, after);
         }
-      };
+      });
 
-      el.ondrop = (e) => {
+      el.addEventListener('drop', async (e) => {
         e.preventDefault();
         if(!dragSrc) return;
         if(placeholder.parentElement){
           el.insertBefore(dragSrc, placeholder);
           placeholder.remove();
         }
+        // automatyczne zapisanie kolejności z widoku listy
+        const rows = Array.from(el.querySelectorAll('.admin-machine-row'));
+        await saveOrderFromRows(rows);
         dragSrc = null;
-      };
+      });
 
       document.ondragend = () => {
-        if(dragSrc) dragSrc.classList.remove('dragging');
-        if(placeholder.parentElement) placeholder.remove();
+        if (dragSrc) dragSrc.classList.remove('dragging');
+        if (placeholder.parentElement) placeholder.remove();
         dragSrc = null;
       };
 
@@ -476,118 +639,6 @@ const AdminMachines = (function(){
       console.error('renderEditableOrderList error', e);
       el.appendChild(makeMuted('Błąd ładowania listy. Sprawdź konsolę.'));
     }
-  }
-
-  function openEditModal(machine){
-    let existing = document.getElementById('adminEditMachineModal');
-    if(existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'adminEditMachineModal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    modal.style.position = 'fixed';
-    modal.style.inset = '0';
-    modal.style.background = 'rgba(0,0,0,0.45)';
-    modal.style.zIndex = '22000';
-
-    const box = document.createElement('div');
-    box.className = 'modal-content';
-    box.style.maxWidth = '620px';
-    box.style.width = '100%';
-    box.style.padding = '14px';
-    box.style.borderRadius = '10px';
-    box.style.background = '#fff';
-    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)';
-
-    const title = document.createElement('h3');
-    title.textContent = `Edytuj maszynę ${machine.number}`;
-    title.style.marginTop = '0';
-
-    const form = document.createElement('div');
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = 'repeat(auto-fit, minmax(160px, 1fr))';
-    form.style.gap = '10px';
-    form.style.marginTop = '8px';
-
-    const inpOld = document.createElement('input');
-    inpOld.type = 'text';
-    inpOld.value = machine.number || '';
-    inpOld.placeholder = 'Numer maszyny';
-    inpOld.style.padding = '8px';
-    inpOld.style.border = '1px solid #e6eef8';
-    inpOld.style.borderRadius = '6px';
-
-    const selMaker = document.createElement('select');
-    selMaker.style.padding = '8px';
-    selMaker.style.borderRadius = '6px';
-    selMaker.style.border = '1px solid #e6eef8';
-    MAKER_OPTIONS.forEach(mk => { const o=document.createElement('option'); o.value=mk; o.textContent=mk; selMaker.appendChild(o); });
-    selMaker.value = machine.maker || MAKER_OPTIONS[0];
-
-    const selPaker = document.createElement('select');
-    selPaker.style.padding = '8px';
-    selPaker.style.borderRadius = '6px';
-    selPaker.style.border = '1px solid #e6eef8';
-    PAKER_OPTIONS.forEach(pk => { const o=document.createElement('option'); o.value=pk; o.textContent=pk; selPaker.appendChild(o); });
-    selPaker.value = machine.paker || PAKER_OPTIONS[0];
-
-    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || '');
-    const selPak  = makeSelect(PAK_OPTIONS,  machine.pakieciarka || '');
-    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || '');
-
-    const fNum = makeField('Numer', inpOld, 'Numer identyfikacyjny maszyny.');
-    const fMaker = makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.');
-    const fPaker = makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.');
-    const fCela = makeField('Celafoniarka', selCela, 'Celafoniarka — kod urządzenia: 751 lub 753.');
-    const fPak  = makeField('Pakieciarka', selPak, 'Pakieciarka — kod urządzenia: 411, 413 lub 707.');
-    const fKart = makeField('Kartoniarka', selKart, 'Kartoniarka — kod urządzenia: 487 lub 489.');
-
-    form.appendChild(fNum);
-    form.appendChild(fMaker);
-    form.appendChild(fPaker);
-    form.appendChild(fCela);
-    form.appendChild(fPak);
-    form.appendChild(fKart);
-
-    const actions = document.createElement('div');
-    actions.style.display = 'flex';
-    actions.style.justifyContent = 'flex-end';
-    actions.style.gap = '8px';
-    actions.style.marginTop = '12px';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'btn outline';
-    cancelBtn.textContent = 'Anuluj';
-    cancelBtn.onclick = () => { modal.remove(); };
-
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn';
-    saveBtn.textContent = 'Zapisz';
-    saveBtn.onclick = async () => {
-      const newNum = inpOld.value.trim();
-      const mk = selMaker.value;
-      const pk = selPaker.value;
-      const cel = selCela.value || '';
-      const pak = selPak.value || '';
-      const kart = selKart.value || '';
-      if(!newNum){ return alert('Numer nie może być pusty.'); }
-      await editMachine(machine.number, newNum, mk, pk, cel, pak, kart);
-      modal.remove();
-      await renderList();
-      refreshOrderViewSafe();
-    };
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(saveBtn);
-
-    box.appendChild(title);
-    box.appendChild(form);
-    box.appendChild(actions);
-    modal.appendChild(box);
-    document.body.appendChild(modal);
   }
 
   function refreshOrderViewSafe(){
@@ -611,7 +662,12 @@ const AdminMachines = (function(){
 
       const saveOrderBtn = document.getElementById('saveMachineOrderBtn');
       if(saveOrderBtn) saveOrderBtn.addEventListener('click', async () => {
-        const rows = Array.from(listEditableEl.querySelectorAll('.admin-machine-row'));
+        let rows = [];
+        if (listEditableEl) rows = Array.from(listEditableEl.querySelectorAll('.admin-machine-row'));
+        if(!rows || rows.length === 0) {
+          const tbl = wrapEl && wrapEl.querySelector('table');
+          if (tbl) rows = Array.from(tbl.querySelectorAll('tr.admin-machine-row'));
+        }
         if(!rows.length) { alert('Brak wierszy do zapisania.'); return; }
         if(!sb){ alert('Brak połączenia z serwerem.'); return; }
         try{
@@ -667,7 +723,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function showModify(){
       if(orderSection) orderSection.style.display = 'none';
       if(machinesSection) machinesSection.style.display = '';
-      if(tabOrder) { tabOrder.classList.remove('active'); tabOrder.classList.add('ghost'); }
+      if(tabOrder) tabOrder.classList.remove('active'); tabOrder.classList.add('ghost');
       if(tabModify) tabModify.classList.remove('ghost'); tabModify.classList.add('active');
       await AdminMachines.renderList();
     }
