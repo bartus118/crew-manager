@@ -1,8 +1,7 @@
 /**
  * admin/a_script.js
  *
- * Moduł administracyjny — Modyfikacja maszyn
- * Dodatkowo: formularz dodawania w modal'u (przycisk nad tabelą).
+ * Moduł administracyjny — Modyfikacja maszyn + lista pracowników
  *
  * UWAGA: podmień cały plik admin/a_script.js na poniższy.
  */
@@ -48,15 +47,14 @@ function showAuthModal() {
 
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
-  passInput.value = '';
-  passInput.focus();
+  if(passInput) { passInput.value = ''; passInput.focus(); }
 
   function closeModal() { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
 
   async function tryLogin() {
-    const v = (passInput.value || '');
+    const v = (passInput && passInput.value) ? passInput.value : '';
     if (v === ADMIN_PASSWORD) {
-      sessionStorage.setItem('adminAuthenticated', '1');
+      try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e){}
       closeModal();
       await initSupabaseAdmin();
       try {
@@ -70,13 +68,13 @@ function showAuthModal() {
       // show the modify tab if present
       document.getElementById('tabModify')?.click();
     } else {
-      alert('Błędne hasło.'); passInput.focus();
+      alert('Błędne hasło.'); if(passInput) passInput.focus();
     }
   }
 
-  okBtn.onclick = tryLogin;
-  cancelBtn.onclick = () => { window.location.href = '../index.html'; };
-  passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
+  if(okBtn) okBtn.onclick = tryLogin;
+  if(cancelBtn) cancelBtn.onclick = () => { window.location.href = '../index.html'; };
+  if(passInput) passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
 }
 
 function ensureAuthThen(cb) {
@@ -162,7 +160,7 @@ const AdminMachines = (function(){
     label.style.fontSize = '13px';
     label.style.fontWeight = '600';
     label.textContent = labelText;
-    controlEl.style.width = '100%';
+    if(controlEl && controlEl.style) controlEl.style.width = '100%';
     wrap.appendChild(label);
     wrap.appendChild(controlEl);
     if(descText){
@@ -313,10 +311,7 @@ const AdminMachines = (function(){
     inpNum.focus();
   }
 
-  /* -------------------- renderList (tabela z drag handle)
-     ZAMIENIONO: formularz dodawania przeniesiony do modala.
-     Nad tabelą pojawia się przycisk "Dodaj maszynę".
-  */
+  /* -------------------- renderList (tabela z drag handle) -------------------- */
   async function renderList(){
     if(!wrapEl) return;
     wrapEl.innerHTML = '';
@@ -721,25 +716,193 @@ const AdminMachines = (function(){
     editMachine,
     refreshOrderView: refreshOrderViewSafe
   };
-})();
+})(); // koniec AdminMachines
+
+/* -------------------- AdminEmployees (mini-moduł) -------------------- */
+const AdminEmployees = (function(){
+  let wrap = null;
+  let cache = [];
+
+  async function fetchEmployees(){
+    if(!sb){ cache = []; return; }
+    try{
+      const { data, error } = await sb.from('employees').select('id,name,bu,roles').order('name', { ascending: true });
+      if(error){ console.warn('fetchEmployees error', error); cache = []; }
+      else {
+        // normalizuj roles -> string (jeśli tablica -> "a, b")
+        cache = (data || []).map(e => ({
+          ...e,
+          roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || '')
+        }));
+      }
+    }catch(e){ console.error(e); cache = []; }
+  }
+
+  function makeRow(emp){
+    const div = document.createElement('div');
+    div.style.display = 'flex';
+    div.style.justifyContent = 'space-between';
+    div.style.alignItems = 'center';
+    div.style.padding = '8px';
+    div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+
+    const left = document.createElement('div');
+    left.textContent = emp.name || '';
+    left.style.fontWeight = '600';
+    left.style.flex = '1 1 auto';
+    left.style.minWidth = '160px';
+
+    const center = document.createElement('div');
+    center.textContent = emp.bu || '';
+    center.style.opacity = '0.85';
+    center.style.fontSize = '13px';
+    center.style.minWidth = '90px';
+    center.style.textAlign = 'center';
+
+    const right = document.createElement('div');
+    right.textContent = emp.roles || '';
+    right.style.opacity = '0.85';
+    right.style.fontSize = '13px';
+    right.style.minWidth = '140px';
+    right.style.textAlign = 'right';
+
+    div.appendChild(left);
+    div.appendChild(center);
+    div.appendChild(right);
+    return div;
+  }
+
+  function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole){
+    const q = String(query||'').trim().toLowerCase();
+    let out = list.slice();
+
+    // --- filtrowanie ---
+    if(q) out = out.filter(e => (e.name||'').toLowerCase().includes(q));
+    if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
+    if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
+
+    // --- sortowanie ---
+    out.sort((a,b) => {
+      const av = String(a[sortField]||'').toLowerCase();
+      const bv = String(b[sortField]||'').toLowerCase();
+      if(av === bv) return (a.name||'').localeCompare(b.name||'');
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    return out;
+  }
+
+  async function renderList(){
+    if(!wrap) return;
+    wrap.innerHTML = '<div class="muted">Ładuję listę pracowników...</div>';
+    await fetchEmployees();
+    const query = (document.getElementById('empSearchInput')?.value || '').trim();
+    const sortField = (document.getElementById('empSortField')?.value || 'bu');
+    const sortDir = (document.getElementById('empSortDir')?.value || 'asc');
+    const filterBu = (document.getElementById('empFilterBu')?.value || '');
+    const filterRole = (document.getElementById('empFilterRole')?.value || '');
+    const list = applyFilterSort(cache, query, sortField, sortDir, filterBu, filterRole);
+
+    wrap.innerHTML = '';
+    if(!list.length){
+      const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'Brak pracowników do wyświetlenia.'; wrap.appendChild(m); return;
+    }
+    list.forEach(emp => wrap.appendChild(makeRow(emp)));
+  }
+
+  async function init(){
+    wrap = document.getElementById('adminEmployeesApp');
+    // hooki UI
+    const search = document.getElementById('empSearchInput');
+    const sortField = document.getElementById('empSortField');
+    const sortDir = document.getElementById('empSortDir');
+    const refresh = document.getElementById('refreshEmpListBtn');
+    const filterBu = document.getElementById('empFilterBu');
+    const filterRole = document.getElementById('empFilterRole');
+
+    if(search) search.addEventListener('input', () => renderList());
+    if(sortField) sortField.addEventListener('change', () => renderList());
+    if(sortDir) sortDir.addEventListener('change', () => renderList());
+    if(refresh) refresh.addEventListener('click', () => renderList());
+    if(filterBu) filterBu.addEventListener('change', () => renderList());
+    if(filterRole) filterRole.addEventListener('change', () => renderList());
+
+    await renderList();
+    populateFilters();
+  }
+
+  // wypełnij filtry BU i roli unikalnymi wartościami
+  function populateFilters() {
+    const buSet = new Set(cache.map(e => e.bu).filter(Boolean));
+    // roleSet — splitowane i unikatowe
+    const roleArr = [];
+    cache.forEach(e => {
+      if(!e.roles) return;
+      e.roles.split(',').map(s=>s.trim()).forEach(r => {
+        if(r && !roleArr.includes(r)) roleArr.push(r);
+      });
+    });
+
+    const buSel = document.getElementById('empFilterBu');
+    const roleSel = document.getElementById('empFilterRole');
+
+    if(buSel && buSel.options.length <= 1) {
+      Array.from(buSet).sort().forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b; opt.textContent = b;
+        buSel.appendChild(opt);
+      });
+    }
+
+    if(roleSel && roleSel.options.length <= 1) {
+      roleArr.sort().forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r; opt.textContent = r;
+        roleSel.appendChild(opt);
+      });
+    }
+  }
+
+  return { init, renderList };
+})(); // koniec AdminEmployees
+
+// expose modules to window so inline handlers in a_index.html can call them
+window.AdminMachines = AdminMachines;
+window.AdminEmployees = AdminEmployees;
 
 /* -------------------- Zakładki i bootstrapping admin -------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
   ensureAuthThen(() => {
     const tabModify = document.getElementById('tabModify');
+    const tabEmployees = document.getElementById('tabEmployees');
     const machinesSection = document.getElementById('adminMachinesSection');
+    const employeesSection = document.getElementById('adminEmployeesSection');
     const backToMainBtn = document.getElementById('backToMainBtn');
 
+    // --- Funkcja: pokaż sekcję modyfikacji maszyn ---
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
+      if(employeesSection) employeesSection.style.display = 'none';
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
       await AdminMachines.renderList();
     }
 
+    // --- Funkcja: pokaż sekcję pracowników ---
+    async function showEmployees(){
+      if(machinesSection) machinesSection.style.display = 'none';
+      if(employeesSection) employeesSection.style.display = '';
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      if(tabEmployees) tabEmployees.classList.add('active');
+      try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
+    }
+
+    // --- Podpinanie zdarzeń ---
     if(tabModify) tabModify.addEventListener('click', () => showModify());
+    if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
     if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-    // show modify right away after auth
+    // --- Po zalogowaniu domyślnie pokaż modyfikację ---
     showModify();
   });
 });

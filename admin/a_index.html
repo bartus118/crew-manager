@@ -61,6 +61,7 @@
       <ul class="nav-list">
         <!-- Możesz dodać kolejne <li class="nav-item"> z data-tab -->
         <li class="nav-item" data-tab="modify" id="tabModify">Modyfikacja maszyn</li>
+        <li class="nav-item" data-tab="employees" id="tabEmployees">Pracownicy</li>
         <!-- placeholdery na przyszłe zakładki -->
         <li class="nav-item disabled">Raporty</li>
         <li class="nav-item disabled">Ustawienia</li>
@@ -92,44 +93,98 @@
     </section>
   </main>
 
+  <!-- Sekcja: Pracownicy (ukryta domyślnie) -->
+  <div id="adminEmployeesSection" style="display:none; margin:12px;">
+    <h4>Lista pracowników</h4>
+    <div class="muted">Szukaj po imieniu/nazwisku, filtruj po BU i roli, sortuj i odśwież listę.</div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin:10px 0; flex-wrap:wrap;">
+      <input id="empSearchInput" type="search" placeholder="Szukaj (imię lub nazwisko)" style="padding:8px; border-radius:8px; border:1px solid #e6eef8; min-width:200px;" />
+
+      <select id="empFilterBu" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
+        <option value="">Wszystkie BU</option>
+      </select>
+
+      <select id="empFilterRole" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
+        <option value="">Wszystkie role</option>
+      </select>
+
+      <label style="font-size:13px; color:#556;">Sortuj według:</label>
+      <select id="empSortField" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
+        <option value="bu">BU</option>
+        <option value="roles">Rola</option>
+      </select>
+
+      <label style="font-size:13px; color:#556;">Kierunek:</label>
+      <select id="empSortDir" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
+        <option value="asc">Rosnąco</option>
+        <option value="desc">Malejąco</option>
+      </select>
+
+      <button id="refreshEmpListBtn" class="btn small" style="margin-left:auto;">Odśwież</button>
+    </div>
+
+    <div id="adminEmployeesApp" class="card" style="padding:8px; max-height:52vh; overflow:auto;">
+      <!-- lista renderowana dynamicznie -->
+    </div>
+  </div>
+
   <script src="./a_script.js"></script>
 
   <!-- lekki skrypt UI: podłączenia kliknięć w nav do istniejących selektorów (nie rusza Twojej logiki) -->
   <script>
     (function(){
-      // podmieniamy zachowanie elementu #tabModify z nowego nav na istniejący selektor w a_script.js
+      // helper: pokaż zakładkę "Modyfikacja maszyn" (wywołuje render z a_script.js jeśli dostępne)
       function showModifyFromNav(){
-        // wywołaj kliknięcie programu (jeśli a_script używa #tabModify)
         const el = document.getElementById('tabModify');
-        if(el) {
-          // Ustawiaj aktywność wizualnie
-          document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-          el.classList.add('active');
-          // Pokaż sekcję modyfikacji (a_script.js i tak zainicjalizuje render)
-          document.getElementById('adminMachinesSection').style.display = '';
-          // jeśli AdminMachines dostępny — renderuj
-          try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
-        }
+        if(!el) return;
+        // wizualne ustawienia
+        document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+        el.classList.add('active');
+        // pokaż sekcję maszyn, ukryj pracowników
+        const machines = document.getElementById('adminMachinesSection');
+        const emps = document.getElementById('adminEmployeesSection');
+        if(machines) machines.style.display = '';
+        if(emps) emps.style.display = 'none';
+        // jeśli moduł AdminMachines dostępny — wyrenderuj
+        try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
       }
 
+      // inicjalizacja zdarzeń nav po załadowaniu DOM
       document.addEventListener('DOMContentLoaded', () => {
-        // kliknięcie w nav
+        // podłącz listenery do wszystkich nav-item
         document.querySelectorAll('.nav-item').forEach(it => {
           it.addEventListener('click', (e) => {
             if(it.classList.contains('disabled')) return;
+
             if(it.dataset.tab === 'modify') {
-              showModifyFromNav();
+              // pokaż modyfikację maszyn
+              document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+              it.classList.add('active');
+              document.getElementById('adminMachinesSection').style.display = '';
+              const empSec = document.getElementById('adminEmployeesSection');
+              if(empSec) empSec.style.display = 'none';
+              try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
+
+            } else if(it.dataset.tab === 'employees') {
+              // pokaż listę pracowników
+              document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+              it.classList.add('active');
+              document.getElementById('adminMachinesSection').style.display = 'none';
+              document.getElementById('adminEmployeesSection').style.display = '';
+              try { window.AdminEmployees && window.AdminEmployees.init && window.AdminEmployees.init(); } catch(e){ console.warn(e); }
+
             } else {
-              // placeholdery: pokażesz tu inne zakładki w przyszłości
+              // placeholdery: inne zakładki
               alert('Ta zakładka jest jeszcze nieaktywna.');
             }
           });
         });
 
-        // bardziej widoczny back button - jeśli ktoś chce, można zrobić potwierdzenie
+        // bardziej widoczny back button
         document.getElementById('backToMainBtn')?.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-        // po załadowaniu automatycznie „kliknij” Modyfikację
+        // po załadowaniu automatycznie „kliknij” Modyfikację (jeśli jest)
         const first = document.querySelector('.nav-item[data-tab="modify"]');
         if(first) first.click();
       });
