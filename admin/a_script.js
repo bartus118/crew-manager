@@ -1,32 +1,19 @@
 /**
  * admin/a_script.js
  *
- * Moduł administracyjny — Modyfikacja maszyn (wersja rozszerzona)
+ * Moduł administracyjny — Modyfikacja maszyn (wersja z poprawionymi selectami dla urządzeń)
  *
- * Funkcje:
- *  - prosty client-side login (modal) — ADMIN_PASSWORD
- *  - idempotentne init modułu AdminMachines
- *  - zakładki: Kolejność (istniejąca) oraz Modyfikacja maszyn (nowa)
- *  - Modyfikacja maszyn: lista maszyn z kolumnami (Numer, Maker, Paker, Akcje)
- *      - dodawanie maszyn (number, maker, paker)
- *      - edycja maszyn (możliwość zmiany numeru + maker + paker)
- *      - usuwanie maszyn (usuwa również przypisania w tabeli assignments)
- *
- * UWAGI:
- *  - Maker: 'P100' | 'P70'
- *  - Paker: 'F550' | 'F350' | 'GD' | 'GDX'
- *  - Sesja admina jest zapisana w sessionStorage['adminAuthenticated'] = '1' (ważna do zamknięcia karty)
- *
- * Nie zmieniam niczego poza admin logic.
+ * Zmiany:
+ * - osobne listy opcji dla celafoniarka / pakieciarka / kartoniarka
+ * - selecty w formularzu dodawania i w modalu edycji używają teraz tych list
  */
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
-const ADMIN_PASSWORD = 'admin123'; // <- zmień jeśli chcesz inne
+const ADMIN_PASSWORD = 'admin123';
 const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 /* --------------------------------------------------------------------------------- */
 
-/* poczekaj aż globalny supabase (CDN) będzie dostępny */
 function waitForSupabaseGlobal(timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
@@ -39,7 +26,6 @@ function waitForSupabaseGlobal(timeoutMs = 8000) {
   });
 }
 
-/* Inicjalizacja klienta Supabase dla admina */
 let sb = null;
 async function initSupabaseAdmin(){
   try {
@@ -52,132 +38,92 @@ async function initSupabaseAdmin(){
   }
 }
 
-/* -------------------- Proste uwierzytelnienie (modal) -------------------- */
-/* showAuthModal() — modal logowania; po poprawnym haśle dispatchuje 'adminAuthenticated' */
+/* -------------------- Auth modal -------------------- */
 function showAuthModal() {
   const modal = document.getElementById('adminAuthModal');
   const passInput = document.getElementById('adminAuthPass');
   const okBtn = document.getElementById('adminAuthBtn');
   const cancelBtn = document.getElementById('adminAuthCancel');
-
   if(!modal) return;
-
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
   passInput.value = '';
   passInput.focus();
-
-  function closeModal() {
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
+  function closeModal() { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
   async function tryLogin() {
     const v = (passInput.value || '');
     if (v === ADMIN_PASSWORD) {
       sessionStorage.setItem('adminAuthenticated', '1');
       closeModal();
-
-      // po zamknięciu modala: zainicjuj supabase i moduły admina, odśwież widoki
       await initSupabaseAdmin();
       try {
         if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
           AdminMachines.init();
-          try { AdminMachines.refreshOrderView(); } catch(e){/*ignore*/ }
-          try { AdminMachines.renderList(); } catch(e){/*ignore*/ }
+          try { AdminMachines.refreshOrderView(); } catch(e){}
+          try { AdminMachines.renderList(); } catch(e){}
         }
-      } catch(e){
-        console.warn('Błąd po logowaniu przy init AdminMachines:', e);
-      }
-
-      // wyślij zdarzenie, żeby reszta skryptu wiedziała, że jesteśmy zalogowani
-      try {
-        document.dispatchEvent(new CustomEvent('adminAuthenticated'));
-      } catch (e) {
-        /* ignore */
-      }
-
-      // pokaż zakładkę Kolejność (jeśli istnieje)
+      } catch(e){ console.warn('Błąd po logowaniu przy init AdminMachines:', e); }
+      try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
       document.getElementById('tabOrder')?.click();
     } else {
-      alert('Błędne hasło.');
-      passInput.focus();
+      alert('Błędne hasło.'); passInput.focus();
     }
   }
-
   okBtn.onclick = tryLogin;
-  cancelBtn.onclick = () => {
-    // użytkownik anulował — wróć do strony głównej
-    window.location.href = '../index.html';
-  };
-
-  passInput.onkeydown = (e) => {
-    if(e.key === 'Enter') tryLogin();
-  };
+  cancelBtn.onclick = () => { window.location.href = '../index.html'; };
+  passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
 }
 
-/* Sprawdź autoryzację i zapewnij inicjalizację modułów admin */
 function ensureAuthThen(cb) {
   const ok = sessionStorage.getItem('adminAuthenticated') === '1';
   if (ok) {
-    // jeśli już zalogowany -> init supabase, init modułów, potem cb
     initSupabaseAdmin()
       .then(async () => {
         try {
           if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
             AdminMachines.init();
-            try { AdminMachines.refreshOrderView(); } catch(e){/*ignore*/ }
-            try { AdminMachines.renderList(); } catch(e){/*ignore*/ }
+            try { AdminMachines.refreshOrderView(); } catch(e){}
+            try { AdminMachines.renderList(); } catch(e){}
           }
-        } catch (e) {
-          console.warn('Błąd podczas init AdminMachines:', e);
-        }
+        } catch (e) { console.warn('Błąd podczas init AdminMachines:', e); }
       })
       .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
-      .catch(err => {
-        console.warn('Błąd initSupabaseAdmin w ensureAuthThen:', err);
-        showAuthModal();
-      });
+      .catch(err => { console.warn('Błąd initSupabaseAdmin w ensureAuthThen:', err); showAuthModal(); });
   } else {
-    // show modal and listen for custom event once
     showAuthModal();
-
     const handler = () => {
       document.removeEventListener('adminAuthenticated', handler);
-      // po otrzymaniu auth — init i cb
       initSupabaseAdmin()
         .then(async () => {
           try {
             if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
               AdminMachines.init();
-              try { AdminMachines.refreshOrderView(); } catch(e){/*ignore*/ }
-              try { AdminMachines.renderList(); } catch(e){/*ignore*/ }
+              try { AdminMachines.refreshOrderView(); } catch(e){}
+              try { AdminMachines.renderList(); } catch(e){}
             }
-          } catch (e) {
-            console.warn('Błąd podczas init AdminMachines po zdarzeniu auth:', e);
-          }
+          } catch (e) { console.warn('Błąd podczas init AdminMachines po zdarzeniu auth:', e); }
         })
         .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
-        .catch(err => {
-          console.warn('Błąd initSupabaseAdmin po zdarzeniu auth:', err);
-        });
+        .catch(err => { console.warn('Błąd initSupabaseAdmin po zdarzeniu auth:', err); });
     };
-
     document.addEventListener('adminAuthenticated', handler);
   }
 }
 
-/* -------------------- Moduł AdminMachines (idempotentny init) -------------------- */
+/* -------------------- AdminMachines -------------------- */
 const AdminMachines = (function(){
-  let wrapEl = null;            // kontener główny (adminMachinesApp)
-  let listEditableEl = null;    // lista editable (machineListEditable)
-  let addFormEl = null;         // formularz dodawania
-  let machinesCache = [];       // cache maszyn
-  let _inited = false;          // flaga init
+  let wrapEl = null;
+  let listEditableEl = null;
+  let machinesCache = [];
+  let _inited = false;
 
-  // dostępne wartości — trzymaj tutaj by łatwo zmienić
   const MAKER_OPTIONS = ['P100','P70'];
   const PAKER_OPTIONS = ['F550','F350','GD','GDX'];
+
+  // oddzielne listy opcji zgodnie z prośbą
+  const CELA_OPTIONS = ['', '751','753'];
+  const PAK_OPTIONS  = ['', '411','413','707'];
+  const KART_OPTIONS = ['', '487','489'];
 
   function makeMuted(text){
     const d = document.createElement('div');
@@ -186,33 +132,66 @@ const AdminMachines = (function(){
     return d;
   }
 
-  /* -------------------- renderList
-     Renderuje tabelę maszyn z kolumnami: Numer | Maker | Paker | Akcje
-     Dodatkowo generuje formularz dodawania nad tabelą (jeśli jeszcze nie istnieje).
-  */
+  function makeSelect(options, defaultValue = '') {
+    const sel = document.createElement('select');
+    sel.style.padding = '8px';
+    sel.style.borderRadius = '6px';
+    sel.style.border = '1px solid #e6eef8';
+    sel.style.minWidth = '120px';
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt === '' ? '—' : opt;
+      if (String(opt) === String(defaultValue)) o.selected = true;
+      sel.appendChild(o);
+    });
+    return sel;
+  }
+
+  function makeField(labelText, controlEl, descText){
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.minWidth = '120px';
+    wrap.style.gap = '6px';
+    wrap.style.alignItems = 'flex-start';
+    const label = document.createElement('label');
+    label.style.fontSize = '13px';
+    label.style.fontWeight = '600';
+    label.textContent = labelText;
+    label.appendChild(document.createElement('br'));
+    controlEl.style.width = '100%';
+    wrap.appendChild(label);
+    wrap.appendChild(controlEl);
+    if(descText){
+      const d = document.createElement('div');
+      d.className = 'small-muted';
+      d.style.fontSize = '12px';
+      d.style.color = '#556';
+      d.textContent = descText;
+      wrap.appendChild(d);
+    }
+    return wrap;
+  }
+
   async function renderList(){
     if(!wrapEl) return;
     wrapEl.innerHTML = '';
     wrapEl.appendChild(makeMuted('Ładuję listę maszyn...'));
-
-    if(!sb){
-      wrapEl.innerHTML = '';
-      wrapEl.appendChild(makeMuted('Brak połączenia z Supabase (offline).'));
-      return;
-    }
+    if(!sb){ wrapEl.innerHTML=''; wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).')); return; }
 
     try{
       const { data, error } = await sb.from('machines').select('*').order('ord', { ascending:true });
       if(error) throw error;
       machinesCache = data || [];
 
-      // NAGŁÓWEK FORMULARZA DODAWANIA
+      // formularz dodawania
       const addBox = document.createElement('div');
-      addBox.style.marginBottom = '10px';
+      addBox.style.marginBottom = '12px';
       addBox.style.display = 'flex';
       addBox.style.flexWrap = 'wrap';
-      addBox.style.gap = '8px';
-      addBox.style.alignItems = 'center';
+      addBox.style.gap = '12px';
+      addBox.style.alignItems = 'flex-start';
 
       const inpNum = document.createElement('input');
       inpNum.placeholder = 'Numer maszyny';
@@ -225,18 +204,30 @@ const AdminMachines = (function(){
       selMaker.style.padding = '8px';
       selMaker.style.borderRadius = '6px';
       selMaker.style.border = '1px solid #e6eef8';
-      MAKER_OPTIONS.forEach(mk => {
-        const o = document.createElement('option'); o.value = mk; o.textContent = mk; selMaker.appendChild(o);
-      });
+      MAKER_OPTIONS.forEach(mk => { const o = document.createElement('option'); o.value = mk; o.textContent = mk; selMaker.appendChild(o); });
 
       const selPaker = document.createElement('select');
       selPaker.style.padding = '8px';
       selPaker.style.borderRadius = '6px';
       selPaker.style.border = '1px solid #e6eef8';
-      PAKER_OPTIONS.forEach(pk => {
-        const o = document.createElement('option'); o.value = pk; o.textContent = pk; selPaker.appendChild(o);
-      });
+      PAKER_OPTIONS.forEach(pk => { const o = document.createElement('option'); o.value = pk; o.textContent = pk; selPaker.appendChild(o); });
 
+      const selCela = makeSelect(CELA_OPTIONS, '');
+      const selPak  = makeSelect(PAK_OPTIONS, '');
+      const selKart = makeSelect(KART_OPTIONS, '');
+
+      const fNum = makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).');
+      const fMaker = makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.');
+      const fPaker = makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.');
+      const fCela = makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.');
+      const fPak  = makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.');
+      const fKart = makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.');
+
+      const addCol = document.createElement('div');
+      addCol.style.display = 'flex';
+      addCol.style.flexDirection = 'column';
+      addCol.style.justifyContent = 'flex-end';
+      addCol.style.gap = '8px';
       const addBtn = document.createElement('button');
       addBtn.className = 'btn';
       addBtn.textContent = 'Dodaj maszynę';
@@ -244,20 +235,26 @@ const AdminMachines = (function(){
         const num = (inpNum.value || '').trim();
         const mk = selMaker.value;
         const pk = selPaker.value;
+        const cel = selCela.value || '';
+        const pak = selPak.value || '';
+        const kart = selKart.value || '';
         if(!num){ return alert('Podaj numer maszyny.'); }
-        await addMachine(num, mk, pk);
-        inpNum.value = '';
+        await addMachine(num, mk, pk, cel, pak, kart);
+        inpNum.value=''; selCela.value=''; selPak.value=''; selKart.value='';
       };
+      addCol.appendChild(addBtn);
 
-      addBox.appendChild(inpNum);
-      addBox.appendChild(selMaker);
-      addBox.appendChild(selPaker);
-      addBox.appendChild(addBtn);
+      addBox.appendChild(fNum);
+      addBox.appendChild(fMaker);
+      addBox.appendChild(fPaker);
+      addBox.appendChild(fCela);
+      addBox.appendChild(fPak);
+      addBox.appendChild(fKart);
+      addBox.appendChild(addCol);
 
       wrapEl.innerHTML = '';
       wrapEl.appendChild(addBox);
 
-      // TABELA
       if(!machinesCache || machinesCache.length === 0){
         wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
         return;
@@ -267,43 +264,40 @@ const AdminMachines = (function(){
       table.style.width = '100%';
       table.style.borderCollapse = 'collapse';
       table.style.marginTop = '6px';
-
-      // nagłówki
       const thead = document.createElement('thead');
-      thead.innerHTML = `<tr style="text-align:left;"><th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th><th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th><th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th><th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th></tr>`;
+      thead.innerHTML = `<tr style="text-align:left;">
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
+      </tr>`;
       table.appendChild(thead);
-
       const tbody = document.createElement('tbody');
 
       machinesCache.forEach(m => {
         const tr = document.createElement('tr');
+        const td = (text) => { const t = document.createElement('td'); t.style.padding='8px'; t.style.borderBottom='1px solid rgba(0,0,0,0.04)'; t.textContent = text; return t; };
 
-        const tdNum = document.createElement('td');
-        tdNum.style.padding = '8px';
-        tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdNum.textContent = m.number || '';
-
-        const tdMaker = document.createElement('td');
-        tdMaker.style.padding = '8px';
-        tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdMaker.textContent = m.maker || '';
-
-        const tdPaker = document.createElement('td');
-        tdPaker.style.padding = '8px';
-        tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdPaker.textContent = m.paker || '';
+        tr.appendChild(td(m.number || ''));
+        tr.appendChild(td(m.maker || ''));
+        tr.appendChild(td(m.paker || ''));
+        tr.appendChild(td(m.celafoniarka || ''));
+        tr.appendChild(td(m.pakieciarka || ''));
+        tr.appendChild(td(m.kartoniarka || ''));
 
         const tdActions = document.createElement('td');
         tdActions.style.padding = '8px';
         tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
 
-        // Edytuj -> otwiera modal edycji
         const editBtn = document.createElement('button');
         editBtn.className = 'btn ghost small';
         editBtn.textContent = 'Edytuj';
         editBtn.onclick = () => openEditModal(m);
 
-        // Usuń -> potwierdzenie + usunięcie (usuwa też assignments)
+        // Usuń zostawiam, ale można łatwo usunąć jeśli chcesz
         const delBtn = document.createElement('button');
         delBtn.className = 'btn danger small';
         delBtn.style.marginLeft = '8px';
@@ -312,18 +306,12 @@ const AdminMachines = (function(){
           if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
           await deleteMachine(m.number);
           await renderList();
-          // odśwież widok kolejności po usunięciu
           try { document.getElementById('saveMachineOrderBtn') && AdminMachines.refreshOrderView(); } catch(e){}
         };
 
         tdActions.appendChild(editBtn);
         tdActions.appendChild(delBtn);
-
-        tr.appendChild(tdNum);
-        tr.appendChild(tdMaker);
-        tr.appendChild(tdPaker);
         tr.appendChild(tdActions);
-
         tbody.appendChild(tr);
       });
 
@@ -336,43 +324,27 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- addMachine
-     Dodaje maszynę do tabeli machines (upsert, ale tutaj preferujemy insert — sprawdzamy unikalność).
-  */
-  async function addMachine(number, maker='P100', paker='F550'){
+  async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
     if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
-    if(!MAKER_OPTIONS.includes(maker) || !PAKER_OPTIONS.includes(paker)) { alert('Błędny typ Maker/Paker.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
-
     const num = String(number).trim();
     try{
-      // sprawdź unikalność numeru
       const { data: exists } = await sb.from('machines').select('number').eq('number', num).limit(1);
-      if(exists && exists.length){
-        alert('Maszyna o numerze ' + num + ' już istnieje.');
-        return;
-      }
-
-      // pobierz ostatni ord
+      if(exists && exists.length){ alert('Maszyna o numerze ' + num + ' już istnieje.'); return; }
       const { data: last } = await sb.from('machines').select('ord').order('ord', { ascending:false }).limit(1).maybeSingle();
       const nextOrd = last && last.ord ? last.ord + 1 : (machinesCache.length ? (machinesCache[machinesCache.length-1].ord || machinesCache.length) + 1 : 1);
-
-      const { error } = await sb.from('machines').insert([{ number: num, ord: nextOrd, default_view: true, status: 'Produkcja', maker, paker }]);
+      const insertObj = { number: num, ord: nextOrd, default_view: true, status: 'Produkcja', maker, paker, celafoniarka, pakieciarka, kartoniarka };
+      const { error } = await sb.from('machines').insert([insertObj]);
       if(error){ alert('Błąd dodawania maszyny: ' + (error.message || error)); return; }
-
       alert('Dodano maszynę ' + num);
       await renderList();
-      // odśwież widok kolejności
-      try { AdminMachines.refreshOrderView(); } catch(e){/*ignore*/ }
+      try { AdminMachines.refreshOrderView(); } catch(e){}
     }catch(e){
       console.error('AdminMachines.addMachine error', e);
       alert('Błąd podczas dodawania maszyny. Sprawdź konsolę.');
     }
   }
 
-  /* -------------------- deleteMachine
-     Usuwa maszynę (usuwa też przypisania w assignments).
-  */
   async function deleteMachine(number){
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     try{
@@ -386,36 +358,21 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- editMachine
-     Edycja rekordu maszyny: zmiana numeru, maker, paker.
-     - jeśli zmiana numeru: sprawdzamy unikalność (poza aktualnym rekordem)
-  */
-  async function editMachine(oldNumber, newNumber, maker, paker){
+  async function editMachine(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
     if(!newNumber || !String(newNumber).trim()) { alert('Numer nie może być pusty.'); return; }
-    if(!MAKER_OPTIONS.includes(maker) || !PAKER_OPTIONS.includes(paker)) { alert('Błędny typ Maker/Paker.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
-
     const newNum = String(newNumber).trim();
     try{
       if(newNum !== String(oldNumber)){
-        // sprawdź czy nowy numer już istnieje
         const { data: exists } = await sb.from('machines').select('number').eq('number', newNum).limit(1);
-        if(exists && exists.length){
-          alert('Maszyna o numerze ' + newNum + ' już istnieje. Wybierz inny numer.');
-          return;
-        }
+        if(exists && exists.length){ alert('Maszyna o numerze ' + newNum + ' już istnieje.'); return; }
       }
-
-      // aktualizuj rekord w machines
-      const updates = { number: newNum, maker, paker };
+      const updates = { number: newNum, maker, paker, celafoniarka, pakieciarka, kartoniarka };
       const { error } = await sb.from('machines').update(updates).eq('number', oldNumber);
       if(error){ alert('Błąd aktualizacji maszyny: ' + (error.message || error)); return; }
-
-      // jeśli numer się zmienił, musimy również zaktualizować assignments (przypisania)
       if(newNum !== String(oldNumber)){
         await sb.from('assignments').update({ machine_number: newNum }).eq('machine_number', oldNumber);
       }
-
       alert('Zaktualizowano maszynę: ' + newNum);
     }catch(e){
       console.error('AdminMachines.editMachine error', e);
@@ -423,45 +380,20 @@ const AdminMachines = (function(){
     }
   }
 
-  
-  
-    /* -------------------- renderEditableOrderList (używane przez zakładkę Kolejność)
-     Tutaj tylko pokazujemy maker/paker obok numeru, tak aby kolejność nadal była widoczna.
-     WERSJA BEZ PRZYCISKU "USUŃ".
-  */
   async function renderEditableOrderList(){
     const el = document.getElementById('machineListEditable');
     if(!el) return;
-
-    // usuń stare placeholdery
     el.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
     el.innerHTML = '';
-
-    if(!sb){
-      el.appendChild(makeMuted('Brak połączenia z serwerem.'));
-      return;
-    }
-
+    if(!sb){ el.appendChild(makeMuted('Brak połączenia z serwerem.')); return; }
     try{
       const { data } = await sb.from('machines').select('*').order('ord',{ascending:true});
       const machines = data || [];
-      if(!machines.length){
-        el.appendChild(makeMuted('Brak maszyn w bazie.'));
-        return;
-      }
-
-      // placeholder
+      if(!machines.length){ el.appendChild(makeMuted('Brak maszyn w bazie.')); return; }
       const placeholder = document.createElement('div');
       placeholder.className = 'drag-placeholder';
       placeholder.style.height = '0px';
-      placeholder.style.transition = 'height 120ms ease, opacity 120ms ease';
-      placeholder.style.opacity = '0.9';
-      placeholder.style.border = '2px dashed rgba(96,165,250,0.8)';
-      placeholder.style.background = 'rgba(219,234,254,0.3)';
-      placeholder.style.borderRadius = '8px';
-      placeholder.style.margin = '6px 0';
 
-      // utwórz wiersze
       machines.forEach(m=>{
         const row = document.createElement('div');
         row.className = 'admin-machine-row';
@@ -475,27 +407,18 @@ const AdminMachines = (function(){
         row.style.transition = 'background 120ms ease, transform 120ms ease';
         row.draggable = true;
 
-        // zawartość tylko: uchwyt + numer + maker/paker
         const left = document.createElement('div');
         left.style.display = 'flex';
         left.style.alignItems = 'center';
-        left.innerHTML = `
-          <span class="drag-handle" style="cursor:grab;margin-right:8px;">⇅</span>
-          <strong>${m.number}</strong>
-          <span style="margin-left:8px;color:#6b7280;font-size:13px;">(${m.maker||''}/${m.paker||''})</span>
-        `;
-
+        left.innerHTML = `<span class="drag-handle" style="cursor:grab;margin-right:8px;">⇅</span>
+                          <strong>${m.number}</strong>
+                          <span style="margin-left:8px;color:#6b7280;font-size:13px;">
+                            (${m.maker||''}/${m.paker||''}${m.celafoniarka? ' • ' + m.celafoniarka : ''}${m.pakieciarka? ' • ' + m.pakieciarka : ''}${m.kartoniarka? ' • ' + m.kartoniarka : ''})
+                          </span>`;
         row.appendChild(left);
         el.appendChild(row);
       });
 
-      // pomocnicze funkcje
-      function removeAllPlaceholders() {
-        el.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
-      }
-      function clearDragClasses() {
-        el.querySelectorAll('.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
-      }
       function getDragAfterElement(container, y) {
         const draggableElements = [...container.querySelectorAll('.admin-machine-row:not(.dragging)')];
         return draggableElements.find(child => {
@@ -504,9 +427,7 @@ const AdminMachines = (function(){
         }) || null;
       }
 
-      // drag & drop
       let dragSrc = null;
-
       el.querySelectorAll('.admin-machine-row').forEach(item=>{
         item.addEventListener('dragstart', (e) => {
           dragSrc = item;
@@ -516,19 +437,18 @@ const AdminMachines = (function(){
           try { e.dataTransfer.setData('text/plain', 'moving'); } catch(err){}
           e.dataTransfer.effectAllowed = 'move';
         });
-
         item.addEventListener('dragend', () => {
           if (dragSrc) dragSrc.classList.remove('dragging');
-          removeAllPlaceholders();
-          clearDragClasses();
+          if (placeholder.parentElement) placeholder.remove();
           dragSrc = null;
         });
+        item.addEventListener('dragenter', () => { if(item !== dragSrc) item.classList.add('drag-over'); });
+        item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
       });
 
       el.ondragover = (e) => {
         e.preventDefault();
         const after = getDragAfterElement(el, e.clientY);
-        el.querySelectorAll('.drag-placeholder').forEach(p => { if(p !== placeholder) p.remove(); });
         if(after === null){
           if(el.lastElementChild !== placeholder) el.appendChild(placeholder);
         } else {
@@ -543,39 +463,22 @@ const AdminMachines = (function(){
           el.insertBefore(dragSrc, placeholder);
           placeholder.remove();
         }
-        clearDragClasses();
         dragSrc = null;
       };
 
       document.ondragend = () => {
         if(dragSrc) dragSrc.classList.remove('dragging');
-        removeAllPlaceholders();
-        clearDragClasses();
+        if(placeholder.parentElement) placeholder.remove();
         dragSrc = null;
       };
 
-      removeAllPlaceholders();
     }catch(e){
       console.error('renderEditableOrderList error', e);
       el.appendChild(makeMuted('Błąd ładowania listy. Sprawdź konsolę.'));
     }
   }
 
-
-
-  function refreshOrderViewSafe(){
-    if(document.readyState === 'loading'){
-      document.addEventListener('DOMContentLoaded', ()=>{ renderEditableOrderList().catch(e=>console.warn(e)); }, { once:true });
-    } else {
-      renderEditableOrderList().catch(e=>console.warn(e));
-    }
-  }
-
-  /* -------------------- Modal edycji (dynamiczny)
-     Tworzy prosty modal w DOM, wypełnia go danymi maszyny i pozwala edytować numer/maker/paker.
-  */
   function openEditModal(machine){
-    // utworzenie elementów modala (jeśli już istnieje - usuń stare)
     let existing = document.getElementById('adminEditMachineModal');
     if(existing) existing.remove();
 
@@ -592,7 +495,7 @@ const AdminMachines = (function(){
 
     const box = document.createElement('div');
     box.className = 'modal-content';
-    box.style.maxWidth = '520px';
+    box.style.maxWidth = '620px';
     box.style.width = '100%';
     box.style.padding = '14px';
     box.style.borderRadius = '10px';
@@ -605,8 +508,8 @@ const AdminMachines = (function(){
 
     const form = document.createElement('div');
     form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr 1fr';
-    form.style.gap = '8px';
+    form.style.gridTemplateColumns = 'repeat(auto-fit, minmax(160px, 1fr))';
+    form.style.gap = '10px';
     form.style.marginTop = '8px';
 
     const inpOld = document.createElement('input');
@@ -631,9 +534,23 @@ const AdminMachines = (function(){
     PAKER_OPTIONS.forEach(pk => { const o=document.createElement('option'); o.value=pk; o.textContent=pk; selPaker.appendChild(o); });
     selPaker.value = machine.paker || PAKER_OPTIONS[0];
 
-    form.appendChild(inpOld);
-    form.appendChild(selMaker);
-    form.appendChild(selPaker);
+    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || '');
+    const selPak  = makeSelect(PAK_OPTIONS,  machine.pakieciarka || '');
+    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || '');
+
+    const fNum = makeField('Numer', inpOld, 'Numer identyfikacyjny maszyny.');
+    const fMaker = makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.');
+    const fPaker = makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.');
+    const fCela = makeField('Celafoniarka', selCela, 'Celafoniarka — kod urządzenia: 751 lub 753.');
+    const fPak  = makeField('Pakieciarka', selPak, 'Pakieciarka — kod urządzenia: 411, 413 lub 707.');
+    const fKart = makeField('Kartoniarka', selKart, 'Kartoniarka — kod urządzenia: 487 lub 489.');
+
+    form.appendChild(fNum);
+    form.appendChild(fMaker);
+    form.appendChild(fPaker);
+    form.appendChild(fCela);
+    form.appendChild(fPak);
+    form.appendChild(fKart);
 
     const actions = document.createElement('div');
     actions.style.display = 'flex';
@@ -653,8 +570,11 @@ const AdminMachines = (function(){
       const newNum = inpOld.value.trim();
       const mk = selMaker.value;
       const pk = selPaker.value;
+      const cel = selCela.value || '';
+      const pak = selPak.value || '';
+      const kart = selKart.value || '';
       if(!newNum){ return alert('Numer nie może być pusty.'); }
-      await editMachine(machine.number, newNum, mk, pk);
+      await editMachine(machine.number, newNum, mk, pk, cel, pak, kart);
       modal.remove();
       await renderList();
       refreshOrderViewSafe();
@@ -670,27 +590,27 @@ const AdminMachines = (function(){
     document.body.appendChild(modal);
   }
 
-  /* -------------------- init (idempotentne)
-     - podłącza eventy (tylko raz)
-     - przygotowuje referencje do DOM
-     - wykonuje początkowy render listy
-  */
-  function init(){
+  function refreshOrderViewSafe(){
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ()=>{ renderEditableOrderList().catch(e=>console.warn(e)); }, { once:true });
+    } else {
+      renderEditableOrderList().catch(e=>console.warn(e));
+    }
+  }
+
+  async function init(){
     const doInit = async () => {
       if(_inited){
-        // jeśli już zainicjowane, odśwież widoki
         refreshOrderViewSafe();
-        try { await renderList(); } catch(e){/*ignore*/ }
+        try { await renderList(); } catch(e){}
         return;
       }
 
       wrapEl = document.getElementById('adminMachinesApp');
       listEditableEl = document.getElementById('machineListEditable');
 
-      // podłącz eventy do istniejących przycisków (jeśli są) - np. przycisk zapisu kolejności
       const saveOrderBtn = document.getElementById('saveMachineOrderBtn');
       if(saveOrderBtn) saveOrderBtn.addEventListener('click', async () => {
-        // jeśli chcesz, można tu dodać dodatkową walidację
         const rows = Array.from(listEditableEl.querySelectorAll('.admin-machine-row'));
         if(!rows.length) { alert('Brak wierszy do zapisania.'); return; }
         if(!sb){ alert('Brak połączenia z serwerem.'); return; }
@@ -707,12 +627,8 @@ const AdminMachines = (function(){
         }
       });
 
-      // initial render
       try { await renderList(); } catch(e){ console.warn(e); }
-
-      // initial render order list
       refreshOrderViewSafe();
-
       _inited = true;
     };
 
@@ -723,7 +639,6 @@ const AdminMachines = (function(){
     }
   }
 
-  // expose public API
   return {
     init,
     renderList,
@@ -736,7 +651,6 @@ const AdminMachines = (function(){
 
 /* -------------------- Zakładki i bootstrapping admin -------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
-  // Przy starcie - najpierw zapewnij autoryzację, potem dalsza inicjalizacja.
   ensureAuthThen(() => {
     const tabOrder = document.getElementById('tabOrder');
     const tabModify = document.getElementById('tabModify');
@@ -754,18 +668,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(orderSection) orderSection.style.display = 'none';
       if(machinesSection) machinesSection.style.display = '';
       if(tabOrder) { tabOrder.classList.remove('active'); tabOrder.classList.add('ghost'); }
-      if(tabModify) { tabModify.classList.remove('ghost'); tabModify.classList.add('active'); }
+      if(tabModify) tabModify.classList.remove('ghost'); tabModify.classList.add('active');
       await AdminMachines.renderList();
     }
 
     if(tabOrder) tabOrder.addEventListener('click', () => { showOrder(); AdminMachines.refreshOrderView(); });
     if(tabModify) tabModify.addEventListener('click', () => showModify());
 
-    if(backToMainBtn) backToMainBtn.addEventListener('click', () => {
-      window.location.href = '../index.html';
-    });
+    if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-    // pokaż sekcję kolejności na start
     showOrder();
   });
 });
