@@ -538,108 +538,7 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- lista edytowalna kolejności (zakładka Kolejność) */
-  async function renderEditableOrderList(){
-    const el = document.getElementById('machineListEditable');
-    if(!el) return;
-    el.querySelectorAll('.drag-placeholder').forEach(p => p.remove());
-    el.innerHTML = '';
-    if(!sb){ el.appendChild(makeMuted('Brak połączenia z serwerem.')); return; }
-    try{
-      const { data } = await sb.from('machines').select('*').order('ord',{ascending:true});
-      const machines = data || [];
-      if(!machines.length){ el.appendChild(makeMuted('Brak maszyn w bazie.')); return; }
 
-      const placeholder = document.createElement('div');
-      placeholder.className = 'drag-placeholder';
-      placeholder.style.height = '0px';
-
-      machines.forEach(m=>{
-        const row = document.createElement('div');
-        row.className = 'admin-machine-row';
-        row.dataset.number = m.number;
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
-        row.style.padding = '8px';
-        row.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        row.style.background = '#fff';
-        row.style.transition = 'background 120ms ease, transform 120ms ease';
-
-        const left = document.createElement('div');
-        left.style.display = 'flex';
-        left.style.alignItems = 'center';
-        left.innerHTML = `<span class="drag-handle" style="cursor:grab;margin-right:8px;">≡</span>
-                          <strong>${m.number}</strong>
-                          <span style="margin-left:8px;color:#6b7280;font-size:13px;">
-                            (${m.maker||''}/${m.paker||''}${m.celafoniarka? ' • ' + m.celafoniarka : ''}${m.pakieciarka? ' • ' + m.pakieciarka : ''}${m.kartoniarka? ' • ' + m.kartoniarka : ''})
-                          </span>`;
-        row.appendChild(left);
-        el.appendChild(row);
-      });
-
-      function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.admin-machine-row:not(.dragging)')];
-        return draggableElements.find(child => {
-          const box = child.getBoundingClientRect();
-          return y < box.top + box.height / 2;
-        }) || null;
-      }
-
-      let dragSrc = null;
-      el.querySelectorAll('.admin-machine-row').forEach(item=>{
-        const handle = item.querySelector('.drag-handle');
-        if(!handle) return;
-        handle.draggable = true;
-        handle.addEventListener('dragstart', (e) => {
-          dragSrc = item;
-          item.classList.add('dragging');
-          const h = item.getBoundingClientRect().height;
-          placeholder.style.height = `${h}px`;
-          try { e.dataTransfer.setData('text/plain', 'moving'); } catch (err) {}
-          e.dataTransfer.effectAllowed = 'move';
-        });
-        handle.addEventListener('dragend', () => {
-          if (dragSrc) dragSrc.classList.remove('dragging');
-          if (placeholder.parentElement) placeholder.remove();
-          dragSrc = null;
-        });
-      });
-
-      el.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const after = getDragAfterElement(el, e.clientY);
-        if(after === null){
-          if(el.lastElementChild !== placeholder) el.appendChild(placeholder);
-        } else {
-          if(after !== placeholder) el.insertBefore(placeholder, after);
-        }
-      });
-
-      el.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        if(!dragSrc) return;
-        if(placeholder.parentElement){
-          el.insertBefore(dragSrc, placeholder);
-          placeholder.remove();
-        }
-        // automatyczne zapisanie kolejności z widoku listy
-        const rows = Array.from(el.querySelectorAll('.admin-machine-row'));
-        await saveOrderFromRows(rows);
-        dragSrc = null;
-      });
-
-      document.ondragend = () => {
-        if (dragSrc) dragSrc.classList.remove('dragging');
-        if (placeholder.parentElement) placeholder.remove();
-        dragSrc = null;
-      };
-
-    }catch(e){
-      console.error('renderEditableOrderList error', e);
-      el.appendChild(makeMuted('Błąd ładowania listy. Sprawdź konsolę.'));
-    }
-  }
 
   function refreshOrderViewSafe(){
     if(document.readyState === 'loading'){
@@ -658,7 +557,7 @@ const AdminMachines = (function(){
       }
 
       wrapEl = document.getElementById('adminMachinesApp');
-      listEditableEl = document.getElementById('machineListEditable');
+
 
       const saveOrderBtn = document.getElementById('saveMachineOrderBtn');
       if(saveOrderBtn) saveOrderBtn.addEventListener('click', async () => {
@@ -708,31 +607,20 @@ const AdminMachines = (function(){
 /* -------------------- Zakładki i bootstrapping admin -------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
   ensureAuthThen(() => {
-    const tabOrder = document.getElementById('tabOrder');
     const tabModify = document.getElementById('tabModify');
-    const orderSection = document.getElementById('adminOrderSection');
     const machinesSection = document.getElementById('adminMachinesSection');
     const backToMainBtn = document.getElementById('backToMainBtn');
 
-    function showOrder(){
-      if(orderSection) orderSection.style.display = '';
-      if(machinesSection) machinesSection.style.display = 'none';
-      if(tabOrder) { tabOrder.classList.remove('ghost'); tabOrder.classList.add('active'); }
-      if(tabModify) { tabModify.classList.remove('active'); tabModify.classList.add('ghost'); }
-    }
+    // od razu pokazujemy sekcję modyfikacji po logowaniu
     async function showModify(){
-      if(orderSection) orderSection.style.display = 'none';
       if(machinesSection) machinesSection.style.display = '';
-      if(tabOrder) tabOrder.classList.remove('active'); tabOrder.classList.add('ghost');
-      if(tabModify) tabModify.classList.remove('ghost'); tabModify.classList.add('active');
+      if(tabModify) tabModify.classList.add('active');
       await AdminMachines.renderList();
     }
 
-    if(tabOrder) tabOrder.addEventListener('click', () => { showOrder(); AdminMachines.refreshOrderView(); });
     if(tabModify) tabModify.addEventListener('click', () => showModify());
-
     if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-    showOrder();
+    showModify();
   });
 });

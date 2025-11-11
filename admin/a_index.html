@@ -66,16 +66,10 @@
 
       <!-- 🔹 ZAKŁADKI ADMINA -->
       <div id="adminTabs" style="display:flex;gap:8px;margin-bottom:12px;">
-        <button id="tabOrder" class="btn active">Kolejność maszyn</button>
-        <button id="tabModify" class="btn ghost">Modyfikacja maszyn</button>
+                <button id="tabModify" class="btn ghost">Modyfikacja maszyn</button>
       </div>
 
-       <!-- 🔸 SEKCJA KOLEJNOŚCI MASZYN (pierwotny panel) -->
-      <div id="adminOrderSection">
-        <h4>Kolejność wyświetlania maszyn</h4>
-        <div class="muted">Przeciągaj, aby zmienić kolejność. Zapisz, aby ustawić nowy domyślny widok.</div>
-
-        <!-- ZAPISZ KOLEJNOŚĆ (przycisk nad listą lub pod, wg preferencji) -->
+             <!-- ZAPISZ KOLEJNOŚĆ (przycisk nad listą lub pod, wg preferencji) -->
         <div class="row" style="margin-top:8px;">
           <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
         </div>
@@ -88,7 +82,7 @@
       <!-- 🔸 SEKCJA MODYFIKACJI MASZYN (nowy moduł, ukryty na starcie) -->
       <div id="adminMachinesSection" style="display:none;">
         <h4>Modyfikacja maszyn</h4>
-        <div class="muted">Tutaj możesz dodawać, usuwać i edytować statusy maszyn.</div>
+        <div class="muted">Tutaj możesz dodawać, usuwać i edytować kolejność maszyn.</div>
 
         <div id="adminMachinesApp" class="card" style="margin-top:10px;padding:10px;">
           <!-- zawartość generowana dynamicznie przez AdminMachines -->
