@@ -569,6 +569,48 @@ table td:active,
   opacity: 0.95;
   box-sizing: border-box;
 }
+/* ---- Dodatkowe style dla nowej nawigacji i lepszego CTA back ---- */
+
+/* admin-nav (pozioma nawigacja w header) */
+.admin-nav { margin-left: 18px; display:flex; align-items:center; }
+.admin-nav .nav-list { display:flex; gap:8px; list-style:none; margin:0; padding:0; align-items:center; }
+.admin-nav .nav-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.95);
+  font-weight:600;
+  cursor: pointer;
+  transition: background .12s ease, transform .06s ease;
+  border: 1px solid transparent;
+}
+.admin-nav .nav-item:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); }
+.admin-nav .nav-item.active { background: #ffffff; color:#0b4f88; border-color: rgba(0,0,0,0.06); box-shadow: 0 6px 18px rgba(11,74,136,0.12); }
+.admin-nav .nav-item.disabled { opacity:0.5; cursor:not-allowed; background:transparent; color:rgba(255,255,255,0.75); }
+
+/* wyróżniony przycisk powrotu - większy, kontrastowy */
+.top-bar .controls { margin-left: auto; display:flex; gap:10px; align-items:center; }
+.back-cta {
+  background: #fff;
+  color: #1366d6;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(19,102,214,0.12);
+  box-shadow: 0 6px 18px rgba(19,102,214,0.12);
+}
+.back-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(19,102,214,0.18); }
+
+/* responsywność: skondensuj nav na niewielkich ekranach */
+@media (max-width: 860px) {
+  .admin-nav { display:none; } /* na małych ekranach chowanie – możesz dodać hamburger później */
+  .top-bar .brand { font-size: 15px; }
+  .back-cta { padding: 6px 8px; font-size:14px; }
+}
+
+/* drobne poprawki: sekcja panelu */
+.panel h3 { font-size: 18px; margin-bottom:10px; }
+.card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 6px 18px rgba(2,6,23,0.04); }
 
 
 /* koniec pliku */

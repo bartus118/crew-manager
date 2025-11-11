@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Panel administratora — Crew Manager</title>
   <link rel="stylesheet" href="../style.css">
   <!-- Supabase SDK -->
@@ -10,7 +10,7 @@
 
   <!-- Minimalne style dla modala logowania (lokalnie, żeby nie ruszać style.css) -->
   <style>
-    /* overlay modal auth */
+    /* overlay modal auth (nie zmienione logicznie) */
     #adminAuthModal {
       position: fixed;
       inset: 0;
@@ -39,7 +39,7 @@
   </style>
 </head>
 <body>
-  <!-- AUTH MODAL: blokuje cały panel dopóki nie zostanie wprowadzone hasło -->
+  <!-- AUTH MODAL -->
   <div id="adminAuthModal" aria-hidden="true" style="display:none;">
     <div class="auth-box" role="dialog" aria-modal="true" aria-labelledby="authTitle">
       <h3 id="authTitle">Logowanie — panel administratora</h3>
@@ -55,8 +55,21 @@
 
   <header class="top-bar">
     <div class="brand">Panel administratora</div>
+
+    <!-- nowy: sekcja nawigacji/zakładek (po lewej obok brand) -->
+    <nav class="admin-nav" aria-label="Admin navigation">
+      <ul class="nav-list">
+        <!-- Możesz dodać kolejne <li class="nav-item"> z data-tab -->
+        <li class="nav-item" data-tab="modify" id="tabModify">Modyfikacja maszyn</li>
+        <!-- placeholdery na przyszłe zakładki -->
+        <li class="nav-item disabled">Raporty</li>
+        <li class="nav-item disabled">Ustawienia</li>
+      </ul>
+    </nav>
+
     <div class="controls">
-      <button id="backToMainBtn" class="btn outline">Powrót do strony głównej</button>
+      <!-- wyróżniony przycisk powrotu -->
+      <button id="backToMainBtn" class="btn back-cta">Powrót do strony głównej</button>
     </div>
   </header>
 
@@ -64,34 +77,63 @@
     <section class="panel card">
       <h3 style="margin-bottom:16px;">Zarządzanie maszynami i konfiguracją</h3>
 
-      <!-- 🔹 ZAKŁADKI ADMINA -->
-      <div id="adminTabs" style="display:flex;gap:8px;margin-bottom:12px;">
-                <button id="tabModify" class="btn ghost">Modyfikacja maszyn</button>
-      </div>
-
-             <!-- ZAPISZ KOLEJNOŚĆ (przycisk nad listą lub pod, wg preferencji) -->
-        <div class="row" style="margin-top:8px;">
-          <button id="saveMachineOrderBtn" class="btn">Zapisz kolejność</button>
-        </div>
-
-        <!-- lista edytowalna -->
-        <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px;"></div>
-      </div>
-
-       
-      <!-- 🔸 SEKCJA MODYFIKACJI MASZYN (nowy moduł, ukryty na starcie) -->
-      <div id="adminMachinesSection" style="display:none;">
+      <!-- Jedna zakładka: Modyfikacja maszyn (pokazywana/ukrywana przez JS) -->
+      <div id="adminMachinesSection">
         <h4>Modyfikacja maszyn</h4>
         <div class="muted">Tutaj możesz dodawać, usuwać i edytować kolejność maszyn.</div>
 
         <div id="adminMachinesApp" class="card" style="margin-top:10px;padding:10px;">
-          <!-- zawartość generowana dynamicznie przez AdminMachines -->
+          <!-- zawartość generowana dynamicznie przez AdminMachines (a_script.js) -->
         </div>
       </div>
 
+      <!-- lista edytowalna (jeśli chcesz zachować osobne miejsce) -->
+      <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px; display:none;"></div>
     </section>
   </main>
 
   <script src="./a_script.js"></script>
+
+  <!-- lekki skrypt UI: podłączenia kliknięć w nav do istniejących selektorów (nie rusza Twojej logiki) -->
+  <script>
+    (function(){
+      // podmieniamy zachowanie elementu #tabModify z nowego nav na istniejący selektor w a_script.js
+      function showModifyFromNav(){
+        // wywołaj kliknięcie programu (jeśli a_script używa #tabModify)
+        const el = document.getElementById('tabModify');
+        if(el) {
+          // Ustawiaj aktywność wizualnie
+          document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+          el.classList.add('active');
+          // Pokaż sekcję modyfikacji (a_script.js i tak zainicjalizuje render)
+          document.getElementById('adminMachinesSection').style.display = '';
+          // jeśli AdminMachines dostępny — renderuj
+          try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // kliknięcie w nav
+        document.querySelectorAll('.nav-item').forEach(it => {
+          it.addEventListener('click', (e) => {
+            if(it.classList.contains('disabled')) return;
+            if(it.dataset.tab === 'modify') {
+              showModifyFromNav();
+            } else {
+              // placeholdery: pokażesz tu inne zakładki w przyszłości
+              alert('Ta zakładka jest jeszcze nieaktywna.');
+            }
+          });
+        });
+
+        // bardziej widoczny back button - jeśli ktoś chce, można zrobić potwierdzenie
+        document.getElementById('backToMainBtn')?.addEventListener('click', () => { window.location.href = '../index.html'; });
+
+        // po załadowaniu automatycznie „kliknij” Modyfikację
+        const first = document.querySelector('.nav-item[data-tab="modify"]');
+        if(first) first.click();
+      });
+    })();
+  </script>
 </body>
 </html>
