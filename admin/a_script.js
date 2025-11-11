@@ -124,8 +124,8 @@ const AdminMachines = (function(){
 
   const MAKER_OPTIONS = ['P100','P70'];
   const PAKER_OPTIONS = ['F550','F350','GD','GDX'];
-  const CELA_OPTIONS = ['', '751','753'];
-  const PAK_OPTIONS  = ['', '411','413','707'];
+  const CELA_OPTIONS = ['', '751','401'];
+  const PAK_OPTIONS  = ['', '411','407','408','409','707'];
   const KART_OPTIONS = ['', '487','489'];
 
   function makeMuted(text){
