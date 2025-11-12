@@ -612,5 +612,41 @@ table td:active,
 .panel h3 { font-size: 18px; margin-bottom:10px; }
 .card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 6px 18px rgba(2,6,23,0.04); }
 
+/* Styl listy pracowników — poprawiony wygląd */
+.admin-emp-header {
+  background-color: #f5f6f8;
+  border-radius: 6px 6px 0 0;
+}
+
+.admin-emp-row:hover {
+  background-color: #f9fafb;
+}
+
+.btn.btn-small {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.btn.btn-gray {
+  background: #e0e0e0;
+}
+
+.btn.btn-blue {
+  background: #007bff;
+  color: #fff;
+}
+
+.btn.btn-gray:hover {
+  background: #d5d5d5;
+}
+
+.btn.btn-blue:hover {
+  background: #0069d9;
+}
+
 
 /* koniec pliku */

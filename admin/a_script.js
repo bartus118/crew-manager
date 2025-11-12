@@ -1,12 +1,13 @@
 /**
  * admin/a_script.js
  *
- * Moduł administracyjny — Modyfikacja maszyn + lista pracowników (z firstname/surname)
+ * Panel administracyjny — zarządzanie maszynami i pracownikami
+ * Wersja: poprawiona (lepsze logowanie, defensywne sprawdzanie DOM, spójne zmienne)
  *
- * Zmiany:
- * - pola pracownika: firstname + surname (zamiast name)
- * - dodano modal "Uprawnienia" dostępny z listy pracowników
- * - fetch/update używa firstname/surname/roles/permissions/bu
+ * Uwaga:
+ *  - Ten plik zastępuje wcześniejszą wersję a_script.js.
+ *  - Nie zmieniono logiki biznesowej — jedynie poprawiono błędy referencji
+ *    i dodano lepsze logowanie.
  */
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
@@ -15,6 +16,28 @@ const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
 /* --------------------------------------------------------------------------------- */
 
+/* -------------------- UTILS: logowanie i obrona -------------------- */
+function logInfo(ctx, ...args) {
+  try { console.info(`[admin:${ctx}]`, ...args); } catch(e){}
+}
+function logWarn(ctx, ...args) {
+  try { console.warn(`[admin:${ctx}]`, ...args); } catch(e){}
+}
+function logError(ctx, ...args) {
+  try { console.error(`[admin:${ctx}]`, ...args); } catch(e){}
+}
+function safeExec(fnName, fn) {
+  return async function(...args) {
+    try {
+      return await fn.apply(this, args);
+    } catch (err) {
+      logError(fnName, err && (err.stack || err.message || err));
+      throw err;
+    }
+  };
+}
+
+/* -------------------- Supabase init (defensive) -------------------- */
 function waitForSupabaseGlobal(timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
@@ -28,55 +51,67 @@ function waitForSupabaseGlobal(timeoutMs = 8000) {
 }
 
 let sb = null;
-async function initSupabaseAdmin(){
+const initSupabaseAdmin = safeExec('initSupabaseAdmin', async function(){
   try {
     await waitForSupabaseGlobal();
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('admin: Supabase ready');
+    logInfo('initSupabaseAdmin', 'Supabase client created');
   } catch (e) {
-    console.warn('admin: Supabase not available — offline mode', e);
     sb = null;
+    logWarn('initSupabaseAdmin', 'Supabase SDK not available — offline mode', e && e.message);
   }
-}
+});
 
-/* -------------------- Auth modal -------------------- */
+/* -------------------- AUTH MODAL -------------------- */
 function showAuthModal() {
-  const modal = document.getElementById('adminAuthModal');
-  const passInput = document.getElementById('adminAuthPass');
-  const okBtn = document.getElementById('adminAuthBtn');
-  const cancelBtn = document.getElementById('adminAuthCancel');
-
-  if(!modal) return;
-
-  modal.style.display = 'flex';
-  modal.setAttribute('aria-hidden', 'false');
-  if(passInput) { passInput.value = ''; passInput.focus(); }
-
-  function closeModal() { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
-
-  async function tryLogin() {
-    const v = (passInput && passInput.value) ? passInput.value : '';
-    if (v === ADMIN_PASSWORD) {
-      try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e){}
-      closeModal();
-      await initSupabaseAdmin();
-      try {
-        if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
-          AdminMachines.init();
-          try { AdminMachines.refreshOrderView(); } catch(e){}
-          try { AdminMachines.renderList(); } catch(e){}
-        }
-      } catch(e){ console.warn('Błąd po logowaniu przy init AdminMachines:', e); }
-      try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
-      document.getElementById('tabModify')?.click();
-    } else {
-      alert('Błędne hasło.'); if(passInput) passInput.focus();
+  try {
+    const modal = document.getElementById('adminAuthModal');
+    if(!modal) {
+      logWarn('showAuthModal', 'No #adminAuthModal in DOM');
+      return;
     }
-  }
+    const passInput = document.getElementById('adminAuthPass');
+    const okBtn = document.getElementById('adminAuthBtn');
+    const cancelBtn = document.getElementById('adminAuthCancel');
 
-  if(okBtn) okBtn.onclick = tryLogin;
-  if(cancelBtn) cancelBtn.onclick = () => { window.location.href = '../index.html'; };
-  if(passInput) passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    if(passInput) { passInput.value = ''; passInput.focus(); }
+
+    function closeModal() {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function tryLogin() {
+      const v = (passInput && passInput.value) ? passInput.value : '';
+      if (v === ADMIN_PASSWORD) {
+        try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e){}
+        closeModal();
+        await initSupabaseAdmin();
+        try {
+          if (window.AdminMachines && AdminMachines.init) AdminMachines.init();
+        } catch(e){ logWarn('tryLogin', 'AdminMachines init failed', e); }
+        try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
+        document.getElementById('tabModify')?.click();
+      } else {
+        alert('Błędne hasło.');
+        if(passInput) passInput.focus();
+      }
+    }
+
+    if(okBtn) {
+      okBtn.onclick = tryLogin;
+    }
+    if(cancelBtn) {
+      cancelBtn.onclick = () => { window.location.href = '../index.html'; };
+    }
+    if(passInput) {
+      passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
+    }
+  } catch(err) {
+    logError('showAuthModal', err);
+  }
 }
 
 function ensureAuthThen(cb) {
@@ -85,37 +120,29 @@ function ensureAuthThen(cb) {
     initSupabaseAdmin()
       .then(async () => {
         try {
-          if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
-            AdminMachines.init();
-            try { AdminMachines.refreshOrderView(); } catch(e){}
-            try { AdminMachines.renderList(); } catch(e){}
+          if (window.AdminMachines && AdminMachines.init) {
+            await AdminMachines.init();
           }
-        } catch (e) { console.warn('Błąd podczas init AdminMachines:', e); }
+        } catch (e) { logWarn('ensureAuthThen', 'AdminMachines init error', e); }
       })
-      .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
-      .catch(err => { console.warn('Błąd initSupabaseAdmin w ensureAuthThen:', err); showAuthModal(); });
+      .then(() => { try { cb && cb(); } catch (e) { logWarn('ensureAuthThen cb', e); } })
+      .catch(err => { logWarn('ensureAuthThen', 'initSupabaseAdmin failed', err); showAuthModal(); });
   } else {
     showAuthModal();
     const handler = () => {
       document.removeEventListener('adminAuthenticated', handler);
       initSupabaseAdmin()
         .then(async () => {
-          try {
-            if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
-              AdminMachines.init();
-              try { AdminMachines.refreshOrderView(); } catch(e){}
-              try { AdminMachines.renderList(); } catch(e){}
-            }
-          } catch (e) { console.warn('Błąd podczas init AdminMachines po zdarzeniu auth:', e); }
+          try { if (window.AdminMachines && AdminMachines.init) await AdminMachines.init(); } catch (e) { logWarn('ensureAuthThen handler', e); }
         })
-        .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
-        .catch(err => { console.warn('Błąd initSupabaseAdmin po zdarzeniu auth:', err); });
+        .then(() => { try { cb && cb(); } catch (e) { logWarn('ensureAuthThen handler cb', e); } })
+        .catch(err => { logWarn('ensureAuthThen handler', err); });
     };
     document.addEventListener('adminAuthenticated', handler);
   }
 }
 
-/* -------------------- AdminMachines (bez większych zmian) -------------------- */
+/* -------------------- AdminMachines -------------------- */
 const AdminMachines = (function(){
   let wrapEl = null;
   let tbodyRef = null;
@@ -176,10 +203,10 @@ const AdminMachines = (function(){
     return wrap;
   }
 
-  async function saveOrderFromRows(rows) {
+  const saveOrderFromRows = safeExec('AdminMachines.saveOrderFromRows', async function(rows) {
     if (!rows || rows.length === 0) return;
     if (!sb) {
-      console.warn('Brak połączenia z serwerem — nie można zapisać kolejności.');
+      logWarn('saveOrderFromRows', 'No Supabase client — cannot save order.');
       return;
     }
     try {
@@ -189,7 +216,7 @@ const AdminMachines = (function(){
         // sequential update to avoid race
         // eslint-disable-next-line no-await-in-loop
         const { error } = await sb.from('machines').update({ ord: i+1, default_view: true }).eq('number', String(num));
-        if (error) console.warn('Błąd aktualizacji ord dla', num, error);
+        if (error) logWarn('saveOrderFromRows', 'update error for', num, error);
       }
       const b = document.createElement('div');
       b.textContent = 'Zapisano kolejność';
@@ -204,10 +231,12 @@ const AdminMachines = (function(){
       b.style.zIndex = 21000;
       document.body.appendChild(b);
       setTimeout(()=>{ b.remove(); }, 1400);
+      // refresh local cache
+      try { await fetchMachinesCache(); } catch(e){ logWarn('saveOrderFromRows refresh cache', e); }
     } catch (e) {
-      console.error('saveOrderFromRows error', e);
+      logError('saveOrderFromRows', e);
     }
-  }
+  });
 
   function openAddModal(){
     const existing = document.getElementById('adminAddMachineModal');
@@ -258,8 +287,8 @@ const AdminMachines = (function(){
     grid.appendChild(makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).'));
     grid.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.'));
     grid.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.'));
-    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
-    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
+    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401.'));
+    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 407, 408, 409, 707.'));
     grid.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
 
     const actions = document.createElement('div');
@@ -299,206 +328,230 @@ const AdminMachines = (function(){
     inpNum.focus();
   }
 
-  async function renderList(){
-    if(!wrapEl) return;
-    wrapEl.innerHTML = '';
-    wrapEl.appendChild(makeMuted('Ładuję listę maszyn...'));
-    if(!sb){ wrapEl.innerHTML=''; wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).')); return; }
-
-    try{
+  async function fetchMachinesCache(){
+    if(!sb) {
+      logWarn('fetchMachinesCache', 'No Supabase client — using local fallback');
+      machinesCache = [];
+      return;
+    }
+    try {
       const { data, error } = await sb.from('machines').select('*').order('ord', { ascending:true });
-      if(error) throw error;
-      machinesCache = data || [];
-
-      const topRow = document.createElement('div');
-      topRow.style.display = 'flex';
-      topRow.style.justifyContent = 'flex-start';
-      topRow.style.marginBottom = '10px';
-
-      const addBtn = document.createElement('button');
-      addBtn.className = 'btn';
-      addBtn.textContent = 'Dodaj maszynę';
-      addBtn.onclick = () => openAddModal();
-
-      topRow.appendChild(addBtn);
-      wrapEl.innerHTML = '';
-      wrapEl.appendChild(topRow);
-
-      if(!machinesCache || machinesCache.length === 0){
-        wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
+      if (error) {
+        logWarn('fetchMachinesCache', 'Supabase returned error', error);
+        machinesCache = [];
         return;
       }
-
-      const table = document.createElement('table');
-      table.style.width = '100%';
-      table.style.borderCollapse = 'collapse';
-      table.style.marginTop = '6px';
-      const thead = document.createElement('thead');
-      thead.innerHTML = `<tr style="text-align:left;">
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
-      </tr>`;
-      table.appendChild(thead);
-      const tbody = document.createElement('tbody');
-      tbodyRef = tbody;
-
-      const placeholder = document.createElement('tr');
-      placeholder.className = 'drag-placeholder';
-      placeholder.style.height = '0';
-      placeholder.style.background = 'rgba(96,165,250,0.06)';
-      placeholder.innerHTML = `<td colspan="8" style="padding:0;border:none;"></td>`;
-
-      machinesCache.forEach(m => {
-        const tr = document.createElement('tr');
-        tr.className = 'admin-machine-row';
-        tr.dataset.number = m.number;
-        tr.style.background = '#fff';
-
-        const tdHandle = document.createElement('td');
-        tdHandle.style.padding = '8px';
-        tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdHandle.style.textAlign = 'center';
-        tdHandle.style.cursor = 'grab';
-        const handle = document.createElement('span');
-        handle.className = 'drag-handle';
-        handle.title = 'Przeciągnij, aby zmienić pozycję';
-        handle.style.userSelect = 'none';
-        handle.style.fontSize = '16px';
-        handle.style.lineHeight = '1';
-        handle.textContent = '≡';
-        handle.draggable = true;
-        tdHandle.appendChild(handle);
-        tr.appendChild(tdHandle);
-
-        const tdNum = document.createElement('td');
-        tdNum.style.padding = '8px';
-        tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdNum.textContent = m.number || '';
-        tr.appendChild(tdNum);
-
-        const tdMaker = document.createElement('td');
-        tdMaker.style.padding = '8px';
-        tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdMaker.textContent = m.maker || '';
-        tr.appendChild(tdMaker);
-
-        const tdPaker = document.createElement('td');
-        tdPaker.style.padding = '8px';
-        tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdPaker.textContent = m.paker || '';
-        tr.appendChild(tdPaker);
-
-        const tdCela = document.createElement('td');
-        tdCela.style.padding = '8px';
-        tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdCela.textContent = m.celafoniarka || '';
-        tr.appendChild(tdCela);
-
-        const tdPak = document.createElement('td');
-        tdPak.style.padding = '8px';
-        tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdPak.textContent = m.pakieciarka || '';
-        tr.appendChild(tdPak);
-
-        const tdKart = document.createElement('td');
-        tdKart.style.padding = '8px';
-        tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-        tdKart.textContent = m.kartoniarka || '';
-        tr.appendChild(tdKart);
-
-        const tdActions = document.createElement('td');
-        tdActions.style.padding = '8px';
-        tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-
-        const editBtn = document.createElement('button');
-        editBtn.className = 'btn ghost small';
-        editBtn.textContent = 'Edytuj';
-        editBtn.onclick = () => openEditModal(m);
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn danger small';
-        delBtn.style.marginLeft = '8px';
-        delBtn.textContent = 'Usuń';
-        delBtn.onclick = async () => {
-          if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
-          await deleteMachine(m.number);
-          await renderList();
-        };
-
-        tdActions.appendChild(editBtn);
-        tdActions.appendChild(delBtn);
-        tr.appendChild(tdActions);
-
-        handle.addEventListener('dragstart', (e) => {
-          tr.classList.add('dragging');
-          try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
-          e.dataTransfer.effectAllowed = 'move';
-          const h = tr.getBoundingClientRect().height;
-          placeholder.style.height = `${h}px`;
-        });
-
-        handle.addEventListener('dragend', () => {
-          tr.classList.remove('dragging');
-          if (tbody.contains(placeholder)) placeholder.remove();
-        });
-
-        tbody.appendChild(tr);
-      });
-
-      table.appendChild(tbody);
-      wrapEl.appendChild(table);
-
-      function getDragAfterRow(container, y) {
-        const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
-        return draggableRows.find(row => {
-          const box = row.getBoundingClientRect();
-          return y < box.top + box.height / 2;
-        }) || null;
-      }
-
-      tbody.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const after = getDragAfterRow(tbody, e.clientY);
-        if (after === null) {
-          if (tbody.lastElementChild !== placeholder) tbody.appendChild(placeholder);
-        } else {
-          if (after !== placeholder) tbody.insertBefore(placeholder, after);
-        }
-      });
-
-      tbody.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        const dragging = tbody.querySelector('tr.dragging');
-        if (!dragging) return;
-        if (placeholder.parentElement) {
-          tbody.insertBefore(dragging, placeholder);
-          placeholder.remove();
-        }
-        tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
-        const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
-        await saveOrderFromRows(rows);
-      });
-
-      document.ondragend = () => {
-        const dragging = tbody.querySelector('tr.dragging');
-        if (dragging) dragging.classList.remove('dragging');
-        if (tbody.contains(placeholder)) placeholder.remove();
-      };
-
-    }catch(e){
-      console.error('AdminMachines.renderList error', e);
-      wrapEl.innerHTML = '';
-      wrapEl.appendChild(makeMuted('Błąd ładowania maszyn. Sprawdź konsolę.'));
+      machinesCache = Array.isArray(data) ? data : [];
+      logInfo('fetchMachinesCache', 'fetched', machinesCache.length, 'machines');
+    } catch (e) {
+      logError('fetchMachinesCache', e);
+      machinesCache = [];
     }
   }
 
-  async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
+  const renderList = safeExec('AdminMachines.renderList', async function(){
+    if(!wrapEl) {
+      wrapEl = document.getElementById('adminMachinesApp');
+      if(!wrapEl){
+        logWarn('renderList', 'No #adminMachinesApp element found in DOM');
+        return;
+      }
+    }
+    wrapEl.innerHTML = '';
+    wrapEl.appendChild(makeMuted('Ładuję listę maszyn...'));
+
+    if(!sb){
+      wrapEl.innerHTML='';
+      wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).'));
+      return;
+    }
+
+    await fetchMachinesCache();
+
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.justifyContent = 'flex-start';
+    topRow.style.marginBottom = '10px';
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn';
+    addBtn.textContent = 'Dodaj maszynę';
+    addBtn.onclick = () => openAddModal();
+
+    topRow.appendChild(addBtn);
+    wrapEl.innerHTML = '';
+    wrapEl.appendChild(topRow);
+
+    if(!machinesCache || machinesCache.length === 0){
+      wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.marginTop = '6px';
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr style="text-align:left;">
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
+    </tr>`;
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    tbodyRef = tbody;
+
+    const placeholder = document.createElement('tr');
+    placeholder.className = 'drag-placeholder';
+    placeholder.style.height = '0';
+    placeholder.style.background = 'rgba(96,165,250,0.06)';
+    placeholder.innerHTML = `<td colspan="8" style="padding:0;border:none;"></td>`;
+
+    machinesCache.forEach(m => {
+      const tr = document.createElement('tr');
+      tr.className = 'admin-machine-row';
+      tr.dataset.number = m.number;
+      tr.style.background = '#fff';
+
+      const tdHandle = document.createElement('td');
+      tdHandle.style.padding = '8px';
+      tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdHandle.style.textAlign = 'center';
+      tdHandle.style.cursor = 'grab';
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.title = 'Przeciągnij, aby zmienić pozycję';
+      handle.style.userSelect = 'none';
+      handle.style.fontSize = '16px';
+      handle.style.lineHeight = '1';
+      handle.textContent = '≡';
+      handle.draggable = true;
+      tdHandle.appendChild(handle);
+      tr.appendChild(tdHandle);
+
+      const tdNum = document.createElement('td');
+      tdNum.style.padding = '8px';
+      tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdNum.textContent = m.number || '';
+      tr.appendChild(tdNum);
+
+      const tdMaker = document.createElement('td');
+      tdMaker.style.padding = '8px';
+      tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdMaker.textContent = m.maker || '';
+      tr.appendChild(tdMaker);
+
+      const tdPaker = document.createElement('td');
+      tdPaker.style.padding = '8px';
+      tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdPaker.textContent = m.paker || '';
+      tr.appendChild(tdPaker);
+
+      const tdCela = document.createElement('td');
+      tdCela.style.padding = '8px';
+      tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdCela.textContent = m.celafoniarka || '';
+      tr.appendChild(tdCela);
+
+      const tdPak = document.createElement('td');
+      tdPak.style.padding = '8px';
+      tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdPak.textContent = m.pakieciarka || '';
+      tr.appendChild(tdPak);
+
+      const tdKart = document.createElement('td');
+      tdKart.style.padding = '8px';
+      tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+      tdKart.textContent = m.kartoniarka || '';
+      tr.appendChild(tdKart);
+
+      const tdActions = document.createElement('td');
+      tdActions.style.padding = '8px';
+      tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn ghost small';
+      editBtn.textContent = 'Edytuj';
+      editBtn.onclick = () => openEditModal(m);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn danger small';
+      delBtn.style.marginLeft = '8px';
+      delBtn.textContent = 'Usuń';
+      delBtn.onclick = async () => {
+        if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
+        await deleteMachine(m.number);
+        await renderList();
+      };
+
+      tdActions.appendChild(editBtn);
+      tdActions.appendChild(delBtn);
+      tr.appendChild(tdActions);
+
+      handle.addEventListener('dragstart', (e) => {
+        tr.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
+        e.dataTransfer.effectAllowed = 'move';
+        const h = tr.getBoundingClientRect().height;
+        placeholder.style.height = `${h}px`;
+      });
+
+      handle.addEventListener('dragend', () => {
+        tr.classList.remove('dragging');
+        if (tbody.contains(placeholder)) placeholder.remove();
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrapEl.appendChild(table);
+
+    function getDragAfterRow(container, y) {
+      const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
+      return draggableRows.find(row => {
+        const box = row.getBoundingClientRect();
+        return y < box.top + box.height / 2;
+      }) || null;
+    }
+
+    tbody.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const after = getDragAfterRow(tbody, e.clientY);
+      if (after === null) {
+        if (tbody.lastElementChild !== placeholder) tbody.appendChild(placeholder);
+      } else {
+        if (after !== placeholder) tbody.insertBefore(placeholder, after);
+      }
+    });
+
+    tbody.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const dragging = tbody.querySelector('tr.dragging');
+      if (!dragging) return;
+      if (placeholder.parentElement) {
+        tbody.insertBefore(dragging, placeholder);
+        placeholder.remove();
+      }
+      tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
+      const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
+      await saveOrderFromRows(rows);
+    });
+
+    document.ondragend = () => {
+      const dragging = tbody.querySelector('tr.dragging');
+      if (dragging) dragging.classList.remove('dragging');
+      if (tbody.contains(placeholder)) placeholder.remove();
+    };
+
+  });
+
+  const addMachine = safeExec('AdminMachines.addMachine', async function(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
     if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     const num = String(number).trim();
@@ -511,27 +564,29 @@ const AdminMachines = (function(){
       const { error } = await sb.from('machines').insert([insertObj]);
       if(error){ alert('Błąd dodawania maszyny: ' + (error.message || error)); return; }
       alert('Dodano maszynę ' + num);
+      await fetchMachinesCache();
       await renderList();
     }catch(e){
-      console.error('AdminMachines.addMachine error', e);
+      logError('addMachine', e);
       alert('Błąd podczas dodawania maszyny. Sprawdź konsolę.');
     }
-  }
+  });
 
-  async function deleteMachine(number){
+  const deleteMachine = safeExec('AdminMachines.deleteMachine', async function(number){
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     try{
       await sb.from('assignments').delete().eq('machine_number', number);
       const { error } = await sb.from('machines').delete().eq('number', number);
       if(error){ alert('Błąd usuwania maszyny: ' + (error.message || error)); return; }
       alert('Usunięto maszynę ' + number);
+      await fetchMachinesCache();
     }catch(e){
-      console.error('AdminMachines.deleteMachine error', e);
+      logError('deleteMachine', e);
       alert('Błąd podczas usuwania. Sprawdź konsolę.');
     }
-  }
+  });
 
-  async function editMachine(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
+  const editMachine = safeExec('AdminMachines.editMachine', async function(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
     if(!newNumber || !String(newNumber).trim()) { alert('Numer nie może być pusty.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     const newNum = String(newNumber).trim();
@@ -547,11 +602,12 @@ const AdminMachines = (function(){
         await sb.from('assignments').update({ machine_number: newNum }).eq('machine_number', oldNumber);
       }
       alert('Zaktualizowano maszynę: ' + newNum);
+      await fetchMachinesCache();
     }catch(e){
-      console.error('AdminMachines.editMachine error', e);
+      logError('editMachine', e);
       alert('Błąd podczas edycji maszyny. Sprawdź konsolę.');
     }
-  }
+  });
 
   function openEditModal(machine){
     let existing = document.getElementById('adminEditMachineModal');
@@ -607,8 +663,8 @@ const AdminMachines = (function(){
     rightCol.style.display = 'flex';
     rightCol.style.flexDirection = 'column';
     rightCol.style.gap = '8px';
-    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
-    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
+    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401.'));
+    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 407, 408, 409, 707.'));
     rightCol.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
 
     const cols = document.createElement('div');
@@ -659,11 +715,12 @@ const AdminMachines = (function(){
   async function init(){
     const doInit = async () => {
       if(_inited){
-        try { await renderList(); } catch(e){}
+        try { await renderList(); } catch(e){ logWarn('init', e); }
         return;
       }
       wrapEl = document.getElementById('adminMachinesApp');
-      try { await renderList(); } catch(e){ console.warn(e); }
+      if(!wrapEl) logWarn('init', 'No #adminMachinesApp found');
+      try { await renderList(); } catch(e){ logWarn('init renderList', e); }
       _inited = true;
     };
 
@@ -684,173 +741,138 @@ const AdminMachines = (function(){
   };
 })(); // koniec AdminMachines
 
-/* -------------------- AdminEmployees (mini-moduł) -------------------- */
+/* -------------------- AdminEmployees -------------------- */
 const AdminEmployees = (function(){
   let wrap = null;
   let cache = [];
 
- async function fetchEmployees(){
-  // debug-friendly fetch — logujemy dokładnie odpowiedź i obsługujemy różne przypadki
-  const debugBannerId = 'adminEmpDebugBanner';
-  // usuń stary banner jeśli jest
-  const old = document.getElementById(debugBannerId);
-  if(old) old.remove();
-
-  // pokaż w UI że pobieramy
-  const wrapEl = document.getElementById('adminEmployeesApp');
-  if(wrapEl){
-    const b = document.createElement('div');
-    b.id = debugBannerId;
-    b.className = 'muted';
-    b.style.marginBottom = '8px';
-    b.textContent = 'Ładowanie pracowników... (debug)';
-    wrapEl.prepend(b);
-  }
-
-  if(!sb){
-    console.warn('fetchEmployees: sb (Supabase client) is NULL — nie zainicjowano klienta Supabase.');
-    // pokaż komunikat w UI
-    if(wrapEl){
-      const e = document.createElement('div');
-      e.className = 'muted';
-      e.style.color = '#a33';
-      e.textContent = 'Brak połączenia z Supabase (sb === null). Sprawdź czy SDK został załadowany i czy initSupabase() wykonał się poprawnie.';
-      wrapEl.prepend(e);
+  const fetchEmployees = safeExec('AdminEmployees.fetchEmployees', async function(){
+    // debug UI note
+    const wrapEl = document.getElementById('adminEmployeesApp');
+    if(wrapEl) {
+      const dbg = document.createElement('div');
+      dbg.className = 'muted';
+      dbg.style.marginBottom = '8px';
+      dbg.textContent = 'Ładowanie pracowników...';
+      // prepend so it is visible
+      if(wrapEl.firstChild) wrapEl.insertBefore(dbg, wrapEl.firstChild);
+      else wrapEl.appendChild(dbg);
     }
-    cache = [];
-    return;
-  }
 
-  try{
-    // fetch bez dodatknich filtrów — pobierzemy dokładnie to co jest w tabeli employees
-    const { data, error, status } = await sb.from('employees')
-      .select('id,firstname,surname,bu,roles,permissions')
-      .order('surname', { ascending: true });
-
-    console.log('fetchEmployees: raw response', { status, error, count: Array.isArray(data) ? data.length : data, sample: Array.isArray(data) && data.length ? data.slice(0,5) : data });
-
-    if(error){
-      console.warn('fetchEmployees error', error);
-      // pokaż błąd w UI
-      if(wrapEl){
-        const e = document.createElement('div');
-        e.className = 'muted';
-        e.style.color = '#a33';
-        e.textContent = 'Błąd przy pobieraniu pracowników: ' + (error.message || JSON.stringify(error));
-        wrapEl.prepend(e);
-      }
+    if(!sb){ 
+      logWarn('fetchEmployees', 'No Supabase client — offline');
       cache = [];
       return;
     }
 
-    // upewniamy się, że data to tablica
-    const rows = Array.isArray(data) ? data : [];
+    try{
+      // pobieramy pola, zakładając że kolumny firstname i surname istnieją
+      const { data, error, status } = await sb.from('employees')
+        .select('id,firstname,surname,bu,roles,permissions')
+        .order('surname', { ascending: true });
 
-    // transformacja: bierzemy jedynie firstname/surname — ignorujemy name
-    cache = rows.map(e => ({
-      id: e.id,
-      firstname: e.firstname || '',
-      surname: e.surname || '',
-      legacy_name: '', // ignorujemy pole name zgodnie z wymaganiem
-      bu: e.bu || '',
-      roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
-      permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
-    }));
+      logInfo('fetchEmployees', 'raw response', { status, error, sample: Array.isArray(data) ? data.slice(0,5) : data });
 
-    // dodatkowa weryfikacja — ile rekordów ma firstname/surname
-    const withNames = cache.filter(x => (String(x.firstname).trim() !== '' || String(x.surname).trim() !== ''));
-    console.log('fetchEmployees: total rows=', cache.length, 'with firstname/surname=', withNames.length);
+      if(error){
+        logWarn('fetchEmployees', 'Supabase error', error);
+        cache = [];
+        return;
+      }
 
-    // jeśli nie ma żadnych rekordów z firstname/surname — powiadom w UI
-    if(withNames.length === 0){
-      if(wrapEl){
+      const rows = Array.isArray(data) ? data : [];
+
+      cache = rows.map(e => {
+        return {
+          id: e.id,
+          firstname: e.firstname || '',
+          surname: e.surname || '',
+          legacy_name: '', // ignorujemy name — wymagane
+          bu: e.bu || '',
+          roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
+          permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
+        };
+      });
+
+      const withNames = cache.filter(x => (String(x.firstname).trim() !== '' || String(x.surname).trim() !== ''));
+      logInfo('fetchEmployees', 'fetched', cache.length, 'rows, with firstname/surname:', withNames.length);
+
+      if(withNames.length === 0 && wrapEl){
         const e = document.createElement('div');
         e.className = 'muted';
         e.style.color = '#a33';
-        e.textContent = 'Uwaga: w tabeli employees nie znaleziono rekordów z uzupełnionym firstname lub surname.';
+        e.textContent = 'Uwaga: tabela employees nie zawiera firstname ani surname dla rekordów.';
+        wrapEl.prepend(e);
+      }
+    }catch(err){
+      logError('fetchEmployees catch', err);
+      cache = [];
+      if (wrapEl) {
+        const e = document.createElement('div');
+        e.className = 'muted';
+        e.style.color = '#a33';
+        e.textContent = 'Wyjątek podczas pobierania pracowników. Sprawdź konsolę.';
         wrapEl.prepend(e);
       }
     }
-  }catch(err){
-    console.error('fetchEmployees catch', err);
-    if(wrapEl){
-      const e = document.createElement('div');
-      e.className = 'muted';
-      e.style.color = '#a33';
-      e.textContent = 'Wyjątek podczas pobierania pracowników. Sprawdź konsolę.';
-      wrapEl.prepend(e);
-    }
-    cache = [];
-  }
-}
+  });
 
-
-  /* Tworzy widok wiersza pracownika (surname + skrócone firstname) */
   function makeRow(emp){
-    const div = document.createElement('div');
-    div.style.display = 'flex';
-    div.style.justifyContent = 'space-between';
-    div.style.alignItems = 'center';
-    div.style.padding = '8px';
-    div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+    const row = document.createElement('div');
+    row.className = 'admin-emp-row';
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    row.style.padding = '8px 12px';
+    row.style.borderBottom = '1px solid rgba(0,0,0,0.05)';
+    row.style.fontSize = '14px';
 
-    const left = document.createElement('div');
-    left.style.display = 'flex';
-    left.style.alignItems = 'center';
-    left.style.gap = '10px';
+    // Nazwisko + Imię (full)
+    const nameCol = document.createElement('div');
+    nameCol.style.flex = '2';
+    nameCol.textContent = `${emp.surname || ''} ${emp.firstname || ''}`.trim() || '—';
+    nameCol.title = `${emp.surname || ''} ${emp.firstname || ''}`.trim();
 
-    const nameBlock = document.createElement('div');
-    nameBlock.style.fontWeight = '600';
-    // skrócone imię: dwie litery + kropka
-    const shortName = emp.firstname ? (emp.firstname.slice(0,2) + '.') : '';
-    nameBlock.textContent = emp.surname ? `${emp.surname} ${shortName}` : (emp.firstname || '');
-    left.appendChild(nameBlock);
+    // BU
+    const buCol = document.createElement('div');
+    buCol.style.flex = '0 0 60px';
+    buCol.style.textAlign = 'center';
+    buCol.textContent = emp.bu || '';
 
-    const center = document.createElement('div');
-    center.textContent = emp.bu || '';
-    center.style.opacity = '0.85';
-    center.style.fontSize = '13px';
-    center.style.minWidth = '80px';
-    center.style.textAlign = 'center';
-    left.appendChild(center);
+    // Role
+    const rolesCol = document.createElement('div');
+    rolesCol.style.flex = '2';
+    rolesCol.textContent = emp.roles || '';
 
-    div.appendChild(left);
+    // Uprawnienia (permissions)
+    const permsCol = document.createElement('div');
+    permsCol.style.flex = '2';
+    permsCol.textContent = Array.isArray(emp.permissions)
+      ? emp.permissions.join(', ')
+      : (emp.permissions || '');
 
-    // prawa część: roles + przyciski Uprawnienia i Edytuj
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.alignItems = 'center';
-    right.style.gap = '8px';
+    // Akcje
+    const actionsCol = document.createElement('div');
+    actionsCol.style.flex = '0 0 140px';
+    actionsCol.style.textAlign = 'center';
 
-    const roleDiv = document.createElement('div');
-    roleDiv.textContent = emp.roles || '';
-    roleDiv.style.opacity = '0.85';
-    roleDiv.style.fontSize = '13px';
-    roleDiv.style.minWidth = '140px';
-    roleDiv.style.textAlign = 'right';
-    right.appendChild(roleDiv);
-
-    // PRZYCISK: Uprawnienia
     const permBtn = document.createElement('button');
     permBtn.className = 'btn small';
-    permBtn.style.padding = '6px 8px';
     permBtn.textContent = 'Uprawnienia';
+    permBtn.style.marginRight = '6px';
     permBtn.onclick = () => openPermissionsModal(emp);
-    right.appendChild(permBtn);
 
-    // PRZYCISK: Edytuj (otwiera modal edycji)
     const editBtn = document.createElement('button');
     editBtn.className = 'btn ghost small';
-    editBtn.style.padding = '6px 8px';
     editBtn.textContent = 'Edytuj';
     editBtn.onclick = () => openEditEmployeeModal(emp);
-    right.appendChild(editBtn);
 
-    div.appendChild(right);
-    return div;
+    actionsCol.appendChild(permBtn);
+    actionsCol.appendChild(editBtn);
+
+    [nameCol, buCol, rolesCol, permsCol, actionsCol].forEach(c => row.appendChild(c));
+    return row;
   }
 
-  /* Modal edycji pracownika */
   function openEditEmployeeModal(emp){
     const existing = document.getElementById('empEditModal');
     if(existing) existing.remove();
@@ -970,7 +992,7 @@ const AdminEmployees = (function(){
       };
       await saveEmployeeChanges(emp.id, updates);
       modal.remove();
-      try { await renderList(); } catch(e){ console.warn(e); }
+      try { await renderList(); } catch(e){ logWarn('openEditEmployeeModal after save renderList', e); }
     };
     actions.appendChild(saveBtn);
 
@@ -981,7 +1003,6 @@ const AdminEmployees = (function(){
     modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
   }
 
-  /* Modal Uprawnień (tylko podgląd/edytowalny CSV) */
   function openPermissionsModal(emp){
     const existing = document.getElementById('permModal');
     if(existing) existing.remove();
@@ -1044,7 +1065,7 @@ const AdminEmployees = (function(){
       const perms = (inp.value||'').split(',').map(s=>s.trim()).filter(Boolean);
       await saveEmployeeChanges(emp.id, { permissions: perms });
       modal.remove();
-      try { await renderList(); } catch(e){ console.warn(e); }
+      try { await renderList(); } catch(e){ logWarn('openPermissionsModal after save renderList', e); }
     };
 
     actions.appendChild(closeBtn);
@@ -1056,8 +1077,7 @@ const AdminEmployees = (function(){
     modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
   }
 
-  /* zapis zmian pracownika */
-  async function saveEmployeeChanges(empId, updates){
+  const saveEmployeeChanges = safeExec('AdminEmployees.saveEmployeeChanges', async function(empId, updates){
     if(sb){
       try{
         const payload = {
@@ -1068,12 +1088,12 @@ const AdminEmployees = (function(){
           permissions: updates.permissions
         };
         const { error } = await sb.from('employees').update(payload).eq('id', empId);
-        if(error){ alert('Błąd zapisu: ' + (error.message || error)); console.error(error); return; }
+        if(error){ alert('Błąd zapisu: ' + (error.message || error)); logWarn('saveEmployeeChanges', error); return; }
         const idx = cache.findIndex(x => x.id === empId);
         if(idx > -1) cache[idx] = Object.assign({}, cache[idx], payload);
         alert('Zapisano zmiany.');
       }catch(e){
-        console.error('saveEmployeeChanges error', e);
+        logError('saveEmployeeChanges', e);
         alert('Błąd podczas zapisu. Sprawdź konsolę.');
       }
     } else {
@@ -1091,63 +1111,106 @@ const AdminEmployees = (function(){
         alert('Nie znaleziono pracownika w pamięci lokalnej.');
       }
     }
+  });
+
+  function applyFilterSort(list = [], query = '', sortField = 'bu', sortDir = 'asc', filterBu = '', filterRole = ''){
+    const q = String(query||'').trim().toLowerCase();
+    let out = list.slice();
+
+    if(q) out = out.filter(e => {
+      const fullname = ((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim();
+      const legacy = (e.legacy_name||'').toLowerCase();
+      return fullname.includes(q) || legacy.includes(q);
+    });
+
+    if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
+    if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
+
+    out.sort((a,b) => {
+      let av = String(a[sortField] || '');
+      let bv = String(b[sortField] || '');
+      if(sortField === 'surname' || sortField === 'fullname'){
+        av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase();
+        bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase();
+      } else {
+        av = av.toLowerCase();
+        bv = bv.toLowerCase();
+      }
+
+      if(av === bv) return ((a.surname||'') + (a.firstname||'')).localeCompare((b.surname||'') + (b.firstname||''));
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    return out;
   }
 
-  function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole){
-  const q = String(query||'').trim().toLowerCase();
-  let out = list.slice();
-
-  // filtrowanie - sprawdzamy firstname + surname oraz legacy_name
-  if(q) out = out.filter(e => {
-    const fullname = ((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim();
-    const legacy = (e.legacy_name||'').toLowerCase();
-    return fullname.includes(q) || legacy.includes(q);
-  });
-
-  if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
-  if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
-
-  // sortowanie - jeśli sortField jest 'bu' lub 'surname' itp.
-  out.sort((a,b) => {
-    let av = String(a[sortField] || '');
-    let bv = String(b[sortField] || '');
-    // dla sortowania po nazwisku chcemy surname + firstname
-    if(sortField === 'surname' || sortField === 'fullname'){
-      av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase();
-      bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase();
-    } else {
-      av = av.toLowerCase();
-      bv = bv.toLowerCase();
+  function renderList(){
+    if(!wrap) wrap = document.getElementById('adminEmployeesApp');
+    if(!wrap) {
+      logWarn('renderList', 'No #adminEmployeesApp in DOM');
+      return;
     }
-
-    if(av === bv) return ((a.surname||'') + (a.firstname||'')).localeCompare((b.surname||'') + (b.firstname||''));
-    return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-  });
-
-  return out;
-}
-
-  async function renderList(){
-    if(!wrap) return;
     wrap.innerHTML = '<div class="muted">Ładuję listę pracowników...</div>';
-    await fetchEmployees();
-    const query = (document.getElementById('empSearchInput')?.value || '').trim();
-    const sortField = (document.getElementById('empSortField')?.value || 'bu');
-    const sortDir = (document.getElementById('empSortDir')?.value || 'asc');
-    const filterBu = (document.getElementById('empFilterBu')?.value || '');
-    const filterRole = (document.getElementById('empFilterRole')?.value || '');
-    const list = applyFilterSort(cache, query, sortField, sortDir, filterBu, filterRole);
 
-    wrap.innerHTML = '';
-    if(!list.length){
-      const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'Brak pracowników do wyświetlenia.'; wrap.appendChild(m); return;
-    }
-    list.forEach(emp => wrap.appendChild(makeRow(emp)));
+    fetchEmployees().then(() => {
+      wrap.innerHTML = '';
+
+      // header
+      const header = document.createElement('div');
+      header.className = 'admin-emp-header';
+      header.style.display = 'flex';
+      header.style.justifyContent = 'space-between';
+      header.style.alignItems = 'center';
+      header.style.fontWeight = '600';
+      header.style.fontSize = '14px';
+      header.style.background = '#f8f9fa';
+      header.style.borderBottom = '1px solid #ddd';
+      header.style.padding = '8px 12px';
+
+      const cols = [
+        { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
+        { label: 'BU', width: '60px', flex: '0 0 60px', align: 'center' },
+        { label: 'Role', width: '220px', flex: '2' },
+        { label: 'Uprawnienia', width: '180px', flex: '2' },
+        { label: 'Akcje', width: '140px', flex: '0 0 140px', align: 'center' }
+      ];
+
+      cols.forEach(col => {
+        const el = document.createElement('div');
+        el.textContent = col.label;
+        el.style.flex = col.flex;
+        el.style.width = col.width;
+        el.style.textAlign = col.align || 'left';
+        header.appendChild(el);
+      });
+      wrap.appendChild(header);
+
+      const filtered = applyFilterSort(cache,
+        (document.getElementById('empSearchInput')?.value || '').trim(),
+        (document.getElementById('empSortField')?.value || 'bu'),
+        (document.getElementById('empSortDir')?.value || 'asc'),
+        (document.getElementById('empFilterBu')?.value || ''),
+        (document.getElementById('empFilterRole')?.value || '')
+      );
+
+      if(!filtered.length){
+        const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'Brak pracowników do wyświetlenia.'; wrap.appendChild(m); return;
+      }
+
+      filtered.forEach(emp => wrap.appendChild(makeRow(emp)));
+    }).catch(e => {
+      logError('renderList fetchEmployees failed', e);
+      wrap.innerHTML = '';
+      const eDiv = document.createElement('div');
+      eDiv.className = 'muted';
+      eDiv.style.color = '#a33';
+      eDiv.textContent = 'Błąd podczas ładowania pracowników. Sprawdź konsolę.';
+      wrap.appendChild(eDiv);
+    });
   }
 
   async function init(){
     wrap = document.getElementById('adminEmployeesApp');
-    // hooki UI
     const search = document.getElementById('empSearchInput');
     const sortField = document.getElementById('empSortField');
     const sortDir = document.getElementById('empSortDir');
@@ -1196,7 +1259,7 @@ const AdminEmployees = (function(){
     }
   }
 
-  return { init, renderList };
+  return { init, renderList, fetchEmployees, saveEmployeeChanges };
 })(); // koniec AdminEmployees
 
 // expose modules to window
@@ -1217,7 +1280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(employeesSection) employeesSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
-      await AdminMachines.renderList();
+      try { await AdminMachines.renderList(); } catch(e){ logWarn('showModify renderList', e); }
     }
 
     async function showEmployees(){
@@ -1225,13 +1288,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(employeesSection) employeesSection.style.display = '';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabEmployees) tabEmployees.classList.add('active');
-      try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
+      try { await AdminEmployees.init(); } catch(e){ logWarn('showEmployees init', e); }
     }
 
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
     if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
+    // domyślnie pokaż modyfikację maszyn
     showModify();
   });
 });
