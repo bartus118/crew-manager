@@ -726,7 +726,7 @@ const AdminEmployees = (function(){
   async function fetchEmployees(){
     if(!sb){ cache = []; return; }
     try{
-      const { data, error } = await sb.from('employees').select('id,name,bu,roles').order('name', { ascending: true });
+      const { data, error } = await sb.from('employees').select('id,surname,firstname,bu,roles').order('surname', { ascending: true });
       if(error){ console.warn('fetchEmployees error', error); cache = []; }
       else {
         // normalizuj roles -> string (jeśli tablica -> "a, b")
@@ -747,7 +747,7 @@ const AdminEmployees = (function(){
     div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
 
     const left = document.createElement('div');
-    left.textContent = emp.name || '';
+    left.textContent = `${emp.surname || ''} ${emp.firstname || ''}`.trim();
     left.style.fontWeight = '600';
     left.style.flex = '1 1 auto';
     left.style.minWidth = '160px';

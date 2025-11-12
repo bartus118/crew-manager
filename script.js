@@ -22,6 +22,20 @@ let assignments = {};
 let dateInput, tbody, theadRow;
 let currentDate = null;
 
+// ---- helper: short display name ----
+function displayShort(emp){
+  if(!emp) return '';
+  if(emp.short_name && String(emp.short_name).trim()) return String(emp.short_name).trim();
+  const surname = String(emp.surname || '').trim();
+  const name = String(emp.name || '').trim();
+  if(surname && name){
+    const initials = name.slice(0,2); // dwie litery imienia
+    return `${surname} ${initials}.`;
+  }
+  if(name) return name;
+  if(surname) return surname;
+  return emp.id ? String(emp.id).slice(0,8) : '';
+}
 /* -------------------- KONFIGURACJA KOLUMN I STATUSÓW -------------------- */
 const COLUMNS = [
   { key: 'maszyna', title: 'Maszyna' },
@@ -148,8 +162,9 @@ async function loadAssignmentsForDate(date){
       const idx = COLUMNS.findIndex(c=>c.key === a.role);
       if(idx > -1){
         if(!map[a.machine_number]){ const row=[a.machine_number,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[a.machine_number]=row; }
-        if(emp) map[a.machine_number][idx] = emp.name;
-      }
+      if(emp) map[a.machine_number][idx] = displayShort(emp);
+        }
+
     });
 
     assignments[date] = map;
@@ -470,15 +485,21 @@ function openAssignModal(date, machine, roleKey) {
     const buKeys = Array.from(buMap.keys()).sort();
     const visibleBU = buKeys.filter(bu => filterBU === '__all' ? true : bu === filterBU);
 
-    // przygotuj globalną listę helperów (unikaty) — Map zapewnia unikalność
-    const globalHelpersMap = new Map();
-    employees.forEach(emp => {
-      const empRoles = (emp.roles || []).map(r => String(r));
-      const nameLower = String(emp.name || '').toLowerCase();
-      const hasHelperRole = empRoles.some(r => helperRoles.includes(r)) || helperRoles.some(hr => nameLower.includes(hr));
-      if (hasHelperRole) globalHelpersMap.set(emp.id, emp);
-    });
-    const globalHelpers = Array.from(globalHelpersMap.values()).sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+  // przygotuj globalną listę helperów (unikaty) — Map zapewnia unikalność
+const globalHelpersMap = new Map();
+employees.forEach(emp => {
+  const empRoles = (Array.isArray(emp.roles) ? emp.roles : (emp.roles ? [emp.roles] : [])).map(r => String(r));
+  // używamy zarówno surname jak i name do heurystyk (bezpośrednio łączone)
+  const fullnameLower = ((emp.surname || '') + ' ' + (emp.name || '')).toLowerCase();
+  const hasHelperRole = empRoles.some(r => helperRoles.includes(r))
+    // lub gdy w fullname występuje nazwa pomocniczej roli (np. "rdn", "rdnst" lub "pomocniczy")
+    || helperRoles.some(hr => fullnameLower.includes(hr));
+  if (hasHelperRole) globalHelpersMap.set(emp.id, emp);
+});
+// sortowanie: najlepiej po surname + name, aby numeracje/sort były spójne
+const globalHelpers = Array.from(globalHelpersMap.values())
+  .sort((a,b) => ( ((a.surname||'') + ' ' + (a.name||'')).localeCompare(((b.surname||'') + ' ' + (b.name||''))) ));
+
 
     // utwórz wiersze - po jednym wierszu na BU
     for (let i = 0; i < visibleBU.length; i++) {
@@ -548,7 +569,7 @@ function openAssignModal(date, machine, roleKey) {
           names.forEach(emp => {
             const div = document.createElement('div');
             div.className = 'emp-name';
-            div.textContent = emp.name;
+            div.textContent = displayShort(emp);
             // kliknięcie przypisuje pracownika do roleKey
             div.onclick = async () => {
               await saveAssignment(date, machine, roleKey, emp.id);
@@ -582,7 +603,7 @@ function openAssignModal(date, machine, roleKey) {
           globalHelpers.forEach(emp => {
             const d = document.createElement('div');
             d.className = 'emp-name';
-            d.textContent = emp.name;
+            d.textContent = displayShort(emp);
             d.onclick = async () => {
               await saveAssignment(date, machine, roleKey, emp.id);
               assignModal.style.display = 'none';
