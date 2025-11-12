@@ -1,3 +1,4 @@
 # Ignoruj pliki lokalne używane do łączenia
 combined.txt
 combine_files.ps1
+combine_files.bat

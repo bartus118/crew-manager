@@ -1,9 +1,12 @@
 /**
  * admin/a_script.js
  *
- * Moduł administracyjny — Modyfikacja maszyn + lista pracowników
+ * Moduł administracyjny — Modyfikacja maszyn + lista pracowników (z firstname/surname)
  *
- * UWAGA: podmień cały plik admin/a_script.js na poniższy.
+ * Zmiany:
+ * - pola pracownika: firstname + surname (zamiast name)
+ * - dodano modal "Uprawnienia" dostępny z listy pracowników
+ * - fetch/update używa firstname/surname/roles/permissions/bu
  */
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
@@ -65,7 +68,6 @@ function showAuthModal() {
         }
       } catch(e){ console.warn('Błąd po logowaniu przy init AdminMachines:', e); }
       try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
-      // show the modify tab if present
       document.getElementById('tabModify')?.click();
     } else {
       alert('Błędne hasło.'); if(passInput) passInput.focus();
@@ -113,7 +115,7 @@ function ensureAuthThen(cb) {
   }
 }
 
-/* -------------------- AdminMachines -------------------- */
+/* -------------------- AdminMachines (bez większych zmian) -------------------- */
 const AdminMachines = (function(){
   let wrapEl = null;
   let tbodyRef = null;
@@ -174,7 +176,6 @@ const AdminMachines = (function(){
     return wrap;
   }
 
-  /* -------------------- ZAPIS KOLEJNOŚCI - pomocnicza funkcja -------------------- */
   async function saveOrderFromRows(rows) {
     if (!rows || rows.length === 0) return;
     if (!sb) {
@@ -190,7 +191,6 @@ const AdminMachines = (function(){
         const { error } = await sb.from('machines').update({ ord: i+1, default_view: true }).eq('number', String(num));
         if (error) console.warn('Błąd aktualizacji ord dla', num, error);
       }
-      console.log('Kolejność maszyn zapisana.');
       const b = document.createElement('div');
       b.textContent = 'Zapisano kolejność';
       b.style.position = 'fixed';
@@ -209,9 +209,7 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- OPEN ADD MODAL -------------------- */
   function openAddModal(){
-    // remove existing add modal if present
     const existing = document.getElementById('adminAddMachineModal');
     if(existing) existing.remove();
 
@@ -239,7 +237,6 @@ const AdminMachines = (function(){
     title.textContent = 'Dodaj nową maszynę';
     title.style.marginTop = '0';
 
-    // grid of fields
     const grid = document.createElement('div');
     grid.style.display = 'grid';
     grid.style.gridTemplateColumns = '1fr 1fr 1fr';
@@ -258,22 +255,13 @@ const AdminMachines = (function(){
     const selPak  = makeSelect(PAK_OPTIONS, '');
     const selKart = makeSelect(KART_OPTIONS, '');
 
-    const fNum = makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).');
-    const fMaker = makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.');
-    const fPaker = makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.');
-    const fCela = makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.');
-    const fPak  = makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.');
-    const fKart = makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.');
+    grid.appendChild(makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).'));
+    grid.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.'));
+    grid.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.'));
+    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
+    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
+    grid.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
 
-    // append fields in order to grid
-    grid.appendChild(fNum);
-    grid.appendChild(fMaker);
-    grid.appendChild(fPaker);
-    grid.appendChild(fCela);
-    grid.appendChild(fPak);
-    grid.appendChild(fKart);
-
-    // actions
     const actions = document.createElement('div');
     actions.style.display = 'flex';
     actions.style.justifyContent = 'flex-end';
@@ -311,7 +299,6 @@ const AdminMachines = (function(){
     inpNum.focus();
   }
 
-  /* -------------------- renderList (tabela z drag handle) -------------------- */
   async function renderList(){
     if(!wrapEl) return;
     wrapEl.innerHTML = '';
@@ -323,7 +310,6 @@ const AdminMachines = (function(){
       if(error) throw error;
       machinesCache = data || [];
 
-      // top row: single "Dodaj maszynę" button (nad tabelą)
       const topRow = document.createElement('div');
       topRow.style.display = 'flex';
       topRow.style.justifyContent = 'flex-start';
@@ -343,7 +329,6 @@ const AdminMachines = (function(){
         return;
       }
 
-      // tabela maszyn: pierwsza kolumna = uchwyt drag (≡)
       const table = document.createElement('table');
       table.style.width = '100%';
       table.style.borderCollapse = 'collapse';
@@ -363,7 +348,6 @@ const AdminMachines = (function(){
       const tbody = document.createElement('tbody');
       tbodyRef = tbody;
 
-      // placeholder used during drag
       const placeholder = document.createElement('tr');
       placeholder.className = 'drag-placeholder';
       placeholder.style.height = '0';
@@ -376,7 +360,6 @@ const AdminMachines = (function(){
         tr.dataset.number = m.number;
         tr.style.background = '#fff';
 
-        // kolumna: drag-handle (tylko za nią zaczyna się drag)
         const tdHandle = document.createElement('td');
         tdHandle.style.padding = '8px';
         tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
@@ -452,7 +435,6 @@ const AdminMachines = (function(){
         tdActions.appendChild(delBtn);
         tr.appendChild(tdActions);
 
-        // OBSŁUGA DRAG NA HANDLE
         handle.addEventListener('dragstart', (e) => {
           tr.classList.add('dragging');
           try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
@@ -472,7 +454,6 @@ const AdminMachines = (function(){
       table.appendChild(tbody);
       wrapEl.appendChild(table);
 
-      // DRAG & DROP dla tabeli (placeholder tr) + automatyczne zapisywanie po drop
       function getDragAfterRow(container, y) {
         const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
         return draggableRows.find(row => {
@@ -500,12 +481,10 @@ const AdminMachines = (function(){
           placeholder.remove();
         }
         tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
-        // automatyczne zapisanie kolejności
         const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
         await saveOrderFromRows(rows);
       });
 
-      // global cleanup
       document.ondragend = () => {
         const dragging = tbody.querySelector('tr.dragging');
         if (dragging) dragging.classList.remove('dragging');
@@ -519,7 +498,6 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- CRUD -------------------- */
   async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
     if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
@@ -575,9 +553,7 @@ const AdminMachines = (function(){
     }
   }
 
-  /* -------------------- Modal edycji (dynamiczny) -------------------- */
   function openEditModal(machine){
-    // remove existing edit modal if present
     let existing = document.getElementById('adminEditMachineModal');
     if(existing) existing.remove();
 
@@ -605,11 +581,11 @@ const AdminMachines = (function(){
     title.textContent = `Edytuj maszynę ${machine.number}`;
     title.style.marginTop = '0';
 
-    const form = document.createElement('div');
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr 1fr';
-    form.style.gap = '8px';
-    form.style.marginTop = '8px';
+    const selMaker = makeSelect(MAKER_OPTIONS, machine.maker || MAKER_OPTIONS[0]);
+    const selPaker = makeSelect(PAKER_OPTIONS, machine.paker || PAKER_OPTIONS[0]);
+    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || '');
+    const selPak  = makeSelect(PAK_OPTIONS, machine.pakieciarka || '');
+    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || '');
 
     const inpOld = document.createElement('input');
     inpOld.type = 'text';
@@ -619,13 +595,6 @@ const AdminMachines = (function(){
     inpOld.style.border = '1px solid #e6eef8';
     inpOld.style.borderRadius = '6px';
 
-    const selMaker = makeSelect(MAKER_OPTIONS, machine.maker || MAKER_OPTIONS[0]);
-    const selPaker = makeSelect(PAKER_OPTIONS, machine.paker || PAKER_OPTIONS[0]);
-    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || '');
-    const selPak  = makeSelect(PAK_OPTIONS, machine.pakieciarka || '');
-    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || '');
-
-    // layout
     const leftCol = document.createElement('div');
     leftCol.style.display = 'flex';
     leftCol.style.flexDirection = 'column';
@@ -685,10 +654,7 @@ const AdminMachines = (function(){
     document.body.appendChild(modal);
   }
 
-  function refreshOrderViewSafe(){
-    // kept for compatibility (no separate order view now)
-    return Promise.resolve();
-  }
+  function refreshOrderViewSafe(){ return Promise.resolve(); }
 
   async function init(){
     const doInit = async () => {
@@ -723,21 +689,103 @@ const AdminEmployees = (function(){
   let wrap = null;
   let cache = [];
 
-  async function fetchEmployees(){
-    if(!sb){ cache = []; return; }
-    try{
-      const { data, error } = await sb.from('employees').select('id,surname,firstname,bu,roles').order('surname', { ascending: true });
-      if(error){ console.warn('fetchEmployees error', error); cache = []; }
-      else {
-        // normalizuj roles -> string (jeśli tablica -> "a, b")
-        cache = (data || []).map(e => ({
-          ...e,
-          roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || '')
-        }));
-      }
-    }catch(e){ console.error(e); cache = []; }
+ async function fetchEmployees(){
+  // debug-friendly fetch — logujemy dokładnie odpowiedź i obsługujemy różne przypadki
+  const debugBannerId = 'adminEmpDebugBanner';
+  // usuń stary banner jeśli jest
+  const old = document.getElementById(debugBannerId);
+  if(old) old.remove();
+
+  // pokaż w UI że pobieramy
+  const wrapEl = document.getElementById('adminEmployeesApp');
+  if(wrapEl){
+    const b = document.createElement('div');
+    b.id = debugBannerId;
+    b.className = 'muted';
+    b.style.marginBottom = '8px';
+    b.textContent = 'Ładowanie pracowników... (debug)';
+    wrapEl.prepend(b);
   }
 
+  if(!sb){
+    console.warn('fetchEmployees: sb (Supabase client) is NULL — nie zainicjowano klienta Supabase.');
+    // pokaż komunikat w UI
+    if(wrapEl){
+      const e = document.createElement('div');
+      e.className = 'muted';
+      e.style.color = '#a33';
+      e.textContent = 'Brak połączenia z Supabase (sb === null). Sprawdź czy SDK został załadowany i czy initSupabase() wykonał się poprawnie.';
+      wrapEl.prepend(e);
+    }
+    cache = [];
+    return;
+  }
+
+  try{
+    // fetch bez dodatknich filtrów — pobierzemy dokładnie to co jest w tabeli employees
+    const { data, error, status } = await sb.from('employees')
+      .select('id,firstname,surname,bu,roles,permissions')
+      .order('surname', { ascending: true });
+
+    console.log('fetchEmployees: raw response', { status, error, count: Array.isArray(data) ? data.length : data, sample: Array.isArray(data) && data.length ? data.slice(0,5) : data });
+
+    if(error){
+      console.warn('fetchEmployees error', error);
+      // pokaż błąd w UI
+      if(wrapEl){
+        const e = document.createElement('div');
+        e.className = 'muted';
+        e.style.color = '#a33';
+        e.textContent = 'Błąd przy pobieraniu pracowników: ' + (error.message || JSON.stringify(error));
+        wrapEl.prepend(e);
+      }
+      cache = [];
+      return;
+    }
+
+    // upewniamy się, że data to tablica
+    const rows = Array.isArray(data) ? data : [];
+
+    // transformacja: bierzemy jedynie firstname/surname — ignorujemy name
+    cache = rows.map(e => ({
+      id: e.id,
+      firstname: e.firstname || '',
+      surname: e.surname || '',
+      legacy_name: '', // ignorujemy pole name zgodnie z wymaganiem
+      bu: e.bu || '',
+      roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
+      permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
+    }));
+
+    // dodatkowa weryfikacja — ile rekordów ma firstname/surname
+    const withNames = cache.filter(x => (String(x.firstname).trim() !== '' || String(x.surname).trim() !== ''));
+    console.log('fetchEmployees: total rows=', cache.length, 'with firstname/surname=', withNames.length);
+
+    // jeśli nie ma żadnych rekordów z firstname/surname — powiadom w UI
+    if(withNames.length === 0){
+      if(wrapEl){
+        const e = document.createElement('div');
+        e.className = 'muted';
+        e.style.color = '#a33';
+        e.textContent = 'Uwaga: w tabeli employees nie znaleziono rekordów z uzupełnionym firstname lub surname.';
+        wrapEl.prepend(e);
+      }
+    }
+  }catch(err){
+    console.error('fetchEmployees catch', err);
+    if(wrapEl){
+      const e = document.createElement('div');
+      e.className = 'muted';
+      e.style.color = '#a33';
+      e.textContent = 'Wyjątek podczas pobierania pracowników. Sprawdź konsolę.';
+      wrapEl.prepend(e);
+    }
+    cache = [];
+  }
+}
+
+
+  /* Tworzy widok wiersza pracownika (surname + skrócone firstname) */
   function makeRow(emp){
     const div = document.createElement('div');
     div.style.display = 'flex';
@@ -747,50 +795,337 @@ const AdminEmployees = (function(){
     div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
 
     const left = document.createElement('div');
-    left.textContent = `${emp.surname || ''} ${emp.firstname || ''}`.trim();
-    left.style.fontWeight = '600';
-    left.style.flex = '1 1 auto';
-    left.style.minWidth = '160px';
+    left.style.display = 'flex';
+    left.style.alignItems = 'center';
+    left.style.gap = '10px';
+
+    const nameBlock = document.createElement('div');
+    nameBlock.style.fontWeight = '600';
+    // skrócone imię: dwie litery + kropka
+    const shortName = emp.firstname ? (emp.firstname.slice(0,2) + '.') : '';
+    nameBlock.textContent = emp.surname ? `${emp.surname} ${shortName}` : (emp.firstname || '');
+    left.appendChild(nameBlock);
 
     const center = document.createElement('div');
     center.textContent = emp.bu || '';
     center.style.opacity = '0.85';
     center.style.fontSize = '13px';
-    center.style.minWidth = '90px';
+    center.style.minWidth = '80px';
     center.style.textAlign = 'center';
-
-    const right = document.createElement('div');
-    right.textContent = emp.roles || '';
-    right.style.opacity = '0.85';
-    right.style.fontSize = '13px';
-    right.style.minWidth = '140px';
-    right.style.textAlign = 'right';
+    left.appendChild(center);
 
     div.appendChild(left);
-    div.appendChild(center);
+
+    // prawa część: roles + przyciski Uprawnienia i Edytuj
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.alignItems = 'center';
+    right.style.gap = '8px';
+
+    const roleDiv = document.createElement('div');
+    roleDiv.textContent = emp.roles || '';
+    roleDiv.style.opacity = '0.85';
+    roleDiv.style.fontSize = '13px';
+    roleDiv.style.minWidth = '140px';
+    roleDiv.style.textAlign = 'right';
+    right.appendChild(roleDiv);
+
+    // PRZYCISK: Uprawnienia
+    const permBtn = document.createElement('button');
+    permBtn.className = 'btn small';
+    permBtn.style.padding = '6px 8px';
+    permBtn.textContent = 'Uprawnienia';
+    permBtn.onclick = () => openPermissionsModal(emp);
+    right.appendChild(permBtn);
+
+    // PRZYCISK: Edytuj (otwiera modal edycji)
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn ghost small';
+    editBtn.style.padding = '6px 8px';
+    editBtn.textContent = 'Edytuj';
+    editBtn.onclick = () => openEditEmployeeModal(emp);
+    right.appendChild(editBtn);
+
     div.appendChild(right);
     return div;
   }
 
-  function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole){
-    const q = String(query||'').trim().toLowerCase();
-    let out = list.slice();
+  /* Modal edycji pracownika */
+  function openEditEmployeeModal(emp){
+    const existing = document.getElementById('empEditModal');
+    if(existing) existing.remove();
 
-    // --- filtrowanie ---
-    if(q) out = out.filter(e => (e.name||'').toLowerCase().includes(q));
-    if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
-    if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
+    const modal = document.createElement('div');
+    modal.id = 'empEditModal';
+    modal.className = 'modal';
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = 30000;
 
-    // --- sortowanie ---
-    out.sort((a,b) => {
-      const av = String(a[sortField]||'').toLowerCase();
-      const bv = String(b[sortField]||'').toLowerCase();
-      if(av === bv) return (a.name||'').localeCompare(b.name||'');
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
+    const box = document.createElement('div');
+    box.style.width = '520px';
+    box.style.maxWidth = '94%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '14px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)';
+    box.style.boxSizing = 'border-box';
 
-    return out;
+    const title = document.createElement('h3');
+    title.textContent = `Edytuj pracownika — ${emp.surname || emp.firstname || ''}`;
+    title.style.marginTop = '0';
+    box.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gap = '8px';
+
+    // Surname
+    const inpSurname = document.createElement('input');
+    inpSurname.type = 'text';
+    inpSurname.value = emp.surname || '';
+    inpSurname.placeholder = 'Nazwisko (surname)';
+    inpSurname.style.padding = '8px';
+    inpSurname.style.border = '1px solid #e6eef8';
+    inpSurname.style.borderRadius = '6px';
+    grid.appendChild(inpSurname);
+
+    // Firstname
+    const inpFirstname = document.createElement('input');
+    inpFirstname.type = 'text';
+    inpFirstname.value = emp.firstname || '';
+    inpFirstname.placeholder = 'Imię (firstname)';
+    inpFirstname.style.padding = '8px';
+    inpFirstname.style.border = '1px solid #e6eef8';
+    inpFirstname.style.borderRadius = '6px';
+    grid.appendChild(inpFirstname);
+
+    // BU
+    const inpBu = document.createElement('input');
+    inpBu.type = 'text';
+    inpBu.value = emp.bu || '';
+    inpBu.placeholder = 'BU';
+    inpBu.style.padding = '8px';
+    inpBu.style.border = '1px solid #e6eef8';
+    inpBu.style.borderRadius = '6px';
+    grid.appendChild(inpBu);
+
+    // Roles (comma-separated)
+    const inpRoles = document.createElement('input');
+    inpRoles.type = 'text';
+    inpRoles.value = emp.roles || '';
+    inpRoles.placeholder = 'roles (np. mechanik_focke,operator_focke)';
+    inpRoles.style.padding = '8px';
+    inpRoles.style.border = '1px solid #e6eef8';
+    inpRoles.style.borderRadius = '6px';
+    grid.appendChild(inpRoles);
+
+    box.appendChild(grid);
+
+    // permissions (CSV editable)
+    const permLabel = document.createElement('div');
+    permLabel.textContent = 'Permissions (kody maszyn, oddzielone przecinkami)';
+    permLabel.style.marginTop = '10px';
+    permLabel.style.fontSize = '13px';
+    permLabel.className = 'muted';
+    box.appendChild(permLabel);
+
+    const inpPerms = document.createElement('input');
+    inpPerms.type = 'text';
+    inpPerms.value = Array.isArray(emp.permissions) ? emp.permissions.join(',') : (emp.permissions ? String(emp.permissions).replace(/^{|}$/g,'').replace(/"/g,'') : '');
+    inpPerms.placeholder = 'np. P100,F350,401';
+    inpPerms.style.padding = '8px';
+    inpPerms.style.border = '1px solid #e6eef8';
+    inpPerms.style.borderRadius = '6px';
+    inpPerms.style.width = '100%';
+    box.appendChild(inpPerms);
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.gap = '8px';
+    actions.style.marginTop = '12px';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn outline';
+    cancelBtn.textContent = 'Anuluj';
+    cancelBtn.onclick = () => { modal.remove(); };
+    actions.appendChild(cancelBtn);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn';
+    saveBtn.textContent = 'Zapisz';
+    saveBtn.onclick = async () => {
+      const updates = {
+        surname: (inpSurname.value || '').trim(),
+        firstname: (inpFirstname.value || '').trim(),
+        bu: (inpBu.value || '').trim(),
+        roles: (inpRoles.value || '').split(',').map(s=>s.trim()).filter(Boolean),
+        permissions: (inpPerms.value || '').split(',').map(s=>s.trim()).filter(Boolean)
+      };
+      await saveEmployeeChanges(emp.id, updates);
+      modal.remove();
+      try { await renderList(); } catch(e){ console.warn(e); }
+    };
+    actions.appendChild(saveBtn);
+
+    box.appendChild(actions);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
   }
+
+  /* Modal Uprawnień (tylko podgląd/edytowalny CSV) */
+  function openPermissionsModal(emp){
+    const existing = document.getElementById('permModal');
+    if(existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'permModal';
+    modal.className = 'modal';
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = 32000;
+
+    const box = document.createElement('div');
+    box.style.width = '420px';
+    box.style.maxWidth = '94%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '8px';
+    box.style.padding = '12px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)';
+    box.style.boxSizing = 'border-box';
+
+    const title = document.createElement('h3');
+    title.textContent = `Uprawnienia — ${emp.surname || emp.firstname || ''}`;
+    title.style.marginTop = '0';
+    box.appendChild(title);
+
+    const info = document.createElement('div');
+    info.className = 'muted';
+    info.textContent = 'Wprowadź kody maszyn oddzielone przecinkami (np. P100,F350,401).';
+    box.appendChild(info);
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = Array.isArray(emp.permissions) ? emp.permissions.join(',') : (emp.permissions ? String(emp.permissions).replace(/^{|}$/g,'').replace(/"/g,'') : '');
+    inp.style.width = '100%';
+    inp.style.marginTop = '8px';
+    inp.style.padding = '8px';
+    inp.style.border = '1px solid #e6eef8';
+    inp.style.borderRadius = '6px';
+    box.appendChild(inp);
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.gap = '8px';
+    actions.style.marginTop = '10px';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn outline';
+    closeBtn.textContent = 'Zamknij';
+    closeBtn.onclick = () => modal.remove();
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn';
+    saveBtn.textContent = 'Zapisz';
+    saveBtn.onclick = async () => {
+      const perms = (inp.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+      await saveEmployeeChanges(emp.id, { permissions: perms });
+      modal.remove();
+      try { await renderList(); } catch(e){ console.warn(e); }
+    };
+
+    actions.appendChild(closeBtn);
+    actions.appendChild(saveBtn);
+    box.appendChild(actions);
+
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
+  }
+
+  /* zapis zmian pracownika */
+  async function saveEmployeeChanges(empId, updates){
+    if(sb){
+      try{
+        const payload = {
+          surname: updates.surname,
+          firstname: updates.firstname,
+          bu: updates.bu,
+          roles: updates.roles, // text[] jeśli kolumna typu array
+          permissions: updates.permissions
+        };
+        const { error } = await sb.from('employees').update(payload).eq('id', empId);
+        if(error){ alert('Błąd zapisu: ' + (error.message || error)); console.error(error); return; }
+        const idx = cache.findIndex(x => x.id === empId);
+        if(idx > -1) cache[idx] = Object.assign({}, cache[idx], payload);
+        alert('Zapisano zmiany.');
+      }catch(e){
+        console.error('saveEmployeeChanges error', e);
+        alert('Błąd podczas zapisu. Sprawdź konsolę.');
+      }
+    } else {
+      const idx = cache.findIndex(x => x.id === empId);
+      if(idx > -1){
+        cache[idx] = Object.assign({}, cache[idx], {
+          surname: updates.surname,
+          firstname: updates.firstname,
+          bu: updates.bu,
+          roles: updates.roles,
+          permissions: updates.permissions
+        });
+        alert('Zapisano lokalnie (offline).');
+      } else {
+        alert('Nie znaleziono pracownika w pamięci lokalnej.');
+      }
+    }
+  }
+
+  function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole){
+  const q = String(query||'').trim().toLowerCase();
+  let out = list.slice();
+
+  // filtrowanie - sprawdzamy firstname + surname oraz legacy_name
+  if(q) out = out.filter(e => {
+    const fullname = ((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim();
+    const legacy = (e.legacy_name||'').toLowerCase();
+    return fullname.includes(q) || legacy.includes(q);
+  });
+
+  if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
+  if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
+
+  // sortowanie - jeśli sortField jest 'bu' lub 'surname' itp.
+  out.sort((a,b) => {
+    let av = String(a[sortField] || '');
+    let bv = String(b[sortField] || '');
+    // dla sortowania po nazwisku chcemy surname + firstname
+    if(sortField === 'surname' || sortField === 'fullname'){
+      av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase();
+      bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase();
+    } else {
+      av = av.toLowerCase();
+      bv = bv.toLowerCase();
+    }
+
+    if(av === bv) return ((a.surname||'') + (a.firstname||'')).localeCompare((b.surname||'') + (b.firstname||''));
+    return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  return out;
+}
 
   async function renderList(){
     if(!wrap) return;
@@ -831,10 +1166,8 @@ const AdminEmployees = (function(){
     populateFilters();
   }
 
-  // wypełnij filtry BU i roli unikalnymi wartościami
   function populateFilters() {
     const buSet = new Set(cache.map(e => e.bu).filter(Boolean));
-    // roleSet — splitowane i unikatowe
     const roleArr = [];
     cache.forEach(e => {
       if(!e.roles) return;
@@ -866,7 +1199,7 @@ const AdminEmployees = (function(){
   return { init, renderList };
 })(); // koniec AdminEmployees
 
-// expose modules to window so inline handlers in a_index.html can call them
+// expose modules to window
 window.AdminMachines = AdminMachines;
 window.AdminEmployees = AdminEmployees;
 
@@ -879,7 +1212,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const employeesSection = document.getElementById('adminEmployeesSection');
     const backToMainBtn = document.getElementById('backToMainBtn');
 
-    // --- Funkcja: pokaż sekcję modyfikacji maszyn ---
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
       if(employeesSection) employeesSection.style.display = 'none';
@@ -888,7 +1220,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       await AdminMachines.renderList();
     }
 
-    // --- Funkcja: pokaż sekcję pracowników ---
     async function showEmployees(){
       if(machinesSection) machinesSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = '';
@@ -897,12 +1228,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
     }
 
-    // --- Podpinanie zdarzeń ---
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
     if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-    // --- Po zalogowaniu domyślnie pokaż modyfikację ---
     showModify();
   });
 });
