@@ -1,43 +1,25 @@
 /**
  * admin/a_script.js
  *
- * Panel administracyjny — zarządzanie maszynami i pracownikami
- * Wersja: poprawiona (lepsze logowanie, defensywne sprawdzanie DOM, spójne zmienne)
+ * Pełny plik admin — AdminMachines + AdminEmployees
+ * - czytelne logi błędów
+ * - edycja pracownika: BU select, role multi-select, permissions checkboxy
+ * - filtr uprawnień (multi-select), sortowanie po surname/firstname
  *
- * Uwaga:
- *  - Ten plik zastępuje wcześniejszą wersję a_script.js.
- *  - Nie zmieniono logiki biznesowej — jedynie poprawiono błędy referencji
- *    i dodano lepsze logowanie.
+ * Uwaga: dopasuj stałe (BU_OPTIONS, ROLE_OPTIONS, PERMISSION_OPTIONS) jeśli trzeba.
  */
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
 const ADMIN_PASSWORD = 'admin123';
 const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
-/* --------------------------------------------------------------------------------- */
 
-/* -------------------- UTILS: logowanie i obrona -------------------- */
-function logInfo(ctx, ...args) {
-  try { console.info(`[admin:${ctx}]`, ...args); } catch(e){}
-}
-function logWarn(ctx, ...args) {
-  try { console.warn(`[admin:${ctx}]`, ...args); } catch(e){}
-}
-function logError(ctx, ...args) {
-  try { console.error(`[admin:${ctx}]`, ...args); } catch(e){}
-}
-function safeExec(fnName, fn) {
-  return async function(...args) {
-    try {
-      return await fn.apply(this, args);
-    } catch (err) {
-      logError(fnName, err && (err.stack || err.message || err));
-      throw err;
-    }
-  };
-}
+/* -------------------- Stałe pomocnicze (dostosuj jeśli trzeba) -------------------- */
+const BU_OPTIONS = ['','BU1','BU2','BU3','BU4'];
+const ROLE_OPTIONS = ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','operator_krosowy'];
+const PERMISSION_OPTIONS = ['P100','P70','F350','F550','GD','GDX','751','401','411','407','408','409','707','487','489','GD','GDX"'];
 
-/* -------------------- Supabase init (defensive) -------------------- */
+/* -------------------- Helpers: Supabase init + wait for SDK -------------------- */
 function waitForSupabaseGlobal(timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
@@ -51,98 +33,95 @@ function waitForSupabaseGlobal(timeoutMs = 8000) {
 }
 
 let sb = null;
-const initSupabaseAdmin = safeExec('initSupabaseAdmin', async function(){
+async function initSupabaseAdmin(){
   try {
     await waitForSupabaseGlobal();
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    logInfo('initSupabaseAdmin', 'Supabase client created');
+    console.log('admin: Supabase ready');
   } catch (e) {
+    console.warn('admin: Supabase not available — offline mode', e);
     sb = null;
-    logWarn('initSupabaseAdmin', 'Supabase SDK not available — offline mode', e && e.message);
-  }
-});
-
-/* -------------------- AUTH MODAL -------------------- */
-function showAuthModal() {
-  try {
-    const modal = document.getElementById('adminAuthModal');
-    if(!modal) {
-      logWarn('showAuthModal', 'No #adminAuthModal in DOM');
-      return;
-    }
-    const passInput = document.getElementById('adminAuthPass');
-    const okBtn = document.getElementById('adminAuthBtn');
-    const cancelBtn = document.getElementById('adminAuthCancel');
-
-    modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
-    if(passInput) { passInput.value = ''; passInput.focus(); }
-
-    function closeModal() {
-      modal.style.display = 'none';
-      modal.setAttribute('aria-hidden', 'true');
-    }
-
-    async function tryLogin() {
-      const v = (passInput && passInput.value) ? passInput.value : '';
-      if (v === ADMIN_PASSWORD) {
-        try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e){}
-        closeModal();
-        await initSupabaseAdmin();
-        try {
-          if (window.AdminMachines && AdminMachines.init) AdminMachines.init();
-        } catch(e){ logWarn('tryLogin', 'AdminMachines init failed', e); }
-        try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
-        document.getElementById('tabModify')?.click();
-      } else {
-        alert('Błędne hasło.');
-        if(passInput) passInput.focus();
-      }
-    }
-
-    if(okBtn) {
-      okBtn.onclick = tryLogin;
-    }
-    if(cancelBtn) {
-      cancelBtn.onclick = () => { window.location.href = '../index.html'; };
-    }
-    if(passInput) {
-      passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
-    }
-  } catch(err) {
-    logError('showAuthModal', err);
   }
 }
 
+/* -------------------- Auth modal (prostota) -------------------- */
+function showAuthModal() {
+  const modal = document.getElementById('adminAuthModal');
+  const passInput = document.getElementById('adminAuthPass');
+  const okBtn = document.getElementById('adminAuthBtn');
+  const cancelBtn = document.getElementById('adminAuthCancel');
+
+  if(!modal) return;
+
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+  if(passInput) { passInput.value = ''; passInput.focus(); }
+
+  function closeModal() { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+
+  async function tryLogin() {
+    const v = (passInput && passInput.value) ? passInput.value : '';
+    if (v === ADMIN_PASSWORD) {
+      try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e){}
+      closeModal();
+      await initSupabaseAdmin();
+      try {
+        if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
+          AdminMachines.init();
+          try { AdminMachines.refreshOrderView(); } catch(e){}
+          try { AdminMachines.renderList(); } catch(e){}
+        }
+      } catch(e){ console.warn('Błąd po logowaniu przy init AdminMachines:', e); }
+      try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
+      document.getElementById('tabModify')?.click();
+    } else {
+      alert('Błędne hasło.'); if(passInput) passInput.focus();
+    }
+  }
+
+  if(okBtn) okBtn.onclick = tryLogin;
+  if(cancelBtn) cancelBtn.onclick = () => { window.location.href = '../index.html'; };
+  if(passInput) passInput.onkeydown = (e) => { if(e.key === 'Enter') tryLogin(); };
+}
+
+/* ensure auth then run callback */
 function ensureAuthThen(cb) {
   const ok = sessionStorage.getItem('adminAuthenticated') === '1';
   if (ok) {
     initSupabaseAdmin()
       .then(async () => {
         try {
-          if (window.AdminMachines && AdminMachines.init) {
-            await AdminMachines.init();
+          if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
+            AdminMachines.init();
+            try { AdminMachines.refreshOrderView(); } catch(e){}
+            try { AdminMachines.renderList(); } catch(e){}
           }
-        } catch (e) { logWarn('ensureAuthThen', 'AdminMachines init error', e); }
+        } catch (e) { console.warn('Błąd podczas init AdminMachines:', e); }
       })
-      .then(() => { try { cb && cb(); } catch (e) { logWarn('ensureAuthThen cb', e); } })
-      .catch(err => { logWarn('ensureAuthThen', 'initSupabaseAdmin failed', err); showAuthModal(); });
+      .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
+      .catch(err => { console.warn('Błąd initSupabaseAdmin w ensureAuthThen:', err); showAuthModal(); });
   } else {
     showAuthModal();
     const handler = () => {
       document.removeEventListener('adminAuthenticated', handler);
       initSupabaseAdmin()
         .then(async () => {
-          try { if (window.AdminMachines && AdminMachines.init) await AdminMachines.init(); } catch (e) { logWarn('ensureAuthThen handler', e); }
+          try {
+            if (typeof AdminMachines !== 'undefined' && AdminMachines.init) {
+              AdminMachines.init();
+              try { AdminMachines.refreshOrderView(); } catch(e){}
+              try { AdminMachines.renderList(); } catch(e){}
+            }
+          } catch (e) { console.warn('Błąd podczas init AdminMachines po zdarzeniu auth:', e); }
         })
-        .then(() => { try { cb && cb(); } catch (e) { logWarn('ensureAuthThen handler cb', e); } })
-        .catch(err => { logWarn('ensureAuthThen handler', err); });
+        .then(() => { try { cb && cb(); } catch (e) { console.warn(e); } })
+        .catch(err => { console.warn('Błąd initSupabaseAdmin po zdarzeniu auth:', err); });
     };
     document.addEventListener('adminAuthenticated', handler);
   }
 }
 
-/* -------------------- AdminMachines -------------------- */
+/* -------------------- AdminMachines (bez większych zmian) -------------------- */
 const AdminMachines = (function(){
   let wrapEl = null;
   let tbodyRef = null;
@@ -203,10 +182,10 @@ const AdminMachines = (function(){
     return wrap;
   }
 
-  const saveOrderFromRows = safeExec('AdminMachines.saveOrderFromRows', async function(rows) {
+  async function saveOrderFromRows(rows) {
     if (!rows || rows.length === 0) return;
     if (!sb) {
-      logWarn('saveOrderFromRows', 'No Supabase client — cannot save order.');
+      console.warn('Brak połączenia z serwerem — nie można zapisać kolejności.');
       return;
     }
     try {
@@ -216,7 +195,7 @@ const AdminMachines = (function(){
         // sequential update to avoid race
         // eslint-disable-next-line no-await-in-loop
         const { error } = await sb.from('machines').update({ ord: i+1, default_view: true }).eq('number', String(num));
-        if (error) logWarn('saveOrderFromRows', 'update error for', num, error);
+        if (error) console.warn('Błąd aktualizacji ord dla', num, error);
       }
       const b = document.createElement('div');
       b.textContent = 'Zapisano kolejność';
@@ -231,12 +210,10 @@ const AdminMachines = (function(){
       b.style.zIndex = 21000;
       document.body.appendChild(b);
       setTimeout(()=>{ b.remove(); }, 1400);
-      // refresh local cache
-      try { await fetchMachinesCache(); } catch(e){ logWarn('saveOrderFromRows refresh cache', e); }
     } catch (e) {
-      logError('saveOrderFromRows', e);
+      console.error('saveOrderFromRows error', e);
     }
-  });
+  }
 
   function openAddModal(){
     const existing = document.getElementById('adminAddMachineModal');
@@ -287,8 +264,8 @@ const AdminMachines = (function(){
     grid.appendChild(makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).'));
     grid.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.'));
     grid.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.'));
-    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401.'));
-    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 407, 408, 409, 707.'));
+    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
+    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
     grid.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
 
     const actions = document.createElement('div');
@@ -328,230 +305,206 @@ const AdminMachines = (function(){
     inpNum.focus();
   }
 
-  async function fetchMachinesCache(){
-    if(!sb) {
-      logWarn('fetchMachinesCache', 'No Supabase client — using local fallback');
-      machinesCache = [];
-      return;
-    }
-    try {
+  async function renderList(){
+    if(!wrapEl) return;
+    wrapEl.innerHTML = '';
+    wrapEl.appendChild(makeMuted('Ładuję listę maszyn...'));
+    if(!sb){ wrapEl.innerHTML=''; wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).')); return; }
+
+    try{
       const { data, error } = await sb.from('machines').select('*').order('ord', { ascending:true });
-      if (error) {
-        logWarn('fetchMachinesCache', 'Supabase returned error', error);
-        machinesCache = [];
+      if(error) throw error;
+      machinesCache = data || [];
+
+      const topRow = document.createElement('div');
+      topRow.style.display = 'flex';
+      topRow.style.justifyContent = 'flex-start';
+      topRow.style.marginBottom = '10px';
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn';
+      addBtn.textContent = 'Dodaj maszynę';
+      addBtn.onclick = () => openAddModal();
+
+      topRow.appendChild(addBtn);
+      wrapEl.innerHTML = '';
+      wrapEl.appendChild(topRow);
+
+      if(!machinesCache || machinesCache.length === 0){
+        wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
         return;
       }
-      machinesCache = Array.isArray(data) ? data : [];
-      logInfo('fetchMachinesCache', 'fetched', machinesCache.length, 'machines');
-    } catch (e) {
-      logError('fetchMachinesCache', e);
-      machinesCache = [];
+
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.marginTop = '6px';
+      const thead = document.createElement('thead');
+      thead.innerHTML = `<tr style="text-align:left;">
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
+        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
+      </tr>`;
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      tbodyRef = tbody;
+
+      const placeholder = document.createElement('tr');
+      placeholder.className = 'drag-placeholder';
+      placeholder.style.height = '0';
+      placeholder.style.background = 'rgba(96,165,250,0.06)';
+      placeholder.innerHTML = `<td colspan="8" style="padding:0;border:none;"></td>`;
+
+      machinesCache.forEach(m => {
+        const tr = document.createElement('tr');
+        tr.className = 'admin-machine-row';
+        tr.dataset.number = m.number;
+        tr.style.background = '#fff';
+
+        const tdHandle = document.createElement('td');
+        tdHandle.style.padding = '8px';
+        tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdHandle.style.textAlign = 'center';
+        tdHandle.style.cursor = 'grab';
+        const handle = document.createElement('span');
+        handle.className = 'drag-handle';
+        handle.title = 'Przeciągnij, aby zmienić pozycję';
+        handle.style.userSelect = 'none';
+        handle.style.fontSize = '16px';
+        handle.style.lineHeight = '1';
+        handle.textContent = '≡';
+        handle.draggable = true;
+        tdHandle.appendChild(handle);
+        tr.appendChild(tdHandle);
+
+        const tdNum = document.createElement('td');
+        tdNum.style.padding = '8px';
+        tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdNum.textContent = m.number || '';
+        tr.appendChild(tdNum);
+
+        const tdMaker = document.createElement('td');
+        tdMaker.style.padding = '8px';
+        tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdMaker.textContent = m.maker || '';
+        tr.appendChild(tdMaker);
+
+        const tdPaker = document.createElement('td');
+        tdPaker.style.padding = '8px';
+        tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPaker.textContent = m.paker || '';
+        tr.appendChild(tdPaker);
+
+        const tdCela = document.createElement('td');
+        tdCela.style.padding = '8px';
+        tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdCela.textContent = m.celafoniarka || '';
+        tr.appendChild(tdCela);
+
+        const tdPak = document.createElement('td');
+        tdPak.style.padding = '8px';
+        tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPak.textContent = m.pakieciarka || '';
+        tr.appendChild(tdPak);
+
+        const tdKart = document.createElement('td');
+        tdKart.style.padding = '8px';
+        tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdKart.textContent = m.kartoniarka || '';
+        tr.appendChild(tdKart);
+
+        const tdActions = document.createElement('td');
+        tdActions.style.padding = '8px';
+        tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn ghost small';
+        editBtn.textContent = 'Edytuj';
+        editBtn.onclick = () => openEditModal(m);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn danger small';
+        delBtn.style.marginLeft = '8px';
+        delBtn.textContent = 'Usuń';
+        delBtn.onclick = async () => {
+          if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
+          await deleteMachine(m.number);
+          await renderList();
+        };
+
+        tdActions.appendChild(editBtn);
+        tdActions.appendChild(delBtn);
+        tr.appendChild(tdActions);
+
+        handle.addEventListener('dragstart', (e) => {
+          tr.classList.add('dragging');
+          try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
+          e.dataTransfer.effectAllowed = 'move';
+          const h = tr.getBoundingClientRect().height;
+          placeholder.style.height = `${h}px`;
+        });
+
+        handle.addEventListener('dragend', () => {
+          tr.classList.remove('dragging');
+          if (tbody.contains(placeholder)) placeholder.remove();
+        });
+
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+      wrapEl.appendChild(table);
+
+      function getDragAfterRow(container, y) {
+        const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
+        return draggableRows.find(row => {
+          const box = row.getBoundingClientRect();
+          return y < box.top + box.height / 2;
+        }) || null;
+      }
+
+      tbody.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const after = getDragAfterRow(tbody, e.clientY);
+        if (after === null) {
+          if (tbody.lastElementChild !== placeholder) tbody.appendChild(placeholder);
+        } else {
+          if (after !== placeholder) tbody.insertBefore(placeholder, after);
+        }
+      });
+
+      tbody.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        const dragging = tbody.querySelector('tr.dragging');
+        if (!dragging) return;
+        if (placeholder.parentElement) {
+          tbody.insertBefore(dragging, placeholder);
+          placeholder.remove();
+        }
+        tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
+        const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
+        await saveOrderFromRows(rows);
+      });
+
+      document.ondragend = () => {
+        const dragging = tbody.querySelector('tr.dragging');
+        if (dragging) dragging.classList.remove('dragging');
+        if (tbody.contains(placeholder)) placeholder.remove();
+      };
+
+    }catch(e){
+      console.error('AdminMachines.renderList error', e);
+      wrapEl.innerHTML = '';
+      wrapEl.appendChild(makeMuted('Błąd ładowania maszyn. Sprawdź konsolę.'));
     }
   }
 
-  const renderList = safeExec('AdminMachines.renderList', async function(){
-    if(!wrapEl) {
-      wrapEl = document.getElementById('adminMachinesApp');
-      if(!wrapEl){
-        logWarn('renderList', 'No #adminMachinesApp element found in DOM');
-        return;
-      }
-    }
-    wrapEl.innerHTML = '';
-    wrapEl.appendChild(makeMuted('Ładuję listę maszyn...'));
-
-    if(!sb){
-      wrapEl.innerHTML='';
-      wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).'));
-      return;
-    }
-
-    await fetchMachinesCache();
-
-    const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.justifyContent = 'flex-start';
-    topRow.style.marginBottom = '10px';
-
-    const addBtn = document.createElement('button');
-    addBtn.className = 'btn';
-    addBtn.textContent = 'Dodaj maszynę';
-    addBtn.onclick = () => openAddModal();
-
-    topRow.appendChild(addBtn);
-    wrapEl.innerHTML = '';
-    wrapEl.appendChild(topRow);
-
-    if(!machinesCache || machinesCache.length === 0){
-      wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
-      return;
-    }
-
-    const table = document.createElement('table');
-    table.style.width = '100%';
-    table.style.borderCollapse = 'collapse';
-    table.style.marginTop = '6px';
-    const thead = document.createElement('thead');
-    thead.innerHTML = `<tr style="text-align:left;">
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
-      <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
-    </tr>`;
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    tbodyRef = tbody;
-
-    const placeholder = document.createElement('tr');
-    placeholder.className = 'drag-placeholder';
-    placeholder.style.height = '0';
-    placeholder.style.background = 'rgba(96,165,250,0.06)';
-    placeholder.innerHTML = `<td colspan="8" style="padding:0;border:none;"></td>`;
-
-    machinesCache.forEach(m => {
-      const tr = document.createElement('tr');
-      tr.className = 'admin-machine-row';
-      tr.dataset.number = m.number;
-      tr.style.background = '#fff';
-
-      const tdHandle = document.createElement('td');
-      tdHandle.style.padding = '8px';
-      tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdHandle.style.textAlign = 'center';
-      tdHandle.style.cursor = 'grab';
-      const handle = document.createElement('span');
-      handle.className = 'drag-handle';
-      handle.title = 'Przeciągnij, aby zmienić pozycję';
-      handle.style.userSelect = 'none';
-      handle.style.fontSize = '16px';
-      handle.style.lineHeight = '1';
-      handle.textContent = '≡';
-      handle.draggable = true;
-      tdHandle.appendChild(handle);
-      tr.appendChild(tdHandle);
-
-      const tdNum = document.createElement('td');
-      tdNum.style.padding = '8px';
-      tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdNum.textContent = m.number || '';
-      tr.appendChild(tdNum);
-
-      const tdMaker = document.createElement('td');
-      tdMaker.style.padding = '8px';
-      tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdMaker.textContent = m.maker || '';
-      tr.appendChild(tdMaker);
-
-      const tdPaker = document.createElement('td');
-      tdPaker.style.padding = '8px';
-      tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdPaker.textContent = m.paker || '';
-      tr.appendChild(tdPaker);
-
-      const tdCela = document.createElement('td');
-      tdCela.style.padding = '8px';
-      tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdCela.textContent = m.celafoniarka || '';
-      tr.appendChild(tdCela);
-
-      const tdPak = document.createElement('td');
-      tdPak.style.padding = '8px';
-      tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdPak.textContent = m.pakieciarka || '';
-      tr.appendChild(tdPak);
-
-      const tdKart = document.createElement('td');
-      tdKart.style.padding = '8px';
-      tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-      tdKart.textContent = m.kartoniarka || '';
-      tr.appendChild(tdKart);
-
-      const tdActions = document.createElement('td');
-      tdActions.style.padding = '8px';
-      tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-
-      const editBtn = document.createElement('button');
-      editBtn.className = 'btn ghost small';
-      editBtn.textContent = 'Edytuj';
-      editBtn.onclick = () => openEditModal(m);
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn danger small';
-      delBtn.style.marginLeft = '8px';
-      delBtn.textContent = 'Usuń';
-      delBtn.onclick = async () => {
-        if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
-        await deleteMachine(m.number);
-        await renderList();
-      };
-
-      tdActions.appendChild(editBtn);
-      tdActions.appendChild(delBtn);
-      tr.appendChild(tdActions);
-
-      handle.addEventListener('dragstart', (e) => {
-        tr.classList.add('dragging');
-        try { e.dataTransfer.setData('text/plain', 'drag'); } catch (err) {}
-        e.dataTransfer.effectAllowed = 'move';
-        const h = tr.getBoundingClientRect().height;
-        placeholder.style.height = `${h}px`;
-      });
-
-      handle.addEventListener('dragend', () => {
-        tr.classList.remove('dragging');
-        if (tbody.contains(placeholder)) placeholder.remove();
-      });
-
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    wrapEl.appendChild(table);
-
-    function getDragAfterRow(container, y) {
-      const draggableRows = [...container.querySelectorAll('tr.admin-machine-row:not(.dragging)')];
-      return draggableRows.find(row => {
-        const box = row.getBoundingClientRect();
-        return y < box.top + box.height / 2;
-      }) || null;
-    }
-
-    tbody.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      const after = getDragAfterRow(tbody, e.clientY);
-      if (after === null) {
-        if (tbody.lastElementChild !== placeholder) tbody.appendChild(placeholder);
-      } else {
-        if (after !== placeholder) tbody.insertBefore(placeholder, after);
-      }
-    });
-
-    tbody.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      const dragging = tbody.querySelector('tr.dragging');
-      if (!dragging) return;
-      if (placeholder.parentElement) {
-        tbody.insertBefore(dragging, placeholder);
-        placeholder.remove();
-      }
-      tbody.querySelectorAll('tr.admin-machine-row').forEach(r => r.classList.remove('drag-over','dragging'));
-      const rows = Array.from(tbody.querySelectorAll('tr.admin-machine-row'));
-      await saveOrderFromRows(rows);
-    });
-
-    document.ondragend = () => {
-      const dragging = tbody.querySelector('tr.dragging');
-      if (dragging) dragging.classList.remove('dragging');
-      if (tbody.contains(placeholder)) placeholder.remove();
-    };
-
-  });
-
-  const addMachine = safeExec('AdminMachines.addMachine', async function(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
+  async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
     if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     const num = String(number).trim();
@@ -564,29 +517,27 @@ const AdminMachines = (function(){
       const { error } = await sb.from('machines').insert([insertObj]);
       if(error){ alert('Błąd dodawania maszyny: ' + (error.message || error)); return; }
       alert('Dodano maszynę ' + num);
-      await fetchMachinesCache();
       await renderList();
     }catch(e){
-      logError('addMachine', e);
+      console.error('AdminMachines.addMachine error', e);
       alert('Błąd podczas dodawania maszyny. Sprawdź konsolę.');
     }
-  });
+  }
 
-  const deleteMachine = safeExec('AdminMachines.deleteMachine', async function(number){
+  async function deleteMachine(number){
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     try{
       await sb.from('assignments').delete().eq('machine_number', number);
       const { error } = await sb.from('machines').delete().eq('number', number);
       if(error){ alert('Błąd usuwania maszyny: ' + (error.message || error)); return; }
       alert('Usunięto maszynę ' + number);
-      await fetchMachinesCache();
     }catch(e){
-      logError('deleteMachine', e);
+      console.error('AdminMachines.deleteMachine error', e);
       alert('Błąd podczas usuwania. Sprawdź konsolę.');
     }
-  });
+  }
 
-  const editMachine = safeExec('AdminMachines.editMachine', async function(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
+  async function editMachine(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
     if(!newNumber || !String(newNumber).trim()) { alert('Numer nie może być pusty.'); return; }
     if(!sb){ alert('Brak połączenia z serwerem.'); return; }
     const newNum = String(newNumber).trim();
@@ -602,12 +553,11 @@ const AdminMachines = (function(){
         await sb.from('assignments').update({ machine_number: newNum }).eq('machine_number', oldNumber);
       }
       alert('Zaktualizowano maszynę: ' + newNum);
-      await fetchMachinesCache();
     }catch(e){
-      logError('editMachine', e);
+      console.error('AdminMachines.editMachine error', e);
       alert('Błąd podczas edycji maszyny. Sprawdź konsolę.');
     }
-  });
+  }
 
   function openEditModal(machine){
     let existing = document.getElementById('adminEditMachineModal');
@@ -663,8 +613,8 @@ const AdminMachines = (function(){
     rightCol.style.display = 'flex';
     rightCol.style.flexDirection = 'column';
     rightCol.style.gap = '8px';
-    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401.'));
-    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 407, 408, 409, 707.'));
+    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
+    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
     rightCol.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
 
     const cols = document.createElement('div');
@@ -715,12 +665,11 @@ const AdminMachines = (function(){
   async function init(){
     const doInit = async () => {
       if(_inited){
-        try { await renderList(); } catch(e){ logWarn('init', e); }
+        try { await renderList(); } catch(e){}
         return;
       }
       wrapEl = document.getElementById('adminMachinesApp');
-      if(!wrapEl) logWarn('init', 'No #adminMachinesApp found');
-      try { await renderList(); } catch(e){ logWarn('init renderList', e); }
+      try { await renderList(); } catch(e){ console.warn(e); }
       _inited = true;
     };
 
@@ -741,81 +690,51 @@ const AdminMachines = (function(){
   };
 })(); // koniec AdminMachines
 
-/* -------------------- AdminEmployees -------------------- */
+/* -------------------- AdminEmployees (z filtrowaniem/sortowaniem + modal edycji) -------------------- */
 const AdminEmployees = (function(){
-  let wrap = null;
-  let cache = [];
+  let wrap = null;      // element do renderowania listy
+  let cache = [];       // pobrane dane pracowników (znormalizowane)
 
-  const fetchEmployees = safeExec('AdminEmployees.fetchEmployees', async function(){
-    // debug UI note
+  /* ---- fetchEmployees: pobiera tylko firstname,surname,bu,roles,permissions,id ---- */
+  async function fetchEmployees(){
     const wrapEl = document.getElementById('adminEmployeesApp');
-    if(wrapEl) {
-      const dbg = document.createElement('div');
-      dbg.className = 'muted';
-      dbg.style.marginBottom = '8px';
-      dbg.textContent = 'Ładowanie pracowników...';
-      // prepend so it is visible
-      if(wrapEl.firstChild) wrapEl.insertBefore(dbg, wrapEl.firstChild);
-      else wrapEl.appendChild(dbg);
-    }
+    try {
+      if(!sb){
+        console.warn('fetchEmployees: sb (Supabase client) is NULL — offline mode');
+        cache = [];
+        return;
+      }
 
-    if(!sb){ 
-      logWarn('fetchEmployees', 'No Supabase client — offline');
-      cache = [];
-      return;
-    }
-
-    try{
-      // pobieramy pola, zakładając że kolumny firstname i surname istnieją
       const { data, error, status } = await sb.from('employees')
         .select('id,firstname,surname,bu,roles,permissions')
         .order('surname', { ascending: true });
 
-      logInfo('fetchEmployees', 'raw response', { status, error, sample: Array.isArray(data) ? data.slice(0,5) : data });
-
+      console.debug('fetchEmployees: response status=', status, 'error=', error ? error.message : null);
       if(error){
-        logWarn('fetchEmployees', 'Supabase error', error);
+        console.warn('fetchEmployees error', error);
         cache = [];
         return;
       }
 
       const rows = Array.isArray(data) ? data : [];
+      cache = rows.map(e => ({
+        id: e.id,
+        firstname: e.firstname || '',
+        surname: e.surname || '',
+        legacy_name: '',
+        bu: e.bu || '',
+        roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
+        permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
+      }));
 
-      cache = rows.map(e => {
-        return {
-          id: e.id,
-          firstname: e.firstname || '',
-          surname: e.surname || '',
-          legacy_name: '', // ignorujemy name — wymagane
-          bu: e.bu || '',
-          roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
-          permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
-        };
-      });
-
-      const withNames = cache.filter(x => (String(x.firstname).trim() !== '' || String(x.surname).trim() !== ''));
-      logInfo('fetchEmployees', 'fetched', cache.length, 'rows, with firstname/surname:', withNames.length);
-
-      if(withNames.length === 0 && wrapEl){
-        const e = document.createElement('div');
-        e.className = 'muted';
-        e.style.color = '#a33';
-        e.textContent = 'Uwaga: tabela employees nie zawiera firstname ani surname dla rekordów.';
-        wrapEl.prepend(e);
-      }
-    }catch(err){
-      logError('fetchEmployees catch', err);
+      console.info(`fetchEmployees: loaded ${cache.length} rows; with names: ${cache.filter(x => x.firstname || x.surname).length}`);
+    } catch (err) {
+      console.error('fetchEmployees exception', err);
       cache = [];
-      if (wrapEl) {
-        const e = document.createElement('div');
-        e.className = 'muted';
-        e.style.color = '#a33';
-        e.textContent = 'Wyjątek podczas pobierania pracowników. Sprawdź konsolę.';
-        wrapEl.prepend(e);
-      }
     }
-  });
+  }
 
+  /* Tworzy wiersz pracownika (z nagłówkami powyżej) */
   function makeRow(emp){
     const row = document.createElement('div');
     row.className = 'admin-emp-row';
@@ -826,15 +745,15 @@ const AdminEmployees = (function(){
     row.style.borderBottom = '1px solid rgba(0,0,0,0.05)';
     row.style.fontSize = '14px';
 
-    // Nazwisko + Imię (full)
+    // Nazwisko + Imię (pełne)
     const nameCol = document.createElement('div');
     nameCol.style.flex = '2';
+    nameCol.style.fontWeight = '600';
     nameCol.textContent = `${emp.surname || ''} ${emp.firstname || ''}`.trim() || '—';
-    nameCol.title = `${emp.surname || ''} ${emp.firstname || ''}`.trim();
 
     // BU
     const buCol = document.createElement('div');
-    buCol.style.flex = '0 0 60px';
+    buCol.style.flex = '0 0 80px';
     buCol.style.textAlign = 'center';
     buCol.textContent = emp.bu || '';
 
@@ -846,33 +765,31 @@ const AdminEmployees = (function(){
     // Uprawnienia (permissions)
     const permsCol = document.createElement('div');
     permsCol.style.flex = '2';
-    permsCol.textContent = Array.isArray(emp.permissions)
-      ? emp.permissions.join(', ')
-      : (emp.permissions || '');
+    permsCol.style.whiteSpace = 'nowrap';
+    permsCol.style.overflow = 'hidden';
+    permsCol.style.textOverflow = 'ellipsis';
+    permsCol.title = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : (emp.permissions || '');
+    permsCol.textContent = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : (emp.permissions || '');
 
-    // Akcje
+    // Akcje -> tylko Edytuj (usunąłem modal Uprawnienia)
     const actionsCol = document.createElement('div');
-    actionsCol.style.flex = '0 0 140px';
-    actionsCol.style.textAlign = 'center';
-
-    const permBtn = document.createElement('button');
-    permBtn.className = 'btn small';
-    permBtn.textContent = 'Uprawnienia';
-    permBtn.style.marginRight = '6px';
-    permBtn.onclick = () => openPermissionsModal(emp);
-
+    actionsCol.style.flex = '0 0 120px';
+    actionsCol.style.textAlign = 'right';
     const editBtn = document.createElement('button');
     editBtn.className = 'btn ghost small';
     editBtn.textContent = 'Edytuj';
-    editBtn.onclick = () => openEditEmployeeModal(emp);
-
-    actionsCol.appendChild(permBtn);
+    editBtn.onclick = async () => {
+      // find full record from cache (to get roles array / perms array)
+      const full = cache.find(c => c.id === emp.id) || emp;
+      openEditEmployeeModal(full);
+    };
     actionsCol.appendChild(editBtn);
 
     [nameCol, buCol, rolesCol, permsCol, actionsCol].forEach(c => row.appendChild(c));
     return row;
   }
 
+  /* -------------------- Modal edycji pracownika -------------------- */
   function openEditEmployeeModal(emp){
     const existing = document.getElementById('empEditModal');
     if(existing) existing.remove();
@@ -889,7 +806,7 @@ const AdminEmployees = (function(){
     modal.style.zIndex = 30000;
 
     const box = document.createElement('div');
-    box.style.width = '520px';
+    box.style.width = '560px';
     box.style.maxWidth = '94%';
     box.style.background = '#fff';
     box.style.borderRadius = '10px';
@@ -902,71 +819,151 @@ const AdminEmployees = (function(){
     title.style.marginTop = '0';
     box.appendChild(title);
 
+    const hint = document.createElement('div');
+    hint.className = 'muted';
+    hint.style.marginBottom = '8px';
+    hint.textContent = 'Uzupełnij pola. Role możesz wybrać wiele (Ctrl/Cmd+klik). Uprawnienia wybierz z checkboxów.';
+    box.appendChild(hint);
+
+    // GRID: nazwisko / imię
     const grid = document.createElement('div');
     grid.style.display = 'grid';
     grid.style.gridTemplateColumns = '1fr 1fr';
-    grid.style.gap = '8px';
+    grid.style.gap = '10px';
 
-    // Surname
+    // surname
+    const wrapSurname = document.createElement('div');
+    const labSurname = document.createElement('label');
+    labSurname.textContent = 'Nazwisko (surname)';
+    labSurname.style.fontWeight = '600';
+    labSurname.style.display = 'block';
+    labSurname.style.marginBottom = '6px';
     const inpSurname = document.createElement('input');
     inpSurname.type = 'text';
     inpSurname.value = emp.surname || '';
-    inpSurname.placeholder = 'Nazwisko (surname)';
+    inpSurname.placeholder = 'Nazwisko';
     inpSurname.style.padding = '8px';
     inpSurname.style.border = '1px solid #e6eef8';
     inpSurname.style.borderRadius = '6px';
-    grid.appendChild(inpSurname);
+    inpSurname.style.width = '100%';
+    wrapSurname.appendChild(labSurname);
+    wrapSurname.appendChild(inpSurname);
+    grid.appendChild(wrapSurname);
 
-    // Firstname
+    // firstname
+    const wrapFirstname = document.createElement('div');
+    const labFirstname = document.createElement('label');
+    labFirstname.textContent = 'Imię (firstname)';
+    labFirstname.style.fontWeight = '600';
+    labFirstname.style.display = 'block';
+    labFirstname.style.marginBottom = '6px';
     const inpFirstname = document.createElement('input');
     inpFirstname.type = 'text';
     inpFirstname.value = emp.firstname || '';
-    inpFirstname.placeholder = 'Imię (firstname)';
+    inpFirstname.placeholder = 'Imię';
     inpFirstname.style.padding = '8px';
     inpFirstname.style.border = '1px solid #e6eef8';
     inpFirstname.style.borderRadius = '6px';
-    grid.appendChild(inpFirstname);
+    inpFirstname.style.width = '100%';
+    wrapFirstname.appendChild(labFirstname);
+    wrapFirstname.appendChild(inpFirstname);
+    grid.appendChild(wrapFirstname);
 
-    // BU
-    const inpBu = document.createElement('input');
-    inpBu.type = 'text';
-    inpBu.value = emp.bu || '';
-    inpBu.placeholder = 'BU';
-    inpBu.style.padding = '8px';
-    inpBu.style.border = '1px solid #e6eef8';
-    inpBu.style.borderRadius = '6px';
-    grid.appendChild(inpBu);
+    // BU select (pełna szerokość - nowy wiersz)
+    const wrapBu = document.createElement('div');
+    wrapBu.style.gridColumn = '1 / -1';
+    const labBu = document.createElement('label');
+    labBu.textContent = 'BU';
+    labBu.style.fontWeight = '600';
+    labBu.style.display = 'block';
+    labBu.style.marginBottom = '6px';
+    const selBu = document.createElement('select');
+    selBu.style.padding = '8px';
+    selBu.style.border = '1px solid #e6eef8';
+    selBu.style.borderRadius = '6px';
+    selBu.style.width = '200px';
+    BU_OPTIONS.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt === '' ? '— wybierz —' : opt;
+      if(String(opt) === String(emp.bu || '')) o.selected = true;
+      selBu.appendChild(o);
+    });
+    wrapBu.appendChild(labBu);
+    wrapBu.appendChild(selBu);
+    grid.appendChild(wrapBu);
 
-    // Roles (comma-separated)
-    const inpRoles = document.createElement('input');
-    inpRoles.type = 'text';
-    inpRoles.value = emp.roles || '';
-    inpRoles.placeholder = 'roles (np. mechanik_focke,operator_focke)';
-    inpRoles.style.padding = '8px';
-    inpRoles.style.border = '1px solid #e6eef8';
-    inpRoles.style.borderRadius = '6px';
-    grid.appendChild(inpRoles);
+    // Role multi-select
+    const wrapRoles = document.createElement('div');
+    wrapRoles.style.gridColumn = '1 / -1';
+    const labRoles = document.createElement('label');
+    labRoles.textContent = 'Role (wybierz jedną lub więcej)';
+    labRoles.style.fontWeight = '600';
+    labRoles.style.display = 'block';
+    labRoles.style.marginBottom = '6px';
+    const selRoles = document.createElement('select');
+    selRoles.multiple = true;
+    selRoles.size = Math.min(6, ROLE_OPTIONS.length);
+    selRoles.style.padding = '6px';
+    selRoles.style.border = '1px solid #e6eef8';
+    selRoles.style.borderRadius = '6px';
+    selRoles.style.width = '100%';
+    const existingRoles = Array.isArray(emp.roles) ? emp.roles.map(r=>String(r).trim()) : (emp.roles ? String(emp.roles).split(',').map(s=>s.trim()) : []);
+    ROLE_OPTIONS.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r;
+      o.textContent = r;
+      if(existingRoles.includes(r)) o.selected = true;
+      selRoles.appendChild(o);
+    });
+    wrapRoles.appendChild(labRoles);
+    wrapRoles.appendChild(selRoles);
+    grid.appendChild(wrapRoles);
 
     box.appendChild(grid);
 
-    // permissions (CSV editable)
-    const permLabel = document.createElement('div');
-    permLabel.textContent = 'Permissions (kody maszyn, oddzielone przecinkami)';
-    permLabel.style.marginTop = '10px';
-    permLabel.style.fontSize = '13px';
-    permLabel.className = 'muted';
-    box.appendChild(permLabel);
+    // Uprawnienia: checkboxy grupowane w kolumny
+    const permsLabel = document.createElement('div');
+    permsLabel.textContent = 'Uprawnienia (zaznacz dostępne maszyny)';
+    permsLabel.style.fontWeight = '600';
+    permsLabel.style.marginTop = '10px';
+    box.appendChild(permsLabel);
 
-    const inpPerms = document.createElement('input');
-    inpPerms.type = 'text';
-    inpPerms.value = Array.isArray(emp.permissions) ? emp.permissions.join(',') : (emp.permissions ? String(emp.permissions).replace(/^{|}$/g,'').replace(/"/g,'') : '');
-    inpPerms.placeholder = 'np. P100,F350,401';
-    inpPerms.style.padding = '8px';
-    inpPerms.style.border = '1px solid #e6eef8';
-    inpPerms.style.borderRadius = '6px';
-    inpPerms.style.width = '100%';
-    box.appendChild(inpPerms);
+    const permGrid = document.createElement('div');
+    permGrid.style.display = 'grid';
+    permGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    permGrid.style.gap = '6px';
+    permGrid.style.marginTop = '6px';
+    const currPerms = Array.isArray(emp.permissions) ? emp.permissions.map(p=>String(p).trim()) : (emp.permissions ? String(emp.permissions).split(',').map(s=>s.trim()) : []);
 
+    PERMISSION_OPTIONS.forEach(code => {
+      const cbWrap = document.createElement('label');
+      cbWrap.style.display = 'flex';
+      cbWrap.style.alignItems = 'center';
+      cbWrap.style.gap = '8px';
+      cbWrap.style.padding = '6px';
+      cbWrap.style.borderRadius = '6px';
+      cbWrap.style.cursor = 'pointer';
+      cbWrap.style.userSelect = 'none';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = code;
+      if(currPerms.includes(code)) cb.checked = true;
+      cb.dataset.perm = code;
+
+      const span = document.createElement('span');
+      span.textContent = code;
+      span.style.fontSize = '13px';
+
+      cbWrap.appendChild(cb);
+      cbWrap.appendChild(span);
+      permGrid.appendChild(cbWrap);
+    });
+
+    box.appendChild(permGrid);
+
+    // action buttons
     const actions = document.createElement('div');
     actions.style.display = 'flex';
     actions.style.justifyContent = 'flex-end';
@@ -983,16 +980,33 @@ const AdminEmployees = (function(){
     saveBtn.className = 'btn';
     saveBtn.textContent = 'Zapisz';
     saveBtn.onclick = async () => {
+      // zbierz role (multi-select)
+      const selectedRoles = Array.from(selRoles.selectedOptions).map(o => o.value).filter(Boolean);
+      // zbierz permissions z checkboxów
+      const checkedPerms = Array.from(permGrid.querySelectorAll('input[type="checkbox"]'))
+        .filter(i => i.checked).map(i => i.value);
+
       const updates = {
         surname: (inpSurname.value || '').trim(),
         firstname: (inpFirstname.value || '').trim(),
-        bu: (inpBu.value || '').trim(),
-        roles: (inpRoles.value || '').split(',').map(s=>s.trim()).filter(Boolean),
-        permissions: (inpPerms.value || '').split(',').map(s=>s.trim()).filter(Boolean)
+        bu: (selBu.value || '').trim(),
+        roles: selectedRoles,
+        permissions: checkedPerms
       };
-      await saveEmployeeChanges(emp.id, updates);
-      modal.remove();
-      try { await renderList(); } catch(e){ logWarn('openEditEmployeeModal after save renderList', e); }
+
+      // minimalna walidacja
+      if(!updates.surname && !updates.firstname){
+        if(!confirm('Nazwisko i imię są puste — chcesz zapisać mimo to?')) return;
+      }
+
+      try {
+        await saveEmployeeChanges(emp.id, updates);
+        modal.remove();
+        try { await renderList(); } catch(e){ console.warn(e); }
+      } catch (e) {
+        console.error('Błąd zapisu pracownika z modala:', e);
+        alert('Błąd podczas zapisu — sprawdź konsolę.');
+      }
     };
     actions.appendChild(saveBtn);
 
@@ -1000,103 +1014,32 @@ const AdminEmployees = (function(){
     modal.appendChild(box);
     document.body.appendChild(modal);
 
+    // zamknij modal przy kliknięciu tła
     modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
   }
 
-  function openPermissionsModal(emp){
-    const existing = document.getElementById('permModal');
-    if(existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'permModal';
-    modal.className = 'modal';
-    modal.style.position = 'fixed';
-    modal.style.inset = '0';
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    modal.style.background = 'rgba(0,0,0,0.4)';
-    modal.style.zIndex = 32000;
-
-    const box = document.createElement('div');
-    box.style.width = '420px';
-    box.style.maxWidth = '94%';
-    box.style.background = '#fff';
-    box.style.borderRadius = '8px';
-    box.style.padding = '12px';
-    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)';
-    box.style.boxSizing = 'border-box';
-
-    const title = document.createElement('h3');
-    title.textContent = `Uprawnienia — ${emp.surname || emp.firstname || ''}`;
-    title.style.marginTop = '0';
-    box.appendChild(title);
-
-    const info = document.createElement('div');
-    info.className = 'muted';
-    info.textContent = 'Wprowadź kody maszyn oddzielone przecinkami (np. P100,F350,401).';
-    box.appendChild(info);
-
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.value = Array.isArray(emp.permissions) ? emp.permissions.join(',') : (emp.permissions ? String(emp.permissions).replace(/^{|}$/g,'').replace(/"/g,'') : '');
-    inp.style.width = '100%';
-    inp.style.marginTop = '8px';
-    inp.style.padding = '8px';
-    inp.style.border = '1px solid #e6eef8';
-    inp.style.borderRadius = '6px';
-    box.appendChild(inp);
-
-    const actions = document.createElement('div');
-    actions.style.display = 'flex';
-    actions.style.justifyContent = 'flex-end';
-    actions.style.gap = '8px';
-    actions.style.marginTop = '10px';
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'btn outline';
-    closeBtn.textContent = 'Zamknij';
-    closeBtn.onclick = () => modal.remove();
-
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn';
-    saveBtn.textContent = 'Zapisz';
-    saveBtn.onclick = async () => {
-      const perms = (inp.value||'').split(',').map(s=>s.trim()).filter(Boolean);
-      await saveEmployeeChanges(emp.id, { permissions: perms });
-      modal.remove();
-      try { await renderList(); } catch(e){ logWarn('openPermissionsModal after save renderList', e); }
-    };
-
-    actions.appendChild(closeBtn);
-    actions.appendChild(saveBtn);
-    box.appendChild(actions);
-
-    modal.appendChild(box);
-    document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => { if(e.target === modal) modal.remove(); });
-  }
-
-  const saveEmployeeChanges = safeExec('AdminEmployees.saveEmployeeChanges', async function(empId, updates){
+  /* zapis zmian pracownika */
+  async function saveEmployeeChanges(empId, updates){
     if(sb){
       try{
         const payload = {
           surname: updates.surname,
           firstname: updates.firstname,
           bu: updates.bu,
-          roles: updates.roles, // text[] jeśli kolumna typu array
+          roles: updates.roles, // as array/text[] type
           permissions: updates.permissions
         };
         const { error } = await sb.from('employees').update(payload).eq('id', empId);
-        if(error){ alert('Błąd zapisu: ' + (error.message || error)); logWarn('saveEmployeeChanges', error); return; }
+        if(error){ alert('Błąd zapisu: ' + (error.message || error)); console.error(error); return; }
         const idx = cache.findIndex(x => x.id === empId);
         if(idx > -1) cache[idx] = Object.assign({}, cache[idx], payload);
         alert('Zapisano zmiany.');
       }catch(e){
-        logError('saveEmployeeChanges', e);
+        console.error('saveEmployeeChanges error', e);
         alert('Błąd podczas zapisu. Sprawdź konsolę.');
       }
     } else {
+      // offline - update lokalnie
       const idx = cache.findIndex(x => x.id === empId);
       if(idx > -1){
         cache[idx] = Object.assign({}, cache[idx], {
@@ -1111,12 +1054,14 @@ const AdminEmployees = (function(){
         alert('Nie znaleziono pracownika w pamięci lokalnej.');
       }
     }
-  });
+  }
 
-  function applyFilterSort(list = [], query = '', sortField = 'bu', sortDir = 'asc', filterBu = '', filterRole = ''){
+  /* applyFilterSort: teraz obsługuje filterPerms (array) oraz sort po firstname/surname */
+  function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole, filterPerms){
     const q = String(query||'').trim().toLowerCase();
     let out = list.slice();
 
+    // filtrowanie tekstowe - firstname/surname
     if(q) out = out.filter(e => {
       const fullname = ((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim();
       const legacy = (e.legacy_name||'').toLowerCase();
@@ -1126,15 +1071,27 @@ const AdminEmployees = (function(){
     if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
     if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
 
+    // filtr uprawnień (filterPerms: pokazujemy tych którzy mają WSZYSTKIE zaznaczone perms)
+    if(Array.isArray(filterPerms) && filterPerms.length > 0){
+      out = out.filter(e => {
+        const perms = Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()) : []);
+        return filterPerms.every(fp => perms.includes(fp));
+      });
+    }
+
+    // sortowanie
     out.sort((a,b) => {
-      let av = String(a[sortField] || '');
-      let bv = String(b[sortField] || '');
-      if(sortField === 'surname' || sortField === 'fullname'){
+      let av, bv;
+      if(sortField === 'surname'){
         av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase();
         bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase();
+      } else if(sortField === 'firstname'){
+        av = String(a.firstname || '').toLowerCase();
+        bv = String(b.firstname || '').toLowerCase();
+        if(av === bv) { av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase(); bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase(); }
       } else {
-        av = av.toLowerCase();
-        bv = bv.toLowerCase();
+        av = String(a[sortField] || '').toLowerCase();
+        bv = String(b[sortField] || '').toLowerCase();
       }
 
       if(av === bv) return ((a.surname||'') + (a.firstname||'')).localeCompare((b.surname||'') + (b.firstname||''));
@@ -1144,79 +1101,87 @@ const AdminEmployees = (function(){
     return out;
   }
 
-  function renderList(){
-    if(!wrap) wrap = document.getElementById('adminEmployeesApp');
-    if(!wrap) {
-      logWarn('renderList', 'No #adminEmployeesApp in DOM');
+  /* renderList: rysuje nagłówki + wiersze; korzysta z cache */
+  async function renderList(){
+    if(!wrap) return;
+    wrap.innerHTML = '';
+    const statusLine = document.createElement('div');
+    statusLine.className = 'muted';
+    statusLine.textContent = 'Ładuję listę pracowników...';
+    wrap.appendChild(statusLine);
+
+    await fetchEmployees();
+
+    // odczytaj filtry / sort
+    const query = (document.getElementById('empSearchInput')?.value || '').trim();
+    const sortField = (document.getElementById('empSortField')?.value || 'bu');
+    const sortDir = (document.getElementById('empSortDir')?.value || 'asc');
+    const filterBu = (document.getElementById('empFilterBu')?.value || '');
+    const filterRole = (document.getElementById('empFilterRole')?.value || '');
+    const filterPermsEl = document.getElementById('empFilterPerms');
+    const filterPerms = filterPermsEl ? Array.from(filterPermsEl.selectedOptions).map(o => o.value).filter(Boolean) : [];
+
+    // header (nagłówki kolumn)
+    const header = document.createElement('div');
+    header.className = 'admin-emp-header';
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.fontWeight = '600';
+    header.style.fontSize = '14px';
+    header.style.background = '#f8f9fa';
+    header.style.borderBottom = '1px solid #ddd';
+    header.style.padding = '8px 12px';
+
+    const cols = [
+      { label: 'Nazwisko / Imię', flex: '2', align: 'left' },
+      { label: 'BU', flex: '0 0 80px', align: 'center' },
+      { label: 'Role', flex: '2', align: 'left' },
+      { label: 'Uprawnienia', flex: '2', align: 'left' },
+      { label: 'Akcje', flex: '0 0 120px', align: 'right' }
+    ];
+    header.innerHTML = '';
+    cols.forEach(col => {
+      const el = document.createElement('div');
+      el.textContent = col.label;
+      el.style.flex = col.flex;
+      el.style.textAlign = col.align;
+      header.appendChild(el);
+    });
+    wrap.innerHTML = '';
+    wrap.appendChild(header);
+
+    // body rows
+    const filtered = applyFilterSort(cache, query, sortField, sortDir, filterBu, filterRole, filterPerms);
+    if(!filtered.length){
+      const m = document.createElement('div');
+      m.className = 'muted';
+      m.style.padding = '10px';
+      m.textContent = 'Brak pracowników do wyświetlenia (sprawdź filtry).';
+      wrap.appendChild(m);
       return;
     }
-    wrap.innerHTML = '<div class="muted">Ładuję listę pracowników...</div>';
 
-    fetchEmployees().then(() => {
-      wrap.innerHTML = '';
-
-      // header
-      const header = document.createElement('div');
-      header.className = 'admin-emp-header';
-      header.style.display = 'flex';
-      header.style.justifyContent = 'space-between';
-      header.style.alignItems = 'center';
-      header.style.fontWeight = '600';
-      header.style.fontSize = '14px';
-      header.style.background = '#f8f9fa';
-      header.style.borderBottom = '1px solid #ddd';
-      header.style.padding = '8px 12px';
-
-      const cols = [
-        { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
-        { label: 'BU', width: '60px', flex: '0 0 60px', align: 'center' },
-        { label: 'Role', width: '220px', flex: '2' },
-        { label: 'Uprawnienia', width: '180px', flex: '2' },
-        { label: 'Akcje', width: '140px', flex: '0 0 140px', align: 'center' }
-      ];
-
-      cols.forEach(col => {
-        const el = document.createElement('div');
-        el.textContent = col.label;
-        el.style.flex = col.flex;
-        el.style.width = col.width;
-        el.style.textAlign = col.align || 'left';
-        header.appendChild(el);
-      });
-      wrap.appendChild(header);
-
-      const filtered = applyFilterSort(cache,
-        (document.getElementById('empSearchInput')?.value || '').trim(),
-        (document.getElementById('empSortField')?.value || 'bu'),
-        (document.getElementById('empSortDir')?.value || 'asc'),
-        (document.getElementById('empFilterBu')?.value || ''),
-        (document.getElementById('empFilterRole')?.value || '')
-      );
-
-      if(!filtered.length){
-        const m = document.createElement('div'); m.className = 'muted'; m.textContent = 'Brak pracowników do wyświetlenia.'; wrap.appendChild(m); return;
-      }
-
-      filtered.forEach(emp => wrap.appendChild(makeRow(emp)));
-    }).catch(e => {
-      logError('renderList fetchEmployees failed', e);
-      wrap.innerHTML = '';
-      const eDiv = document.createElement('div');
-      eDiv.className = 'muted';
-      eDiv.style.color = '#a33';
-      eDiv.textContent = 'Błąd podczas ładowania pracowników. Sprawdź konsolę.';
-      wrap.appendChild(eDiv);
+    filtered.forEach(emp => {
+      wrap.appendChild(makeRow(emp));
     });
   }
 
   async function init(){
     wrap = document.getElementById('adminEmployeesApp');
+    if(!wrap){
+      console.warn('AdminEmployees.init: brak elementu #adminEmployeesApp w DOM');
+      return;
+    }
+
+    // hooki UI
     const search = document.getElementById('empSearchInput');
     const sortField = document.getElementById('empSortField');
     const sortDir = document.getElementById('empSortDir');
     const refresh = document.getElementById('refreshEmpListBtn');
     const filterBu = document.getElementById('empFilterBu');
     const filterRole = document.getElementById('empFilterRole');
+    const permFilter = document.getElementById('empFilterPerms');
 
     if(search) search.addEventListener('input', () => renderList());
     if(sortField) sortField.addEventListener('change', () => renderList());
@@ -1224,23 +1189,30 @@ const AdminEmployees = (function(){
     if(refresh) refresh.addEventListener('click', () => renderList());
     if(filterBu) filterBu.addEventListener('change', () => renderList());
     if(filterRole) filterRole.addEventListener('change', () => renderList());
+    if(permFilter) permFilter.addEventListener('change', () => renderList());
 
+    // initial render & populate filters
     await renderList();
     populateFilters();
   }
 
   function populateFilters() {
+    // bu set
     const buSet = new Set(cache.map(e => e.bu).filter(Boolean));
     const roleArr = [];
+    const permSet = new Set();
+
     cache.forEach(e => {
-      if(!e.roles) return;
-      e.roles.split(',').map(s=>s.trim()).forEach(r => {
-        if(r && !roleArr.includes(r)) roleArr.push(r);
-      });
+      if(e.roles){
+        e.roles.split(',').map(s=>s.trim()).forEach(r => { if(r && !roleArr.includes(r)) roleArr.push(r); });
+      }
+      const permsArr = Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()) : []);
+      permsArr.forEach(p => { if(p) permSet.add(p); });
     });
 
     const buSel = document.getElementById('empFilterBu');
     const roleSel = document.getElementById('empFilterRole');
+    const permSel = document.getElementById('empFilterPerms');
 
     if(buSel && buSel.options.length <= 1) {
       Array.from(buSet).sort().forEach(b => {
@@ -1257,9 +1229,17 @@ const AdminEmployees = (function(){
         roleSel.appendChild(opt);
       });
     }
+
+    if(permSel && permSel.options.length === 0){
+      Array.from(permSet).sort().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p;
+        permSel.appendChild(opt);
+      });
+    }
   }
 
-  return { init, renderList, fetchEmployees, saveEmployeeChanges };
+  return { init, renderList };
 })(); // koniec AdminEmployees
 
 // expose modules to window
@@ -1280,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(employeesSection) employeesSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
-      try { await AdminMachines.renderList(); } catch(e){ logWarn('showModify renderList', e); }
+      try { await AdminMachines.renderList(); } catch(e){ console.warn('showModify renderList error', e); }
     }
 
     async function showEmployees(){
@@ -1288,14 +1268,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(employeesSection) employeesSection.style.display = '';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabEmployees) tabEmployees.classList.add('active');
-      try { await AdminEmployees.init(); } catch(e){ logWarn('showEmployees init', e); }
+      try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
     }
 
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
     if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
-    // domyślnie pokaż modyfikację maszyn
+    // open machines by default
     showModify();
   });
 });

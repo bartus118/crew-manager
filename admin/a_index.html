@@ -106,13 +106,21 @@
       </select>
 
       <select id="empFilterRole" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-        <option value="">Wszystkie role</option>
+         <option value="">Wszystkie role</option>
       </select>
 
-      <label style="font-size:13px; color:#556;">Sortuj według:</label>
+      <!-- nowy filtr uprawnień (multi-select) -->
+      <label style="font-size:13px; color:#556;">Filtr uprawnień:</label>
+        <select id="empFilterPerms" multiple size="4" style="padding:8px; border-radius:8px; border:1px solid #e6eef8; min-width:180px;">
+       <!-- opcje uzupełniane dynamicznie z JS -->
+        </select>
+
+     <label style="font-size:13px; color:#556;">Sortuj według:</label>
       <select id="empSortField" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-        <option value="bu">BU</option>
-        <option value="roles">Rola</option>
+          <option value="bu">BU</option>
+          <option value="roles">Rola</option>
+          <option value="surname">Nazwisko</option>
+          <option value="firstname">Imię</option>
       </select>
 
       <label style="font-size:13px; color:#556;">Kierunek:</label>
