@@ -116,7 +116,7 @@ async function loadMachines(){
     if(!sb){ machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); return; }
     const { data, error } = await sb.from('machines').select('*').order('ord', { ascending: true }).eq('default_view', true);
     if (error) { console.error('loadMachines error', error); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
-    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja', maker: d.maker || '', paker: d.paker || '', celafoniarka: d.celafoniarka || '', pakieciarka: d.pakieciarka || '', kartoniarka: d.kartoniarka || '' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
   }catch(e){ console.error('loadMachines catch', e); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
 }
 
@@ -416,6 +416,35 @@ function openAssignModal(date, machine, roleKey) {
     });
     const globalHelpers = Array.from(globalHelpersMap.values()).sort((a,b) => (((a.surname||'') + ' ' + (a.name||'')).localeCompare(((b.surname||'') + ' ' + (b.name||'')))));
 
+    function getRequiredPermsForMachine(machineNumber){
+      try{
+        const mm = machines.find(x => String(x.number) === String(machineNumber));
+        const req = new Set();
+        if(!mm) return req;
+        ['maker','paker','celafoniarka','pakieciarka','kartoniarka'].forEach(k=>{ const v = mm[k]; if(v && String(v).trim()) req.add(String(v).trim()); });
+        return req;
+      }catch(e){ console.error('getRequiredPermsForMachine error', e, machineNumber); return new Set(); }
+    }
+
+    function empPermSet(emp){
+      try{
+        if(!emp) return new Set();
+        const p = emp.permissions;
+        if(!p) return new Set();
+        if(Array.isArray(p)) return new Set(p.map(x=>String(x).trim()).filter(Boolean));
+        return new Set(String(p).split(/[,;\s]+/).map(x=>String(x).trim()).filter(Boolean));
+      }catch(e){ console.error('empPermSet error', e, emp); return new Set(); }
+    }
+
+    function missingPermsForEmp(emp, machineNumber){
+      try{
+        const req = Array.from(getRequiredPermsForMachine(machineNumber));
+        if(req.length === 0) return [];
+        const empSet = empPermSet(emp);
+        return req.filter(r => !empSet.has(r));
+      }catch(e){ console.error('missingPermsForEmp error', e, {emp, machineNumber}); return []; }
+    }
+
     function renderTable(filterBU = '__all'){
       wrap.innerHTML = '';
       const table = document.createElement('table');
@@ -468,14 +497,34 @@ function openAssignModal(date, machine, roleKey) {
           const unique = Array.from(new Map((roleToList[rc.key]||[]).map(p=>[p.id,p])).values());
           const names = unique.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
           if(names.length === 0){ const span = document.createElement('div'); span.className='muted'; span.textContent='—'; td.appendChild(span); }
-          else{ names.forEach(emp=>{ const div = document.createElement('div'); div.className='emp-name'; div.textContent = displayShort(emp); div.onclick = async ()=>{ await saveAssignment(date, machine, roleKey, emp.id); assignModal.style.display='none'; document.body.classList.remove('modal-open'); }; td.appendChild(div); }); }
+          else{ names.forEach(emp=>{ const div = document.createElement('div'); div.className='emp-name'; div.textContent = displayShort(emp); div.onclick = async ()=>{
+                try{
+                  const missing = missingPermsForEmp(emp, machine);
+                  if(missing && missing.length){
+                    const ok = confirm('Pracownik nie ma wymaganych uprawnień do tej maszyny (brak: ' + missing.join(', ') + '). Na pewno przypisać?');
+                    if(!ok) return;
+                  }
+                  await saveAssignment(date, machine, roleKey, emp.id);
+                  assignModal.style.display='none'; document.body.classList.remove('modal-open');
+                }catch(e){ console.error('assign click error', e, { emp }); }
+              }; td.appendChild(div); }); }
           tr.appendChild(td);
         });
 
         if(i === 0){
           const tdGlobal = document.createElement('td'); tdGlobal.style.padding='8px'; tdGlobal.style.verticalAlign='top'; tdGlobal.style.borderLeft='1px solid rgba(0,0,0,0.06)'; tdGlobal.setAttribute('rowspan', String(visibleBU.length || 1)); tdGlobal.className = 'td-global-helpers';
           if(globalHelpers.length === 0){ const m = document.createElement('div'); m.className='muted'; m.textContent='—'; tdGlobal.appendChild(m); }
-          else{ globalHelpers.forEach(emp=>{ const d = document.createElement('div'); d.className='emp-name'; d.textContent = displayShort(emp); d.onclick = async ()=>{ await saveAssignment(date, machine, roleKey, emp.id); assignModal.style.display='none'; document.body.classList.remove('modal-open'); }; tdGlobal.appendChild(d); }); }
+          else{ globalHelpers.forEach(emp=>{ const d = document.createElement('div'); d.className='emp-name'; d.textContent = displayShort(emp); d.onclick = async ()=>{
+                try{
+                  const missing = missingPermsForEmp(emp, machine);
+                  if(missing && missing.length){
+                    const ok = confirm('Pracownik nie ma wymaganych uprawnień do tej maszyny (brak: ' + missing.join(', ') + '). Na pewno przypisać?');
+                    if(!ok) return;
+                  }
+                  await saveAssignment(date, machine, roleKey, emp.id);
+                  assignModal.style.display='none'; document.body.classList.remove('modal-open');
+                }catch(e){ console.error('assign global click error', e, { emp }); }
+              }; tdGlobal.appendChild(d); }); }
           tr.appendChild(tdGlobal);
         }
 

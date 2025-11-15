@@ -758,7 +758,7 @@ const AdminEmployees = (function(){
   let wrap = null;      // element do renderowania listy
   let cache = [];       // pobrane dane pracowników (znormalizowane)
 
-  /* ---- fetchEmployees: pobiera tylko firstname,surname,bu,roles,permissions,id ---- */
+  /* ---- fetchEmployees: pobiera tylko firstname,surname,bu,roles,permissions,mechanical_permissions,id ---- */
   async function fetchEmployees(){
     const wrapEl = document.getElementById('adminEmployeesApp');
     try {
@@ -769,7 +769,7 @@ const AdminEmployees = (function(){
       }
 
       const { data, error, status } = await sb.from('employees')
-        .select('id,firstname,surname,bu,roles,permissions')
+        .select('id,firstname,surname,bu,roles,permissions,mechanical_permissions')
         .order('surname', { ascending: true });
 
       console.debug('fetchEmployees: response status=', status, 'error=', error ? error.message : null);
@@ -787,7 +787,8 @@ const AdminEmployees = (function(){
         legacy_name: '',
         bu: e.bu || '',
         roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
-        permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : [])
+        permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : []),
+        mechanical_permissions: e.mechanical_permissions || ''
       }));
 
       console.info(`fetchEmployees: loaded ${cache.length} rows; with names: ${cache.filter(x => x.firstname || x.surname).length}`);
@@ -1026,6 +1027,65 @@ const AdminEmployees = (function(){
 
     box.appendChild(permGrid);
 
+    // ========== SEKCJA UPRAWNIEŃ MECHANICZNYCH ==========
+    const isMechanic = existingRoles.includes('mechanik_focke') || existingRoles.includes('mechanik_protos');
+
+    const mechanicalSection = document.createElement('div');
+    mechanicalSection.id = 'mechanicalSection';
+    mechanicalSection.style.display = isMechanic ? 'block' : 'none';
+    mechanicalSection.style.marginTop = '12px';
+    mechanicalSection.style.padding = '12px';
+    mechanicalSection.style.background = '#f5f9ff';
+    mechanicalSection.style.borderRadius = '8px';
+    mechanicalSection.style.border = '1px solid #d6e5ff';
+
+    const mechLabel = document.createElement('div');
+    mechLabel.textContent = 'Uprawnienia mechaniczne — maszyny które może obsługiwać';
+    mechLabel.style.fontWeight = '600';
+    mechLabel.style.marginBottom = '8px';
+    mechanicalSection.appendChild(mechLabel);
+
+    const mechGrid = document.createElement('div');
+    mechGrid.style.display = 'grid';
+    mechGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    mechGrid.style.gap = '8px';
+
+    const currMechPerms = (emp.mechanical_permissions && String(emp.mechanical_permissions).trim()) 
+      ? String(emp.mechanical_permissions).split(',').map(m=>String(m).trim()).filter(Boolean)
+      : [];
+
+    PERMISSION_OPTIONS.forEach(code => {
+      const cbWrap = document.createElement('label');
+      cbWrap.style.display = 'flex';
+      cbWrap.style.alignItems = 'center';
+      cbWrap.style.gap = '6px';
+      cbWrap.style.cursor = 'pointer';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = code;
+      cb.dataset.mechPerm = code;
+      if(currMechPerms.includes(code)) cb.checked = true;
+
+      const span = document.createElement('span');
+      span.textContent = code;
+      span.style.fontSize = '13px';
+
+      cbWrap.appendChild(cb);
+      cbWrap.appendChild(span);
+      mechGrid.appendChild(cbWrap);
+    });
+
+    mechanicalSection.appendChild(mechGrid);
+    box.appendChild(mechanicalSection);
+
+    // obsługa zmian roli — pokaż/ukryj sekcję mechaniczną
+    selRoles.addEventListener('change', () => {
+      const selectedRoles = Array.from(selRoles.selectedOptions).map(o => o.value);
+      const isMech = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos');
+      mechanicalSection.style.display = isMech ? 'block' : 'none';
+    });
+
     // action buttons
     const actions = document.createElement('div');
     actions.style.display = 'flex';
@@ -1059,13 +1119,18 @@ const AdminEmployees = (function(){
       // zbierz permissions z checkboxów
       const checkedPerms = Array.from(permGrid.querySelectorAll('input[type="checkbox"]'))
         .filter(i => i.checked).map(i => i.value);
+      
+      // zbierz maszyny mechaniczne
+      const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
+        .filter(i => i.checked).map(i => i.value).join(',');
 
       const updates = {
         surname: (inpSurname.value || '').trim(),
         firstname: (inpFirstname.value || '').trim(),
         bu: (selBu.value || '').trim(),
         roles: selectedRoles,
-        permissions: checkedPerms
+        permissions: checkedPerms,
+        mechanical_permissions: mechPerms
       };
 
       // minimalna walidacja
@@ -1116,7 +1181,8 @@ const AdminEmployees = (function(){
           short_name: makeShortName(updates.surname, updates.firstname),
           bu: updates.bu,
           roles: updates.roles, // as array/text[] type
-          permissions: updates.permissions
+          permissions: updates.permissions,
+          mechanical_permissions: updates.mechanical_permissions || ''
         };
         const { error } = await sb.from('employees').update(payload).eq('id', empId);
         if(error){ alert('Błąd zapisu: ' + (error.message || error)); console.error(error); return; }
@@ -1154,7 +1220,8 @@ const AdminEmployees = (function(){
         surname: payload.surname || '',
         bu: payload.bu || '',
         roles: Array.isArray(payload.roles) ? payload.roles : (payload.roles ? [payload.roles] : []),
-        permissions: Array.isArray(payload.permissions) ? payload.permissions : (payload.permissions ? payload.permissions.split(',').map(s=>s.trim()) : [])
+        permissions: Array.isArray(payload.permissions) ? payload.permissions : (payload.permissions ? payload.permissions.split(',').map(s=>s.trim()) : []),
+        mechanical_permissions: payload.mechanical_permissions || ''
       };
       // create short_name like: "Surname Fi." (first two letters of firstname, dot)
       (function setShort(){
@@ -1273,16 +1340,73 @@ const AdminEmployees = (function(){
     });
     box.appendChild(permGrid);
 
+    // ========== SEKCJA UPRAWNIEŃ MECHANICZNYCH (DODAWANIE) ==========
+    const mechanicalSection = document.createElement('div');
+    mechanicalSection.id = 'mechanicalSectionAdd';
+    mechanicalSection.style.display = 'none';
+    mechanicalSection.style.marginTop = '12px';
+    mechanicalSection.style.padding = '12px';
+    mechanicalSection.style.background = '#f5f9ff';
+    mechanicalSection.style.borderRadius = '8px';
+    mechanicalSection.style.border = '1px solid #d6e5ff';
+
+    const mechLabel = document.createElement('div');
+    mechLabel.textContent = 'Uprawnienia mechaniczne — typy maszyn które może obsługiwać';
+    mechLabel.style.fontWeight = '600';
+    mechLabel.style.marginBottom = '8px';
+    mechanicalSection.appendChild(mechLabel);
+
+    const mechGrid = document.createElement('div');
+    mechGrid.style.display = 'grid';
+    mechGrid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    mechGrid.style.gap = '8px';
+
+    PERMISSION_OPTIONS.forEach(code => {
+      const cbWrap = document.createElement('label');
+      cbWrap.style.display = 'flex';
+      cbWrap.style.alignItems = 'center';
+      cbWrap.style.gap = '6px';
+      cbWrap.style.cursor = 'pointer';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = code;
+      cb.dataset.mechPerm = code;
+
+      const span = document.createElement('span');
+      span.textContent = code;
+      span.style.fontSize = '13px';
+
+      cbWrap.appendChild(cb);
+      cbWrap.appendChild(span);
+      mechGrid.appendChild(cbWrap);
+    });
+
+    mechanicalSection.appendChild(mechGrid);
+    box.appendChild(mechanicalSection);
+
+    // obsługa zmian roli — pokaż/ukryj sekcję mechaniczną
+    selRoles.addEventListener('change', () => {
+      const selectedRoles = Array.from(selRoles.selectedOptions).map(o => o.value);
+      const isMechanic = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos');
+      mechanicalSection.style.display = isMechanic ? 'block' : 'none';
+    });
+
     const actions = document.createElement('div'); actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px'; actions.style.marginTop='12px';
     const cancelBtn = document.createElement('button'); cancelBtn.className='btn outline'; cancelBtn.textContent='Anuluj'; cancelBtn.onclick = () => modal.remove();
     const addBtn = document.createElement('button'); addBtn.className='btn'; addBtn.textContent='Dodaj';
     addBtn.onclick = async () => {
+      const selectedRoles = Array.from(selRoles.selectedOptions).map(o=>o.value).filter(Boolean);
+      const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
+        .filter(i => i.checked).map(i => i.value).join(',');
+
       const payload = {
         surname: (inpSurname.value||'').trim(),
         firstname: (inpFirstname.value||'').trim(),
         bu: (selBu.value||'').trim(),
-        roles: Array.from(selRoles.selectedOptions).map(o=>o.value).filter(Boolean),
-        permissions: Array.from(permGrid.querySelectorAll('input[type="checkbox"]')).filter(i=>i.checked).map(i=>i.value)
+        roles: selectedRoles,
+        permissions: Array.from(permGrid.querySelectorAll('input[type="checkbox"]')).filter(i=>i.checked).map(i=>i.value),
+        mechanical_permissions: mechPerms
       };
       // minimal validation
       if(!payload.surname && !payload.firstname){ if(!confirm('Nazwisko i imię są puste — chcesz dodać mimo to?')) return; }
