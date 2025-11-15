@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Panel administratora — Crew Manager</title>
-  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="../css/common.css">
+  <link rel="stylesheet" href="../css/admin.css">
   <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -76,7 +77,7 @@
 
   <main class="container">
     <section class="panel card">
-      <h3 style="margin-bottom:16px;">Zarządzanie maszynami i konfiguracją</h3>
+      
 
       <!-- Jedna zakładka: Modyfikacja maszyn (pokazywana/ukrywana przez JS) -->
       <div id="adminMachinesSection">
@@ -96,47 +97,76 @@
   <!-- Sekcja: Pracownicy (ukryta domyślnie) -->
   <div id="adminEmployeesSection" style="display:none; margin:12px;">
     <h4>Lista pracowników</h4>
-    <div class="muted">Szukaj po imieniu/nazwisku, filtruj po BU i roli, sortuj i odśwież listę.</div>
+   <div class="emp-filters row">
+  <input id="empSearchInput" class="filter-input" type="search" placeholder="Szukaj (imię lub nazwisko)" />
 
-    <div style="display:flex; gap:8px; align-items:center; margin:10px 0; flex-wrap:wrap;">
-      <input id="empSearchInput" type="search" placeholder="Szukaj (imię lub nazwisko)" style="padding:8px; border-radius:8px; border:1px solid #e6eef8; min-width:200px;" />
+  <select id="empFilterBu" class="filter-select">
+    <option value="">Wszystkie BU</option>
+  </select>
 
-      <select id="empFilterBu" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-        <option value="">Wszystkie BU</option>
-      </select>
+  <select id="empFilterRole" class="filter-select">
+    <option value="">Wszystkie role</option>
+  </select>
 
-      <select id="empFilterRole" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-         <option value="">Wszystkie role</option>
-      </select>
+  <label class="small-label">Sortuj:</label>
+  <select id="empSortField" class="filter-select small">
+    <option value="bu">BU</option>
+    <option value="roles">Rola</option>
+    <option value="surname">Nazwisko</option>
+    <option value="firstname">Imię</option>
+  </select>
 
-      <!-- nowy filtr uprawnień (multi-select) -->
-      <label style="font-size:13px; color:#556;">Filtr uprawnień:</label>
-        <select id="empFilterPerms" multiple size="4" style="padding:8px; border-radius:8px; border:1px solid #e6eef8; min-width:180px;">
-       <!-- opcje uzupełniane dynamicznie z JS -->
-        </select>
+  <select id="empSortDir" class="filter-select small">
+    <option value="asc">Rosnąco</option>
+    <option value="desc">Malejąco</option>
+  </select>
 
-     <label style="font-size:13px; color:#556;">Sortuj według:</label>
-      <select id="empSortField" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-          <option value="bu">BU</option>
-          <option value="roles">Rola</option>
-          <option value="surname">Nazwisko</option>
-          <option value="firstname">Imię</option>
-      </select>
+  <button id="refreshEmpListBtn" class="btn small" style="margin-left:auto;">Odśwież</button>
+</div>
+<div id="permFilterWrap" style="margin:8px 0;">
+  <label class="perm-filter-label" style="font-size:13px;color:#334;">
+    Uprawnienia (filtr AND — pracownik musi mieć wszystkie zaznaczone)
+  </label>
 
-      <label style="font-size:13px; color:#556;">Kierunek:</label>
-      <select id="empSortDir" style="padding:8px; border-radius:8px; border:1px solid #e6eef8;">
-        <option value="asc">Rosnąco</option>
-        <option value="desc">Malejąco</option>
-      </select>
+  <div class="perm-filter-chips-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <div id="permChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+    <button id="clearPermsBtn" class="btn outline small">Wyczyść</button>
+  </div>
 
-      <button id="refreshEmpListBtn" class="btn small" style="margin-left:auto;">Odśwież</button>
+  <div class="perm-filter-controls" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+    <select id="permOptions" style="padding:6px; border-radius:6px; border:1px solid #ccd;">
+      <option value="">— wybierz —</option>
+      <option value="P100">P100</option>
+      <option value="P70">P70</option>
+      <option value="F350">F350</option>
+      <option value="F550">F550</option>
+      <option value="GD">GD</option>
+      <option value="GDX">GDX</option>
+      <option value="751">751</option>
+      <option value="411">411</option>
+      <option value="407">407</option>
+      <option value="408">408</option>
+      <option value="409">409</option>
+      <option value="487">487</option>
+      <option value="489">489</option>
+    </select>
+
+    <button id="addPermBtn" class="btn small">Dodaj</button>
+
+    <div class="perm-filter-hint" style="font-size:12px;color:#778;">
+      (kliknij × aby usunąć uprawnienie)
     </div>
+  </div>
+</div>
 
     <div id="adminEmployeesApp" class="card" style="padding:8px; max-height:52vh; overflow:auto;">
       <!-- lista renderowana dynamicznie -->
     </div>
   </div>
 
+  
+
+  
   <script src="./a_script.js"></script>
 
   <!-- lekki skrypt UI: podłączenia kliknięć w nav do istniejących selektorów (nie rusza Twojej logiki) -->

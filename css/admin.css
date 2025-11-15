@@ -1,0 +1,125 @@
+/* css/admin.css
+   Styles only for the admin panel (a_index.html). Loaded after common.css
+*/
+
+/* admin nav */
+.admin-nav { margin-left: 18px; display:flex; align-items:center; }
+.admin-nav .nav-list { display:flex; gap:8px; list-style:none; margin:0; padding:0; align-items:center; }
+.admin-nav .nav-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.95);
+  font-weight:600;
+  cursor: pointer;
+  transition: background .12s ease, transform .06s ease;
+  border: 1px solid transparent;
+}
+.admin-nav .nav-item:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); }
+.admin-nav .nav-item.active { background: #ffffff; color:#0b4f88; border-color: rgba(0,0,0,0.06); box-shadow: 0 6px 18px rgba(11,74,136,0.12); }
+.admin-nav .nav-item.disabled { opacity:0.5; cursor:not-allowed; background:transparent; color:rgba(255,255,255,0.75); }
+
+/* wyróżniony przycisk powrotu - admin specific */
+.back-cta {
+  background: #fff;
+  color: #1366d6;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(19,102,214,0.12);
+  box-shadow: 0 6px 18px rgba(19,102,214,0.12);
+}
+
+/* employee filters and controls */
+.emp-filters.row { display:flex; gap:10px; align-items:center; margin:10px 0; flex-wrap:wrap; }
+.filter-input { padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; min-width:220px; }
+.filter-select { padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; background:#fff; min-width:140px; }
+.filter-select.small { min-width:110px; }
+.small-label { color:var(--muted); font-size:13px; margin-left:6px; }
+
+/* perm chips */
+#permChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 0;
+}
+.perm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #e8f0fe;
+  color: #1a3b7b;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #ccd9f8;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  transition: background 0.2s;
+}
+.perm-chip:hover { background: #d6e5ff; }
+.chip-x { font-size: 15px; cursor: pointer; color: #3a4a6a; padding: 0 2px; }
+.chip-x:hover { color: #b00020; }
+
+/* perm options controls */
+#permFilterControls { display:flex; gap:10px; align-items:center; margin-top:8px; }
+#permOptions { padding:6px 8px; border:1px solid #ccd3df; border-radius:6px; background:#fff; }
+#addPermBtn { background: #0b74d1; color:white; border:none; padding:6px 12px; border-radius:6px; }
+#addPermBtn:hover { background:#095ca8; }
+#clearPermsBtn { background:#ececec; border:1px solid #d4d4d4; padding:6px 12px; border-radius:6px; }
+
+/* admin list rows */
+.admin-emp-header { background: #f5f6f8; border-radius: 6px 6px 0 0; padding:8px 12px; display:flex; gap:8px; align-items:center; }
+.admin-emp-row { display:flex; padding:8px 12px; border-bottom: 1px solid rgba(0,0,0,0.05); transition: background 0.15s; }
+.admin-emp-row:hover { background: #f9fafb; }
+.admin-emp-row div:first-child { font-weight: 600; }
+
+/* emp edit modal specifics */
+#empEditModal input[type="checkbox"] { width:16px; height:16px; cursor:pointer; accent-color: #0b74d1; }
+#empEditModal .perm-grid { display:grid; grid-template-columns: repeat(2, 1fr); gap:6px; }
+#empEditModal label { font-size:13px; }
+
+/* admin machine drag & drop */
+.admin-machine-row {
+  transition: transform 220ms ease, box-shadow 160ms ease, background 160ms ease;
+  will-change: transform;
+  position: relative;
+}
+.admin-machine-row.dragging {
+  opacity: 0.65;
+  transform: scale(0.99);
+  box-shadow: 0 12px 30px rgba(59,130,246,0.14);
+  z-index: 30000;
+}
+.admin-machine-row.drag-over {
+  border: 2px dashed rgba(59,130,246,0.8);
+  background: transparent;
+  border-radius: 8px;
+}
+.drag-placeholder {
+  border: 2px dashed rgba(96,165,250,0.9);
+  background: rgba(219,234,254,0.35);
+  border-radius: 8px;
+  margin: 6px 0;
+  transition: height 120ms ease, opacity 120ms ease;
+  opacity: 0.95;
+  box-sizing: border-box;
+}
+.drag-handle {
+  font-size: 18px;
+  opacity: 0.6;
+  cursor: grab;
+}
+.drag-handle:hover { opacity: 1; }
+
+/* admin buttons variants */
+.btn.ghost { background:transparent; color:var(--chip-text); border:1px solid rgba(11,116,209,0.06); }
+.btn.small { padding:6px 8px; font-size:13px; border-radius:7px; }
+
+/* small responsive admin tweaks */
+@media (max-width: 860px) {
+  .admin-nav { display:none; }
+  .top-bar .brand { font-size: 15px; }
+  .back-cta { padding: 6px 8px; font-size:14px; }
+}

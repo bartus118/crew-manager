@@ -1,0 +1,178 @@
+/* css/main.css
+   Styles specific to the main public page (index.html), including the main assignment table and assign modal.
+*/
+
+/* ---------- Main table / "card rows" ---------- */
+table.main-table, table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+  margin-top: 14px;
+  background: transparent;
+}
+thead th {
+  background: #234a75;
+  color: #fff;
+  padding: 10px;
+  font-weight: 600;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+tbody tr {
+  background: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform .12s ease, box-shadow .12s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+tbody tr:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+tbody td {
+  border: none;
+  padding: 10px 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* delikatne linie separatorów w nagłówkach/kolumnach */
+th:nth-child(2), td:nth-child(2),
+th:nth-child(5), td:nth-child(5),
+th:nth-child(7), td:nth-child(7) {
+  border-right: 1px solid #eef3f8;
+}
+
+/* Kolory i stany komórek (role) */
+td.disabled { background: #333 !important; color: #fff !important; border-radius: 6px; padding: 10px; }
+td.empty-cell { background: #fff7a1; border-radius: 6px; padding: 10px; color: #3a2f00; }
+td.assigned-cell { background: transparent; color: inherit; padding: 10px; }
+
+/* Select in status cell */
+td select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #cfdff5;
+  background: white;
+  min-width: 160px;
+}
+
+/* numer maszyny pogrubiony */
+td:first-child { font-weight: 700; }
+
+/* Obramowania wierszy zależne od statusu */
+tr.status-prod {
+  border: 2px solid rgba(10,166,74,0.6);
+}
+tr.status-konserwacja {
+  border: 2px solid rgba(43,123,255,0.6);
+}
+tr.status-rozruch {
+  border: 2px solid rgba(255,138,0,0.6);
+}
+tr.status-bufor {
+  border: 2px solid rgba(229,57,53,0.6);
+}
+tr.status-stop {
+  border: 2px solid rgba(0,0,0,0.9);
+  color: #fff;
+}
+
+/* reset td background for status rows but not empty/assigned cells */
+tr.status-prod td:not(.empty-cell):not(.assigned-cell),
+tr.status-konserwacja td:not(.empty-cell):not(.assigned-cell),
+tr.status-rozruch td:not(.empty-cell):not(.assigned-cell),
+tr.status-stop td:not(.empty-cell):not(.assigned-cell),
+tr.status-bufor td:not(.empty-cell):not(.assigned-cell) {
+  background: transparent;
+}
+
+/* tła dla komórek Maszyna i Status */
+td.status-prod { background: #e6f9ea !important; color: #034d18 !important; }
+td.status-konserwacja { background: #e8f1ff !important; color: #08366b !important; }
+td.status-rozruch { background: #fff3e6 !important; color: #7a3b00 !important; }
+td.status-stop { background: #222222 !important; color: #ffffff !important; }
+td.status-bufor { background: #ffe9e9 !important; color: #7a0f0f !important; }
+
+/* Assign modal (large) - specific to index.html */
+#assignModal .modal-content {
+  width: 90%;
+  max-width: 1300px;
+  height: 85vh;
+  overflow-y: auto;
+}
+.assign-big-table-wrap {
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+}
+.assign-big-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.assign-big-table thead th {
+  background: linear-gradient(180deg, #1f4f86, #123b6b);
+  color: #ffffff;
+  text-align: center;
+  padding: 10px 8px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
+}
+.assign-big-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f4f9;
+  vertical-align: top;
+}
+.td-bu {
+  font-weight: 700;
+  text-align: center;
+  background: #f8fafc;
+  border-right: 1px solid #e5e9f0;
+  width: 80px;
+}
+.td-names {
+  max-height: 180px;
+  overflow-y: auto;
+  min-width: 150px;
+}
+.emp-name {
+  display: block;
+  padding: 2px 4px;
+  font-size: 13px;
+  color: #0055cc;
+}
+
+/* subtle hover for table cells */
+table td:hover,
+.assign-big-table td:hover {
+  background-color: #dce8fa;
+  transition: background-color 0.15s ease-in-out;
+  cursor: pointer;
+  font-weight: 600;
+  color: #0a2965;
+}
+
+/* Export CSV button minimal styling (index) */
+#exportDayBtn.btn.outline { border-radius:6px; }
+
+/* compact modal tweaks (index) */
+.modal-content { max-width: 920px; }
+#assignList { padding: 6px 10px 18px 10px; }
+.assign-grid {
+  display: grid;
+  grid-template-columns: 100px repeat(4, 1fr) 220px;
+  gap: 6px;
+  align-items: start;
+  font-size: 13px;
+}
+
+/* Drag & drop placeholder used in admin only still defined in admin.css */

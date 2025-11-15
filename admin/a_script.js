@@ -1,10 +1,12 @@
+
 /**
  * admin/a_script.js
  *
  * Pełny plik admin — AdminMachines + AdminEmployees
  * - czytelne logi błędów
- * - edycja pracownika: BU select, role multi-select, permissions checkboxy
- * - filtr uprawnień (multi-select), sortowanie po surname/firstname
+ * - edycja pracownika: BU select, role multi-select, permissions checkboxy (chipy filtrów)
+ * - sortowanie po surname/firstname
+ * - stare filtry uprawnień (selecty) usunięte — używamy chipów
  *
  * Uwaga: dopasuj stałe (BU_OPTIONS, ROLE_OPTIONS, PERMISSION_OPTIONS) jeśli trzeba.
  */
@@ -17,7 +19,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 /* -------------------- Stałe pomocnicze (dostosuj jeśli trzeba) -------------------- */
 const BU_OPTIONS = ['','BU1','BU2','BU3','BU4'];
 const ROLE_OPTIONS = ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','operator_krosowy'];
-const PERMISSION_OPTIONS = ['P100','P70','F350','F550','GD','GDX','751','401','411','407','408','409','707','487','489','GD','GDX"'];
+const PERMISSION_OPTIONS = ['P100','P70','F350','F550','GD','GDX','751','401','411','407','408','409','707','487','489'];
 
 /* -------------------- Helpers: Supabase init + wait for SDK -------------------- */
 function waitForSupabaseGlobal(timeoutMs = 8000) {
@@ -690,7 +692,7 @@ const AdminMachines = (function(){
   };
 })(); // koniec AdminMachines
 
-/* -------------------- AdminEmployees (z filtrowaniem/sortowaniem + modal edycji) -------------------- */
+/* -------------------- AdminEmployees (z chipami i bez wcześniejszych filtrów uprawnień) -------------------- */
 const AdminEmployees = (function(){
   let wrap = null;      // element do renderowania listy
   let cache = [];       // pobrane dane pracowników (znormalizowane)
@@ -822,7 +824,7 @@ const AdminEmployees = (function(){
     const hint = document.createElement('div');
     hint.className = 'muted';
     hint.style.marginBottom = '8px';
-    hint.textContent = 'Uzupełnij pola. Role możesz wybrać wiele (Ctrl/Cmd+klik). Uprawnienia wybierz z checkboxów.';
+    hint.textContent = 'Uzupełnij pola. Role możesz wybrać wiele (Ctrl/Cmd+klik). Uprawnienia wybierz z checkboxów (poniżej).';
     box.appendChild(hint);
 
     // GRID: nazwisko / imię
@@ -1056,116 +1058,289 @@ const AdminEmployees = (function(){
     }
   }
 
-  /* applyFilterSort: teraz obsługuje filterPerms (array) oraz sort po firstname/surname */
+  // ----------------------------
+  // Filtry uprawnień — chipy (JS)
+  // ----------------------------
+  // stan wybranych uprawnień (Set dla szybkich operacji)
+  const selectedPermFilters = new Set();
+
+  // domyślna lista możliwych uprawnień (daj znać jeśli chcesz rozszerzyć)
+  const DEFAULT_PERM_OPTIONS = PERMISSION_OPTIONS.slice();
+
+  function safeLog(...args){
+    try { console.log(...args); } catch(e){}
+  }
+
+  // renderuje chipy w #permChips
+  function renderPermChips(){
+    const chipsWrap = document.getElementById('permChips');
+    if(!chipsWrap) return;
+    chipsWrap.innerHTML = '';
+    if(selectedPermFilters.size === 0){
+      const m = document.createElement('div');
+      m.className = 'muted';
+      m.textContent = 'Brak aktywnych filtrów uprawnień';
+      chipsWrap.appendChild(m);
+      return;
+    }
+    Array.from(selectedPermFilters).forEach(p=>{
+      const chip = document.createElement('div');
+      chip.className = 'perm-chip';
+      chip.setAttribute('data-perm', p);
+      chip.textContent = p;
+      const x = document.createElement('span');
+      x.className = 'chip-x';
+      x.title = 'Usuń';
+      x.textContent = '×';
+      x.onclick = (ev) => {
+        ev.stopPropagation();
+        removePermFilter(p);
+      };
+      chip.appendChild(x);
+      chipsWrap.appendChild(chip);
+    });
+  }
+
+  function addPermFilter(perm){
+    if(!perm || !String(perm).trim()) return;
+    const v = String(perm).trim();
+    if(selectedPermFilters.has(v)) return;
+    selectedPermFilters.add(v);
+    renderPermChips();
+    try { renderList(); } catch(e){ safeLog('renderList error after addPermFilter', e); }
+  }
+
+  function removePermFilter(perm){
+    if(!perm) return;
+    selectedPermFilters.delete(String(perm));
+    renderPermChips();
+    try { renderList(); } catch(e){ safeLog('renderList error after removePermFilter', e); }
+  }
+
+  function clearPermFilters(){
+    selectedPermFilters.clear();
+    renderPermChips();
+    try { renderList(); } catch(e){ safeLog('renderList error after clearPermFilters', e); }
+  }
+
+  // wypełnia UI select opcji perms (jeśli chcesz użyć selecta obok chipów)
+  function populatePermOptions(){
+    const sel = document.getElementById('permOptions');
+    if(!sel) return;
+    // jeśli select ma tylko jedną opcję (placeholder) — wypełniamy
+    if(sel.options && sel.options.length <= 1){
+      DEFAULT_PERM_OPTIONS.forEach(p=>{
+        const o = document.createElement('option');
+        o.value = p; o.textContent = p;
+        sel.appendChild(o);
+      });
+    }
+  }
+
+  // inicjalizacja hooków UI dla chipów — wywołać w init()
+  function initPermFilterUI(){
+    try{
+      populatePermOptions();
+      renderPermChips();
+
+      const addBtn = document.getElementById('addPermBtn');
+      const sel = document.getElementById('permOptions');
+      const clearBtn = document.getElementById('clearPermsBtn');
+
+      if(addBtn && sel){
+        addBtn.addEventListener('click', () => {
+          const v = (sel.value || '').trim();
+          if(!v){ alert('Wybierz uprawnienie do dodania.'); return; }
+          addPermFilter(v);
+        });
+      }
+
+      if(sel){
+        sel.addEventListener('keydown', (e) => {
+          if(e.key === 'Enter'){
+            const v = (sel.value || '').trim();
+            if(v) addPermFilter(v);
+          }
+        });
+      }
+
+      if(clearBtn){
+        clearBtn.addEventListener('click', () => {
+          clearPermFilters();
+        });
+      }
+
+    }catch(e){
+      safeLog('initPermFilterUI error', e);
+    }
+  }
+
+  // ----------------------------
+  // Zaktualizowana funkcja applyFilterSort
+  // ----------------------------
   function applyFilterSort(list, query, sortField, sortDir, filterBu, filterRole, filterPerms){
-    const q = String(query||'').trim().toLowerCase();
+    // jeśli parametry nie podane — pobierz je z DOM (ułatwia użycie)
+    const q = (typeof query !== 'undefined') ? String(query || '') : String((document.getElementById('empSearchInput')?.value || '')).trim();
+    const sf = sortField || (document.getElementById('empSortField')?.value || 'surname');
+    const sd = sortDir || (document.getElementById('empSortDir')?.value || 'asc');
+    const fb = (typeof filterBu !== 'undefined') ? filterBu : (document.getElementById('empFilterBu')?.value || '');
+    const fr = (typeof filterRole !== 'undefined') ? filterRole : (document.getElementById('empFilterRole')?.value || '');
+
+    // filterPerms: prefer param, else use selectedPermFilters
+    const permsSet = (Array.isArray(filterPerms) ? new Set(filterPerms) : (filterPerms instanceof Set ? filterPerms : null)) || new Set(Array.from(selectedPermFilters));
+
+    const qlow = String(q||'').toLowerCase().trim();
     let out = list.slice();
 
-    // filtrowanie tekstowe - firstname/surname
-    if(q) out = out.filter(e => {
-      const fullname = ((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim();
-      const legacy = (e.legacy_name||'').toLowerCase();
-      return fullname.includes(q) || legacy.includes(q);
-    });
-
-    if(filterBu) out = out.filter(e => (e.bu||'') === filterBu);
-    if(filterRole) out = out.filter(e => (e.roles||'').split(',').map(s=>s.trim()).includes(filterRole));
-
-    // filtr uprawnień (filterPerms: pokazujemy tych którzy mają WSZYSTKIE zaznaczone perms)
-    if(Array.isArray(filterPerms) && filterPerms.length > 0){
+    // filtrowanie - sprawdzimy firstname + surname oraz legacy_name
+    if(qlow){
       out = out.filter(e => {
-        const perms = Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()) : []);
-        return filterPerms.every(fp => perms.includes(fp));
+        const fullname = (((e.surname||'') + ' ' + (e.firstname||'')).toLowerCase().trim());
+        const legacy = (e.legacy_name||'').toLowerCase();
+        return fullname.includes(qlow) || legacy.includes(qlow);
       });
     }
 
-    // sortowanie
+    if(fb) out = out.filter(e => (e.bu||'') === fb);
+    if(fr) out = out.filter(e => (String(e.roles||'')).split(',').map(s=>s.trim()).includes(fr));
+
+    // FILTER PERMISSIONS (AND) — jeśli permsSet nie jest puste
+    if(permsSet && permsSet.size > 0){
+      out = out.filter(e => {
+        const empPerms = Array.isArray(e.permissions) ? e.permissions.map(x=>String(x)) : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()) : []);
+        const empSet = new Set(empPerms);
+        // sprawdź czy empSet zawiera wszystkie elementy permsSet
+        for(const p of permsSet){
+          if(!empSet.has(p)) return false;
+        }
+        return true;
+      });
+    }
+
+    // sortowanie: dostosowane do sf/sd
     out.sort((a,b) => {
-      let av, bv;
-      if(sortField === 'surname'){
+      let av = String(a[sf] || '');
+      let bv = String(b[sf] || '');
+      if(sf === 'surname' || sf === 'fullname'){
         av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase();
         bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase();
-      } else if(sortField === 'firstname'){
-        av = String(a.firstname || '').toLowerCase();
-        bv = String(b.firstname || '').toLowerCase();
-        if(av === bv) { av = ((a.surname||'') + ' ' + (a.firstname||'')).toLowerCase(); bv = ((b.surname||'') + ' ' + (b.firstname||'')).toLowerCase(); }
       } else {
-        av = String(a[sortField] || '').toLowerCase();
-        bv = String(b[sortField] || '').toLowerCase();
+        av = av.toLowerCase();
+        bv = bv.toLowerCase();
       }
 
       if(av === bv) return ((a.surname||'') + (a.firstname||'')).localeCompare((b.surname||'') + (b.firstname||''));
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sd === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     });
 
     return out;
   }
 
-  /* renderList: rysuje nagłówki + wiersze; korzysta z cache */
-  async function renderList(){
-    if(!wrap) return;
-    wrap.innerHTML = '';
-    const statusLine = document.createElement('div');
-    statusLine.className = 'muted';
-    statusLine.textContent = 'Ładuję listę pracowników...';
-    wrap.appendChild(statusLine);
-
-    await fetchEmployees();
-
-    // odczytaj filtry / sort
-    const query = (document.getElementById('empSearchInput')?.value || '').trim();
-    const sortField = (document.getElementById('empSortField')?.value || 'bu');
-    const sortDir = (document.getElementById('empSortDir')?.value || 'asc');
-    const filterBu = (document.getElementById('empFilterBu')?.value || '');
-    const filterRole = (document.getElementById('empFilterRole')?.value || '');
-    const filterPermsEl = document.getElementById('empFilterPerms');
-    const filterPerms = filterPermsEl ? Array.from(filterPermsEl.selectedOptions).map(o => o.value).filter(Boolean) : [];
-
-    // header (nagłówki kolumn)
-    const header = document.createElement('div');
-    header.className = 'admin-emp-header';
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.fontWeight = '600';
-    header.style.fontSize = '14px';
-    header.style.background = '#f8f9fa';
-    header.style.borderBottom = '1px solid #ddd';
-    header.style.padding = '8px 12px';
-
-    const cols = [
-      { label: 'Nazwisko / Imię', flex: '2', align: 'left' },
-      { label: 'BU', flex: '0 0 80px', align: 'center' },
-      { label: 'Role', flex: '2', align: 'left' },
-      { label: 'Uprawnienia', flex: '2', align: 'left' },
-      { label: 'Akcje', flex: '0 0 120px', align: 'right' }
-    ];
-    header.innerHTML = '';
-    cols.forEach(col => {
-      const el = document.createElement('div');
-      el.textContent = col.label;
-      el.style.flex = col.flex;
-      el.style.textAlign = col.align;
-      header.appendChild(el);
-    });
-    wrap.innerHTML = '';
-    wrap.appendChild(header);
-
-    // body rows
-    const filtered = applyFilterSort(cache, query, sortField, sortDir, filterBu, filterRole, filterPerms);
-    if(!filtered.length){
-      const m = document.createElement('div');
-      m.className = 'muted';
-      m.style.padding = '10px';
-      m.textContent = 'Brak pracowników do wyświetlenia (sprawdź filtry).';
-      wrap.appendChild(m);
+  // ----------------------------
+  // Zaktualizowany renderList (korzysta z applyFilterSort + filtrów perms)
+  // ----------------------------
+  function renderList(){
+    const wrap = document.getElementById('adminEmployeesApp');
+    if(!wrap) {
+      safeLog('renderList: brak #adminEmployeesApp');
       return;
     }
+    wrap.innerHTML = '<div class="muted">Ładuję listę pracowników...</div>';
+    // pamiętaj — fetchEmployees wypełnia cache
+    fetchEmployees().then(()=> {
+      try{
+        // odczytaj ustawienia UI
+        const query = (document.getElementById('empSearchInput')?.value || '').trim();
+        const sortField = (document.getElementById('empSortField')?.value || 'surname');
+        const sortDir = (document.getElementById('empSortDir')?.value || 'asc');
+        const filterBu = (document.getElementById('empFilterBu')?.value || '');
+        const filterRole = (document.getElementById('empFilterRole')?.value || '');
+        const perms = Array.from(selectedPermFilters);
 
-    filtered.forEach(emp => {
-      wrap.appendChild(makeRow(emp));
+        // zastosuj filtrowanie i sortowanie
+        const filtered = applyFilterSort(cache, query, sortField, sortDir, filterBu, filterRole, perms);
+
+        // czyszczę i rysuję nagłówki tak jak wcześniej (jeśli masz header render w oddzielnej funcji, możesz użyć jej)
+        const header = document.createElement('div');
+        header.className = 'admin-emp-header';
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
+        header.style.fontWeight = '600';
+        header.style.fontSize = '14px';
+        header.style.background = '#f8f9fa';
+        header.style.borderBottom = '1px solid #ddd';
+        header.style.padding = '8px 12px';
+
+        const cols = [
+          { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
+          { label: 'BU', width: '60px', flex: '0 0 60px' },
+          { label: 'Role', width: '220px', flex: '2' },
+          { label: 'Uprawnienia', width: '180px', flex: '2' },
+          { label: 'Akcje', width: '140px', flex: '0 0 140px', align: 'center' }
+        ];
+
+        header.innerHTML = '';
+        cols.forEach(col => {
+          const el = document.createElement('div');
+          el.textContent = col.label;
+          el.style.flex = col.flex;
+          el.style.width = col.width;
+          el.style.textAlign = col.align || 'left';
+          header.appendChild(el);
+        });
+        wrap.innerHTML = '';
+        // top area with perm chips + controls (if present in DOM)
+        const topControls = document.createElement('div');
+        topControls.style.display = 'flex';
+        topControls.style.justifyContent = 'space-between';
+        topControls.style.alignItems = 'center';
+        topControls.style.marginBottom = '8px';
+        // left: header
+        topControls.appendChild(header);
+        // right: permChips container (if exists in DOM, we'll reattach into wrap later)
+        wrap.appendChild(topControls);
+
+        // add chips container area (if page has #permChips, populate it)
+        const chipsWrap = document.getElementById('permChips');
+        if(chipsWrap){
+          // ensure chips are up-to-date
+          renderPermChips();
+        }
+
+        // jeśli brak wyników
+        if(filtered.length === 0){
+          const m = document.createElement('div');
+          m.className = 'muted';
+          m.textContent = 'Brak pracowników do wyświetlenia.';
+          wrap.appendChild(m);
+          return;
+        }
+
+        // rysuj wiersze
+        filtered.forEach(emp => {
+          wrap.appendChild(makeRow(emp));
+        });
+      }catch(e){
+        console.error('renderList error (inner)', e);
+        wrap.innerHTML = '';
+        const err = document.createElement('div');
+        err.className = 'muted';
+        err.style.color = '#a33';
+        err.textContent = 'Błąd podczas renderowania listy pracowników. Sprawdź konsolę.';
+        wrap.appendChild(err);
+      }
+    }).catch(e=>{
+      console.error('renderList: fetchEmployees failed', e);
+      wrap.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'muted';
+      err.style.color = '#a33';
+      err.textContent = 'Błąd przy pobieraniu pracowników. Sprawdź konsolę.';
+      wrap.appendChild(err);
     });
   }
+
 
   async function init(){
     wrap = document.getElementById('adminEmployeesApp');
@@ -1181,7 +1356,6 @@ const AdminEmployees = (function(){
     const refresh = document.getElementById('refreshEmpListBtn');
     const filterBu = document.getElementById('empFilterBu');
     const filterRole = document.getElementById('empFilterRole');
-    const permFilter = document.getElementById('empFilterPerms');
 
     if(search) search.addEventListener('input', () => renderList());
     if(sortField) sortField.addEventListener('change', () => renderList());
@@ -1189,7 +1363,9 @@ const AdminEmployees = (function(){
     if(refresh) refresh.addEventListener('click', () => renderList());
     if(filterBu) filterBu.addEventListener('change', () => renderList());
     if(filterRole) filterRole.addEventListener('change', () => renderList());
-    if(permFilter) permFilter.addEventListener('change', () => renderList());
+
+    // init perm chip UI (if perm controls exist in DOM)
+    initPermFilterUI();
 
     // initial render & populate filters
     await renderList();
@@ -1212,7 +1388,6 @@ const AdminEmployees = (function(){
 
     const buSel = document.getElementById('empFilterBu');
     const roleSel = document.getElementById('empFilterRole');
-    const permSel = document.getElementById('empFilterPerms');
 
     if(buSel && buSel.options.length <= 1) {
       Array.from(buSet).sort().forEach(b => {
@@ -1230,13 +1405,7 @@ const AdminEmployees = (function(){
       });
     }
 
-    if(permSel && permSel.options.length === 0){
-      Array.from(permSet).sort().forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p; opt.textContent = p;
-        permSel.appendChild(opt);
-      });
-    }
+    // If you want to expose available perms in a select, user can add #permOptions in HTML; populatePermOptions will fill it.
   }
 
   return { init, renderList };

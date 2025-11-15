@@ -1,0 +1,146 @@
+/* css/common.css
+   Shared styles: variables, layout, buttons, cards, modal base, utilities
+   (kept generic so admin.css and main.css can override specifics)
+*/
+
+:root{
+  --admin-bg: #f7fafc;
+  --card-bg: #ffffff;
+  --muted: #6b7280;
+  --accent: #0b74d1;
+  --chip-bg: #eef6ff;
+  --chip-border: #cfe6ff;
+  --chip-text: #054a91;
+  --panel-padding: 12px;
+}
+
+/* -------------------- Podstawowy layout strony -------------------- */
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #f4f6f8;
+  margin: 0;
+  padding: 0;
+}
+#app {
+  max-width: 1200px;
+  margin: 18px auto;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+/* -------------------- Top bar / kontrolki (base) -------------------- */
+.top-bar {
+  background: linear-gradient(180deg,#1f6feb,#1366d6);
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.top-bar .brand { font-weight: 700; font-size: 16px; }
+.top-bar .controls { margin-left: auto; display:flex; gap:8px; align-items:center; }
+
+/* -------------------- Przyciski globalne (base) -------------------- */
+.btn {
+  padding: 6px 10px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.btn:hover { filter:brightness(.95); }
+.btn.outline { background: transparent; border: 1px solid rgba(0,0,0,0.08); color: #072c4b; }
+.btn.small { padding: 4px 8px; font-size: 12px; border-radius: 6px; }
+.btn.danger { background: #b71c1c; }
+
+/* wygląd przycisku zablokowanego (offline) */
+.btn.disabled-btn, button[disabled] {
+  opacity: 0.55;
+  pointer-events: none;
+  filter: grayscale(0.05);
+}
+
+/* -------------------- Card / Panel base -------------------- */
+.card, .panel.card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: var(--panel-padding);
+  box-shadow: 0 6px 20px rgba(9,30,66,0.04);
+  border: 1px solid rgba(15,23,42,0.03);
+}
+
+/* -------------------- Utilities -------------------- */
+.muted { color: #020101; }
+.small-muted { font-size:12px; color:#555; margin-bottom:6px; }
+
+/* Modal base */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(3px);
+}
+.modal .modal-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+  animation: fadeInModal 0.25s ease-out;
+}
+@keyframes fadeInModal { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+body.modal-open { overflow: hidden; }
+
+/* basic table reset shared */
+table { border-collapse: collapse; width: 100%; }
+
+/* offline banner (shared) */
+#offlineBanner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  padding: 10px 14px;
+  background: #ffefc3;
+  color: #5a3b00;
+  text-align: center;
+  z-index: 10000;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* Emp name (shared clickable list item style) */
+.emp-name {
+  display: block;
+  font-size: 13px;
+  color: #0055cc;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.emp-name:hover {
+  background: #e8f0ff;
+  color: #003b9a;
+}
+
+/* small responsive helpers */
+@media (max-width:900px){
+  .emp-filters.row { gap:8px; }
+  .filter-input { min-width:140px; flex:1 1 120px; }
+}
