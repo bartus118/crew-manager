@@ -59,23 +59,21 @@
       </div>
 
       <div class="emp-filters">
-        <input id="empSearch" class="filter-input emp-filter" placeholder="Szukaj po imieniu / nazwisku..." />
-        <select id="empSort" class="filter-select emp-filter">
-          <option value="name_asc">Sortuj: Imię A→Z</option>
-          <option value="name_desc">Sortuj: Imię Z→A</option>
-          <option value="role_asc">Sortuj: Rola ↑</option>
-          <option value="role_desc">Sortuj: Rola ↓</option>
+        <input id="empSearchInput" class="filter-input emp-filter" placeholder="Szukaj po imieniu / nazwisku..." />
+        <select id="empSortField" class="filter-select emp-filter">
+          <option value="surname">Sortuj: Nazwisko A→Z</option>
+          <option value="firstname">Sortuj: Imię A→Z</option>
         </select>
-        <select id="roleFilter" class="filter-select emp-filter">
-          <option value="">Wszystkie role</option>
-          <option value="mechanik_focke">Mechanik Focke</option>
-          <option value="mechanik_protos">Mechanik Protos</option>
+        <select id="empSortDir" class="filter-select emp-filter">
+          <option value="asc">Rosnąco ↑</option>
+          <option value="desc">Malejąco ↓</option>
         </select>
-        <select id="statusFilter" class="filter-select emp-filter">
-          <option value="">Wszystkie statusy</option>
-          <option value="active">Aktywni</option>
-          <option value="inactive">Nieaktywni</option>
-        </select>
+        <div id="buMultiFilterWrapper" class="filter-multi-wrapper">
+          <button id="buMultiFilterBtn" class="filter-multi-btn">— BU —</button>
+        </div>
+        <div id="roleMultiFilterWrapper" class="filter-multi-wrapper">
+          <button id="roleMultiFilterBtn" class="filter-multi-btn">— Role —</button>
+        </div>
         <div id="permFilterControls" class="perm-filter-controls">
           <select id="permOptions" class="filter-select">
             <option value="">Wybierz uprawnienie</option>
