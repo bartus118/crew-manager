@@ -322,17 +322,73 @@ const AdminMachines = (function(){
 
       const topRow = document.createElement('div');
       topRow.style.display = 'flex';
-      topRow.style.justifyContent = 'flex-start';
+      topRow.style.justifyContent = 'space-between';
+      topRow.style.alignItems = 'center';
       topRow.style.marginBottom = '10px';
 
-      const addBtn = document.createElement('button');
-      addBtn.className = 'btn';
-      addBtn.textContent = 'Dodaj maszynę';
-      addBtn.onclick = () => openAddModal();
-
-      topRow.appendChild(addBtn);
-      wrapEl.innerHTML = '';
-      wrapEl.appendChild(topRow);
+      // Prefer placing the button into the section header so it lines up with the
+      // main section title. If header not found, fall back to rendering topRow
+      // with a title and the button.
+      const machinesHeader = document.querySelector('#adminMachinesSection .admin-section-header');
+      if (machinesHeader) {
+        // ensure left info container exists (stack title + desc)
+        let info = machinesHeader.querySelector('.section-info');
+        if (!info) {
+          const h = machinesHeader.querySelector('h2');
+          const p = machinesHeader.querySelector('p');
+          info = document.createElement('div');
+          info.className = 'section-info';
+          info.style.display = 'flex';
+          info.style.flexDirection = 'column';
+          info.style.gap = '4px';
+          info.style.flex = '1';
+          if (h) info.appendChild(h);
+          if (p) info.appendChild(p);
+          machinesHeader.insertBefore(info, machinesHeader.firstChild);
+        }
+        // ensure actions container exists
+        let actions = machinesHeader.querySelector('.section-actions');
+        if (!actions) {
+          actions = document.createElement('div');
+          actions.className = 'section-actions';
+          actions.style.marginLeft = 'auto';
+          actions.style.display = 'flex';
+          actions.style.alignItems = 'center';
+          actions.style.gap = '12px';
+          machinesHeader.appendChild(actions);
+        }
+        // if button already exists, don't create another
+        let addBtn = actions.querySelector('#addMachineBtn');
+        if (!addBtn) {
+          addBtn = document.createElement('button');
+          addBtn.id = 'addMachineBtn';
+          addBtn.className = 'btn';
+          addBtn.textContent = 'Dodaj maszynę';
+          addBtn.onclick = () => openAddModal();
+          actions.appendChild(addBtn);
+        }
+        machinesHeader.style.display = 'flex';
+        machinesHeader.style.alignItems = 'center';
+        // make sure info occupies left space
+        info.style.flex = '1';
+        wrapEl.innerHTML = '';
+        wrapEl.appendChild(topRow);
+      } else {
+        const sectionTitle = document.createElement('div');
+        sectionTitle.textContent = 'Modyfikacja maszyn';
+        sectionTitle.style.fontWeight = '700';
+        sectionTitle.style.fontSize = '14px';
+        sectionTitle.style.color = '#0f1724';
+        sectionTitle.style.padding = '8px 0';
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn';
+        addBtn.textContent = 'Dodaj maszynę';
+        addBtn.onclick = () => openAddModal();
+        topRow.appendChild(sectionTitle);
+        topRow.appendChild(addBtn);
+        wrapEl.innerHTML = '';
+        wrapEl.appendChild(topRow);
+      }
 
       if(!machinesCache || machinesCache.length === 0){
         wrapEl.appendChild(makeMuted('Brak maszyn w bazie.'));
@@ -1761,8 +1817,8 @@ const AdminEmployees = (function(){
         header.style.fontSize = '14px';
         header.style.background = '#f8f9fa';
         header.style.borderBottom = '1px solid #e5e7eb';
-        header.style.padding = '12px 0';
-        header.style.width = '100%';
+        header.style.padding = '8px 0';
+        header.style.flex = '1';
 
         const cols = [
           { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
@@ -1787,20 +1843,72 @@ const AdminEmployees = (function(){
         const topControls = document.createElement('div');
         topControls.style.display = 'flex';
         topControls.style.justifyContent = 'space-between';
-        topControls.style.alignItems = 'flex-start';
+        // align to baseline so the Add button lines up with the section title/header
+        topControls.style.alignItems = 'baseline';
         topControls.style.marginBottom = '8px';
         topControls.style.width = '100%';
         // left: header
         topControls.appendChild(header);
 
-        // right: add employee button
+        // create add employee button and try to place it into section header
         const addEmpBtn = document.createElement('button');
         addEmpBtn.className = 'btn';
+        addEmpBtn.style.marginTop = '0';
         addEmpBtn.textContent = 'Dodaj pracownika';
         addEmpBtn.onclick = () => openAddEmployeeModal();
-        topControls.appendChild(addEmpBtn);
-        // right: permChips container (if exists in DOM, we'll reattach into wrap later)
-        wrap.appendChild(topControls);
+
+        const empHeader = document.querySelector('#adminEmployeesSection .admin-section-header');
+        if (empHeader) {
+          // ensure left info container exists
+          let infoEmp = empHeader.querySelector('.section-info');
+          if (!infoEmp) {
+            const h = empHeader.querySelector('h2');
+            const p = empHeader.querySelector('p');
+            infoEmp = document.createElement('div');
+            infoEmp.className = 'section-info';
+            infoEmp.style.display = 'flex';
+            infoEmp.style.flexDirection = 'column';
+            infoEmp.style.gap = '4px';
+            infoEmp.style.flex = '1';
+            if (h) infoEmp.appendChild(h);
+            if (p) infoEmp.appendChild(p);
+            empHeader.insertBefore(infoEmp, empHeader.firstChild);
+          }
+          let actions = empHeader.querySelector('.section-actions');
+          if (!actions) {
+            actions = document.createElement('div');
+            actions.className = 'section-actions';
+            actions.style.marginLeft = 'auto';
+            actions.style.display = 'flex';
+            actions.style.alignItems = 'center';
+            actions.style.gap = '12px';
+            empHeader.appendChild(actions);
+          }
+          // if button already exists, reuse it
+          let addEmpBtn = actions.querySelector('#addEmployeeBtn');
+          if (!addEmpBtn) {
+            addEmpBtn = document.createElement('button');
+            addEmpBtn.id = 'addEmployeeBtn';
+            addEmpBtn.className = 'btn';
+            addEmpBtn.style.marginTop = '0';
+            addEmpBtn.textContent = 'Dodaj pracownika';
+            addEmpBtn.onclick = () => openAddEmployeeModal();
+            actions.appendChild(addEmpBtn);
+          }
+          empHeader.style.display = 'flex';
+          empHeader.style.alignItems = 'center';
+          // append filters/chips below header
+          wrap.appendChild(topControls);
+        } else {
+          // fallback: create add button in topControls if header missing
+          const addEmpBtn = document.createElement('button');
+          addEmpBtn.className = 'btn';
+          addEmpBtn.style.marginTop = '0';
+          addEmpBtn.textContent = 'Dodaj pracownika';
+          addEmpBtn.onclick = () => openAddEmployeeModal();
+          topControls.appendChild(addEmpBtn);
+          wrap.appendChild(topControls);
+        }
 
         // add chips container area (if page has #permChips, populate it)
         const chipsWrap = document.getElementById('permChips');
