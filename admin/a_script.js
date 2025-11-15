@@ -339,18 +339,19 @@ const AdminMachines = (function(){
 
       const table = document.createElement('table');
       table.style.width = '100%';
-      table.style.borderCollapse = 'collapse';
+      table.style.borderCollapse = 'separate';
+      table.style.borderSpacing = '0';
       table.style.marginTop = '6px';
       const thead = document.createElement('thead');
-      thead.innerHTML = `<tr style="text-align:left;">
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);width:36px;"></th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Numer</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Maker</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Paker</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Celafoniarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Pakieciarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Kartoniarka</th>
-        <th style="padding:8px;border-bottom:1px solid rgba(0,0,0,0.06);">Akcje</th>
+      thead.innerHTML = `<tr style="text-align:left; background:#f8f9fa; border-bottom:1px solid #e5e7eb;">
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px; width:36px;"></th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Numer</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Maker</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Paker</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Celafoniarka</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Pakieciarka</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Kartoniarka</th>
+        <th style="padding:12px 8px; font-weight:700; color:#0f1724; font-size:14px;">Akcje</th>
       </tr>`;
       table.appendChild(thead);
       const tbody = document.createElement('tbody');
@@ -369,8 +370,8 @@ const AdminMachines = (function(){
         tr.style.background = '#fff';
 
         const tdHandle = document.createElement('td');
-        tdHandle.style.padding = '8px';
-        tdHandle.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdHandle.style.padding = '12px 8px';
+        tdHandle.style.borderBottom = '1px solid #e5e7eb';
         tdHandle.style.textAlign = 'center';
         tdHandle.style.cursor = 'grab';
         const handle = document.createElement('span');
@@ -385,44 +386,44 @@ const AdminMachines = (function(){
         tr.appendChild(tdHandle);
 
         const tdNum = document.createElement('td');
-        tdNum.style.padding = '8px';
-        tdNum.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdNum.style.padding = '12px 8px';
+        tdNum.style.borderBottom = '1px solid #e5e7eb';
         tdNum.textContent = m.number || '';
         tr.appendChild(tdNum);
 
         const tdMaker = document.createElement('td');
-        tdMaker.style.padding = '8px';
-        tdMaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdMaker.style.padding = '12px 8px';
+        tdMaker.style.borderBottom = '1px solid #e5e7eb';
         tdMaker.textContent = m.maker || '';
         tr.appendChild(tdMaker);
 
         const tdPaker = document.createElement('td');
-        tdPaker.style.padding = '8px';
-        tdPaker.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPaker.style.padding = '12px 8px';
+        tdPaker.style.borderBottom = '1px solid #e5e7eb';
         tdPaker.textContent = m.paker || '';
         tr.appendChild(tdPaker);
 
         const tdCela = document.createElement('td');
-        tdCela.style.padding = '8px';
-        tdCela.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdCela.style.padding = '12px 8px';
+        tdCela.style.borderBottom = '1px solid #e5e7eb';
         tdCela.textContent = m.celafoniarka || '';
         tr.appendChild(tdCela);
 
         const tdPak = document.createElement('td');
-        tdPak.style.padding = '8px';
-        tdPak.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdPak.style.padding = '12px 8px';
+        tdPak.style.borderBottom = '1px solid #e5e7eb';
         tdPak.textContent = m.pakieciarka || '';
         tr.appendChild(tdPak);
 
         const tdKart = document.createElement('td');
-        tdKart.style.padding = '8px';
-        tdKart.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdKart.style.padding = '12px 8px';
+        tdKart.style.borderBottom = '1px solid #e5e7eb';
         tdKart.textContent = m.kartoniarka || '';
         tr.appendChild(tdKart);
 
         const tdActions = document.createElement('td');
-        tdActions.style.padding = '8px';
-        tdActions.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+        tdActions.style.padding = '12px 8px';
+        tdActions.style.borderBottom = '1px solid #e5e7eb';
 
         const editBtn = document.createElement('button');
         editBtn.className = 'btn ghost small';
@@ -1143,17 +1144,19 @@ const AdminEmployees = (function(){
       populatePermOptions();
       renderPermChips();
 
-      const addBtn = document.getElementById('addPermBtn');
       const sel = document.getElementById('permOptions');
       const clearBtn = document.getElementById('clearPermsBtn');
 
-      if(addBtn && sel){
-        addBtn.addEventListener('click', () => {
-          const v = (sel.value || '').trim();
-          if(!v){ alert('Wybierz uprawnienie do dodania.'); return; }
-          addPermFilter(v);
-        });
+      // keep select as single-choice dropdown (visual unchanged)
+      if(sel){
+        try {
+          // ensure it's not a multi-select
+          sel.multiple = false;
+          sel.size = 0;
+        } catch(e) { /* ignore if not allowed */ }
       }
+
+      // legacy Add button removed from HTML; nothing to cleanup here
 
       if(sel){
         sel.addEventListener('keydown', (e) => {
@@ -1167,8 +1170,125 @@ const AdminEmployees = (function(){
       if(clearBtn){
         clearBtn.addEventListener('click', () => {
           clearPermFilters();
+          // also clear checkboxes in custom multi-dropdown (if present)
+          try {
+            const wrapper = document.getElementById('permMultiDropdown');
+            if(wrapper){
+              const boxes = wrapper.querySelectorAll('input[type="checkbox"]');
+              boxes.forEach(cb => { try{ cb.checked = false; } catch(e){} });
+              const btn = wrapper.querySelector('.perm-multi-btn');
+              if(btn) {
+                try { btn.firstChild.nodeValue = '— wybierz —'; } catch(e){}
+              }
+            }
+          } catch(e){ /* ignore */ }
         });
       }
+
+      // --- Better UX: create a compact checkbox-dropdown beside the select
+      try {
+        if (sel) {
+          // Build only once
+          if (!document.getElementById('permMultiDropdown')) {
+            // hide original select but keep it in DOM for non-JS fallback
+            sel.style.display = 'none';
+
+            const wrapper = document.createElement('div');
+            wrapper.id = 'permMultiDropdown';
+            wrapper.style.display = 'inline-block';
+            wrapper.style.position = 'relative';
+            wrapper.style.verticalAlign = 'middle';
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'perm-multi-btn';
+            btn.style.padding = '8px';
+            btn.style.border = '1px solid #e6eef8';
+            btn.style.borderRadius = '6px';
+            btn.style.background = '#fff';
+            btn.style.minWidth = '140px';
+            btn.style.textAlign = 'left';
+            btn.style.cursor = 'pointer';
+
+            const caret = document.createElement('span');
+            caret.textContent = ' ▾';
+            caret.style.float = 'right';
+            btn.appendChild(document.createTextNode('— wybierz —'));
+            btn.appendChild(caret);
+
+            const menu = document.createElement('div');
+            menu.className = 'perm-multi-menu';
+            menu.style.position = 'absolute';
+            menu.style.top = '100%';
+            menu.style.left = '0';
+            menu.style.background = '#fff';
+            menu.style.border = '1px solid rgba(0,0,0,0.08)';
+            menu.style.boxShadow = '0 6px 16px rgba(0,0,0,0.08)';
+            menu.style.padding = '6px';
+            menu.style.zIndex = 22000;
+            menu.style.display = 'none';
+            menu.style.maxHeight = '250px';
+            menu.style.overflow = 'auto';
+            menu.style.minWidth = '220px';
+
+            // Build options list from existing select options or defaults
+            const optionValues = (sel.options && sel.options.length > 0)
+              ? Array.from(sel.options).map(o => ({v: (o.value||'').trim(), t: o.textContent||o.value||''})).filter(x=>x.v)
+              : DEFAULT_PERM_OPTIONS.map(p => ({v: p, t: p}));
+
+            optionValues.forEach(opt => {
+              const lab = document.createElement('label');
+              lab.style.display = 'flex';
+              lab.style.alignItems = 'center';
+              lab.style.gap = '8px';
+              lab.style.padding = '4px 6px';
+              lab.style.cursor = 'pointer';
+
+              const cb = document.createElement('input');
+              cb.type = 'checkbox';
+              // store perm in a custom data attribute so global handlers looking for
+              // `[data-perm]` or `input[type="checkbox"][value]` won't match us
+              cb.dataset.mperm = opt.v;
+              cb.style.flex = '0 0 auto';
+              if (selectedPermFilters.has(opt.v)) cb.checked = true;
+
+              const span = document.createElement('span');
+              span.textContent = opt.t || opt.v;
+
+              cb.addEventListener('change', function(ev){
+                const val = (this.dataset.mperm||'').trim();
+                if(!val) return;
+                if(this.checked) addPermFilter(val);
+                else removePermFilter(val);
+                updateBtnLabel();
+                // stop propagation so global perm bridge doesn't override behaviour
+                try { ev.stopPropagation(); } catch(e){}
+              });
+              // also stop click propagation on input and label to be safe
+              cb.addEventListener('click', function(ev){ try{ ev.stopPropagation(); } catch(e){} });
+
+              lab.appendChild(cb);
+              lab.appendChild(span);
+              menu.appendChild(lab);
+            });
+
+            function updateBtnLabel(){
+              const selArr = Array.from(selectedPermFilters);
+              btn.firstChild.nodeValue = selArr.length ? selArr.join(', ') + ' ' : '— wybierz —';
+            }
+
+            btn.addEventListener('click', function(ev){ ev.stopPropagation(); menu.style.display = (menu.style.display === 'none') ? 'block' : 'none'; });
+            // close on outside click
+            document.addEventListener('click', function(){ if(menu) menu.style.display = 'none'; });
+
+            wrapper.appendChild(btn);
+            wrapper.appendChild(menu);
+            // insert after original select
+            sel.parentNode.insertBefore(wrapper, sel.nextSibling);
+            updateBtnLabel();
+          }
+        }
+      } catch (e) { safeLog('perm multi-dropdown init error', e); }
 
     }catch(e){
       safeLog('initPermFilterUI error', e);
@@ -1266,18 +1386,19 @@ const AdminEmployees = (function(){
         header.style.display = 'flex';
         header.style.justifyContent = 'space-between';
         header.style.alignItems = 'center';
-        header.style.fontWeight = '600';
+        header.style.fontWeight = '700';
         header.style.fontSize = '14px';
         header.style.background = '#f8f9fa';
-        header.style.borderBottom = '1px solid #ddd';
-        header.style.padding = '8px 12px';
+        header.style.borderBottom = '1px solid #e5e7eb';
+        header.style.padding = '12px 0';
+        header.style.width = '100%';
 
         const cols = [
           { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
-          { label: 'BU', width: '60px', flex: '0 0 60px' },
+          { label: 'BU', width: '60px', flex: '0 0 80px' },
           { label: 'Role', width: '220px', flex: '2' },
           { label: 'Uprawnienia', width: '180px', flex: '2' },
-          { label: 'Akcje', width: '140px', flex: '0 0 140px', align: 'center' }
+          { label: 'Akcje', width: '140px', flex: '0 0 120px', align: 'center' }
         ];
 
         header.innerHTML = '';
@@ -1287,6 +1408,7 @@ const AdminEmployees = (function(){
           el.style.flex = col.flex;
           el.style.width = col.width;
           el.style.textAlign = col.align || 'left';
+          el.style.color = '#0f1724';
           header.appendChild(el);
         });
         wrap.innerHTML = '';
@@ -1294,8 +1416,9 @@ const AdminEmployees = (function(){
         const topControls = document.createElement('div');
         topControls.style.display = 'flex';
         topControls.style.justifyContent = 'space-between';
-        topControls.style.alignItems = 'center';
+        topControls.style.alignItems = 'flex-start';
         topControls.style.marginBottom = '8px';
+        topControls.style.width = '100%';
         // left: header
         topControls.appendChild(header);
         // right: permChips container (if exists in DOM, we'll reattach into wrap later)
@@ -1408,8 +1531,134 @@ const AdminEmployees = (function(){
     // If you want to expose available perms in a select, user can add #permOptions in HTML; populatePermOptions will fill it.
   }
 
-  return { init, renderList };
+  
+  // Expose applyFilters into the AdminEmployees module so external UI can set perms
+  function applyFilters(filters){
+    try{
+      // normalize filters to array of strings
+      var arr = Array.isArray(filters) ? filters : (filters ? [filters] : []);
+      selectedPermFilters.clear();
+      arr.forEach(function(f){ if(f != null) selectedPermFilters.add(String(f)); });
+      try { renderPermChips(); } catch(e) { /* ignore */ }
+      try { renderList(); } catch(e) { /* ignore */ }
+      return true;
+    } catch(err){
+      console.warn('applyFilters internal error', err);
+      return false;
+    }
+  }
+
+  return { init, renderList, applyFilters };
 })(); // koniec AdminEmployees
+
+/* perm-chip manager — idempotentny, bez powielania */
+(function(){
+  if (window.__permChipManagerInit) return;
+  window.__permChipManagerInit = true;
+
+  // aktywne filtry
+  window.activePermFilters = window.activePermFilters || new Set();
+
+  // pobierz wartość filtra z chipa (data-perm preferred)
+  const getPermValue = el => el?.dataset?.perm?.trim() || el?.textContent?.trim();
+
+  // zaktualizuj UI chipa
+  function updateChipUI(chip, active) {
+    chip.classList.toggle('perm-chip--active', !!active);
+    if (active) chip.setAttribute('aria-pressed','true');
+    else chip.removeAttribute('aria-pressed');
+  }
+
+  // wywołanie filtra w aplikacji (kolejność fallbacków)
+  function applyFilters() {
+    const filters = Array.from(window.activePermFilters);
+    if (window.AdminEmployees && typeof window.AdminEmployees.applyFilters === 'function') {
+      window.AdminEmployees.applyFilters(filters);
+      return;
+    }
+    if (window.AdminEmployees && typeof window.AdminEmployees.refresh === 'function') {
+      window.AdminEmployees.refresh();
+      return;
+    }
+    if (typeof window.refreshEmployeesList === 'function') {
+      window.refreshEmployeesList(filters);
+      return;
+    }
+    document.dispatchEvent(new CustomEvent('permFiltersChanged', { detail: { filters } }));
+  }
+
+  // bezpieczne dodawanie chipa (unikaj duplikatów)
+  window.addPermChip = function addPermChip(value, label, opts = {}) {
+    if (!value) return null;
+    const existing = document.querySelector(`.perm-chip[data-perm="${CSS.escape(value)}"]`);
+    if (existing) {
+      // opcjonalnie aktywuj jeśli podano flagę
+      if (opts.activate) {
+        window.activePermFilters.add(value);
+        updateChipUI(existing, true);
+        applyFilters();
+      }
+      return existing;
+    }
+    // stwórz nowy chip
+    const chip = document.createElement('div');
+    chip.className = 'perm-chip';
+    chip.setAttribute('data-perm', value);
+    chip.setAttribute('role', 'button');
+    chip.setAttribute('tabindex', '0');
+    chip.textContent = label || value;
+    if (opts.activate) {
+      window.activePermFilters.add(value);
+      chip.classList.add('perm-chip--active');
+      chip.setAttribute('aria-pressed','true');
+    }
+    // znajdź kontener (upewnij się, że ID permChips istnieje)
+    const container = document.getElementById('permChips');
+    if (container) container.appendChild(chip);
+    return chip;
+  };
+
+  // delegation handler — toggle
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.perm-chip');
+    if (!chip) return;
+    e.preventDefault();
+    const val = getPermValue(chip);
+    if (!val) return;
+    if (window.activePermFilters.has(val)) {
+      window.activePermFilters.delete(val);
+      updateChipUI(chip, false);
+    } else {
+      window.activePermFilters.add(val);
+      updateChipUI(chip, true);
+    }
+    applyFilters();
+  });
+
+  // klawiatura: Enter/Space też toggluje (accessibility)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      const chip = e.target.closest && e.target.closest('.perm-chip');
+      if (!chip) return;
+      e.preventDefault();
+      chip.click();
+    }
+  });
+
+  // inicjalne ustawienie — ustaw UI chipa, jeśli są predefiniowane filtry
+  document.addEventListener('DOMContentLoaded', () => {
+    const initial = Array.isArray(window.initialPermFilters) ? window.initialPermFilters : [];
+    initial.forEach(v => window.activePermFilters.add(v));
+    document.querySelectorAll('.perm-chip').forEach(chip => {
+      const v = getPermValue(chip);
+      updateChipUI(chip, !!(v && window.activePermFilters.has(v)));
+    });
+  });
+
+  // expose helper do testów / debugu
+  window.getActivePermFilters = () => Array.from(window.activePermFilters);
+})();
+
 
 // expose modules to window
 window.AdminMachines = AdminMachines;
@@ -1447,4 +1696,79 @@ document.addEventListener('DOMContentLoaded', async () => {
     // open machines by default
     showModify();
   });
+  /* === Perm bridge (safe append) ===
+   Append this at the very end of a_script.js (safe, idempotent).
+*/
+(function(){
+  if(window.__permBridgeAppended) return;
+  window.__permBridgeAppended = true;
+
+  function callAdminWithFilters(filters){
+    filters = Array.isArray(filters) ? filters : (filters ? [filters] : []);
+    if(window.AdminEmployees){
+      const candidates = ['applyFilters','filterByPerms','setPerms','setFilters','filterEmployees','renderEmployees','refresh','render','reload','init'];
+      for(const name of candidates){
+        const fn = window.AdminEmployees[name];
+        if(typeof fn === 'function'){
+          try { fn.call(window.AdminEmployees, filters); console.log('AdminEmployees.'+name+' invoked'); return true; }
+          catch(e){ console.warn('AdminEmployees.'+name+' threw', e); }
+        }
+      }
+    }
+    document.dispatchEvent(new CustomEvent('permFiltersChanged', { detail: { filters } }));
+    console.log('permBridge: dispatched permFiltersChanged');
+    return false;
+  }
+
+  function addPerm(val){
+    if(!val) return;
+    if(typeof window.addPermFilter === 'function'){
+      try { window.addPermFilter(val); return; } catch(e){ console.warn(e); }
+    }
+    callAdminWithFilters([val]);
+    document.dispatchEvent(new CustomEvent('permRequestedAdd', { detail:{ val } }));
+  }
+  function removePerm(val){
+    if(!val) return;
+    if(typeof window.removePermFilter === 'function'){
+      try { window.removePermFilter(val); return; } catch(e){ console.warn(e); }
+    }
+    document.dispatchEvent(new CustomEvent('permRequestedRemove', { detail:{ val } }));
+    callAdminWithFilters([]); // best-effort
+  }
+
+  var sel = document.getElementById('permOptions');
+  if(sel && !sel.__permImmediateBound){
+    sel.__permImmediateBound = true;
+    sel.addEventListener('change', function(){
+      const v = (this.value||'').trim();
+      if(!v) return;
+      addPerm(v);
+      const empty = Array.from(this.options).find(o => (o.value||'').trim()==='');
+      if(empty) this.value = '';
+      else this.selectedIndex = 0;
+    }, false);
+    console.log('permBridge: bound change on #permOptions');
+  }
+
+  if(!document.__permGlobalDelegate){
+    document.__permGlobalDelegate = true;
+    document.addEventListener('click', function(e){
+      const t = e.target;
+      const target = t.closest && t.closest('[data-perm], input[type="checkbox"][value], .perm-box, .perm-item, button[data-perm]');
+      if(!target) return;
+      let v = '';
+      if(target.dataset && target.dataset.perm) v = target.dataset.perm.trim();
+      else if(target.tagName === 'INPUT' && target.value) v = (target.value||'').trim();
+      else if(target.getAttribute && target.getAttribute('value')) v = (target.getAttribute('value')||'').trim();
+      else v = (target.textContent||'').trim();
+      if(!v) return;
+      try { const inp = target.tagName==='INPUT' ? target : target.querySelector && target.querySelector('input[type="checkbox"]'); if(inp && !inp.disabled) inp.checked = !inp.checked; } catch(e){}
+      addPerm(v);
+      e.preventDefault();
+    }, false);
+    console.log('permBridge: global delegation bound');
+  }
+})();
+
 });

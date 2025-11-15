@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Crew Manager</title>
-  <link rel="stylesheet" href="css/common.css">
-  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/common.css" />
+  <link rel="stylesheet" href="css/main.css" />
   <!-- stable CDN entry -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -16,14 +16,13 @@
       <input type="date" id="dateInput" class="date-input" />
       <button id="loadDay" class="btn">Załaduj</button>
       <button id="exportDayBtn" class="btn outline">Eksportuj CSV</button>
-      <!-- Używamy istniejącego przycisku; jego obsługa (prompt + przekierowanie) jest w script.js -->
       <button id="adminLoginBtn" class="btn">Panel administratora</button>
     </div>
   </header>
 
   <main class="container">
-    <section class="panel card">
-      <table>
+    <section class="panel card table-card">
+      <table class="main-table">
         <thead>
           <tr id="theadRow"></tr>
         </thead>
@@ -32,7 +31,6 @@
     </section>
   </main>
 
-  <!-- Modal przypisania (używany przez aplikację) -->
   <div id="assignModal" class="modal">
     <div class="modal-content">
       <button class="modal-close" id="assignClose">&times;</button>
@@ -42,7 +40,6 @@
     </div>
   </div>
 
-  <!-- skrypt aplikacji -->
   <script src="script.js"></script>
 </body>
 </html>

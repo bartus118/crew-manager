@@ -1,6 +1,5 @@
 /* css/common.css
-   Shared styles: variables, layout, buttons, cards, modal base, utilities
-   (kept generic so admin.css and main.css can override specifics)
+   Shared styles: variables, layout, buttons, card wrappers, modal base, utilities
 */
 
 :root{
@@ -144,3 +143,48 @@ table { border-collapse: collapse; width: 100%; }
   .emp-filters.row { gap:8px; }
   .filter-input { min-width:140px; flex:1 1 120px; }
 }
+
+/* --- table card wrapper (shared) --- */
+.table-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(9,30,66,0.04);
+  border: 1px solid rgba(15,23,42,0.04);
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+/* spójne nagłówki tabel (shared baseline) */
+.table-card thead th {
+  background: linear-gradient(180deg, #1f6feb, #1366d6);
+  color: #fff;
+  font-weight: 700;
+  padding: 12px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* podstawowy wygląd komórek */
+.table-card tbody td {
+  padding: 12px 10px;
+  vertical-align: middle;
+  color: #0f1724; /* mocniejszy kontrast niż przedtem */
+  font-size: 14px;
+}
+
+/* naprzemienne tła wierszy (czytelność) */
+.table-card tbody tr:nth-child(odd) { background: #ffffff; }
+.table-card tbody tr:nth-child(even){ background: #fbfdff; }
+
+/* delikatny hover wiersza */
+.table-card tbody tr:hover {
+  background: #eef6ff;
+  transform: translateY(-1px);
+  transition: all 140ms ease;
+}
+
+/* przyciski akcji (wyrównane i spójne) */
+.table-card .actions { display:flex; gap:8px; justify-content:flex-end; }
+.btn.ghost { background: transparent; border: 1px solid rgba(11,116,209,0.08); color: #0b74d1; }
+.btn.danger { background: #b71c1c; color: #fff; }

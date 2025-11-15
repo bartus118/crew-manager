@@ -9,35 +9,7 @@
   <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Minimalne style dla modala logowania (lokalnie, żeby nie ruszać style.css) -->
-  <style>
-    /* overlay modal auth (nie zmienione logicznie) */
-    #adminAuthModal {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(12,18,24,0.6);
-      z-index: 20000;
-    }
-    #adminAuthModal .auth-box {
-      background: #fff;
-      padding: 18px;
-      border-radius: 10px;
-      width: 320px;
-      box-shadow: 0 8px 30px rgba(2,6,23,0.3);
-      text-align: left;
-    }
-    #adminAuthModal h3 { margin:0 0 8px; font-size:18px; }
-    #adminAuthModal .desc { color:#6b7280; font-size:13px; margin-bottom:12px; }
-    #adminAuthModal input[type="password"] {
-      width:100%; padding:10px; border-radius:8px; border:1px solid #e6eef8; box-sizing:border-box;
-      margin-bottom:10px;
-    }
-    #adminAuthModal .actions { display:flex; gap:8px; justify-content:flex-end; }
-    #adminAuthModal .muted { color:#6b7280; font-size:13px; margin-top:8px; }
-  </style>
+  
 </head>
 <body>
   <!-- AUTH MODAL -->
@@ -57,176 +29,66 @@
   <header class="top-bar">
     <div class="brand">Panel administratora</div>
 
-    <!-- nowy: sekcja nawigacji/zakładek (po lewej obok brand) -->
     <nav class="admin-nav" aria-label="Admin navigation">
       <ul class="nav-list">
-        <!-- Możesz dodać kolejne <li class="nav-item"> z data-tab -->
         <li class="nav-item" data-tab="modify" id="tabModify">Modyfikacja maszyn</li>
         <li class="nav-item" data-tab="employees" id="tabEmployees">Pracownicy</li>
-        <!-- placeholdery na przyszłe zakładki -->
         <li class="nav-item disabled">Raporty</li>
         <li class="nav-item disabled">Ustawienia</li>
       </ul>
     </nav>
 
     <div class="controls">
-      <!-- wyróżniony przycisk powrotu -->
       <button id="backToMainBtn" class="btn back-cta">Powrót do strony głównej</button>
     </div>
   </header>
 
-  <main class="container">
-    <section class="panel card">
-      
+  <main class="admin-main">
+    <section id="adminMachinesSection" class="admin-section">
+      <div class="admin-section-header">
+        <h2>Modyfikacja maszyn</h2>
+        <p class="admin-section-desc">Tutaj możesz dodawać, usuwać i edytować kolejność maszyn.</p>
+      </div>
+      <div id="adminMachinesApp" class="admin-section-content"></div>
+    </section>
 
-      <!-- Jedna zakładka: Modyfikacja maszyn (pokazywana/ukrywana przez JS) -->
-      <div id="adminMachinesSection">
-        <h4>Modyfikacja maszyn</h4>
-        <div class="muted">Tutaj możesz dodawać, usuwać i edytować kolejność maszyn.</div>
+    <section id="adminEmployeesSection" class="admin-section" style="display:none;">
+      <div class="admin-section-header">
+        <h2>Lista pracowników</h2>
+        <p class="admin-section-desc">Zarządzaj danymi pracowników, ich rolami i uprawnieniami.</p>
+      </div>
 
-        <div id="adminMachinesApp" class="card" style="margin-top:10px;padding:10px;">
-          <!-- zawartość generowana dynamicznie przez AdminMachines (a_script.js) -->
+      <div class="emp-filters">
+        <input id="empSearch" class="filter-input emp-filter" placeholder="Szukaj po imieniu / nazwisku..." />
+        <select id="empSort" class="filter-select emp-filter">
+          <option value="name_asc">Sortuj: Imię A→Z</option>
+          <option value="name_desc">Sortuj: Imię Z→A</option>
+          <option value="role_asc">Sortuj: Rola ↑</option>
+          <option value="role_desc">Sortuj: Rola ↓</option>
+        </select>
+        <select id="roleFilter" class="filter-select emp-filter">
+          <option value="">Wszystkie role</option>
+          <option value="mechanik_focke">Mechanik Focke</option>
+          <option value="mechanik_protos">Mechanik Protos</option>
+        </select>
+        <select id="statusFilter" class="filter-select emp-filter">
+          <option value="">Wszystkie statusy</option>
+          <option value="active">Aktywni</option>
+          <option value="inactive">Nieaktywni</option>
+        </select>
+        <div id="permFilterControls" class="perm-filter-controls">
+          <select id="permOptions" class="filter-select">
+            <option value="">Wybierz uprawnienie</option>
+          </select>
+          <button id="clearPermsBtn" class="btn small outline">Wyczyść</button>
         </div>
       </div>
 
-      <!-- lista edytowalna (jeśli chcesz zachować osobne miejsce) -->
-      <div id="machineListEditable" class="admin-machine-list card" style="margin-top:10px; display:none;"></div>
+      <div id="permChips" class="perm-chips-container"></div>
+      <div id="adminEmployeesApp" class="admin-section-content"></div>
     </section>
   </main>
 
-  <!-- Sekcja: Pracownicy (ukryta domyślnie) -->
-  <div id="adminEmployeesSection" style="display:none; margin:12px;">
-    <h4>Lista pracowników</h4>
-   <div class="emp-filters row">
-  <input id="empSearchInput" class="filter-input" type="search" placeholder="Szukaj (imię lub nazwisko)" />
-
-  <select id="empFilterBu" class="filter-select">
-    <option value="">Wszystkie BU</option>
-  </select>
-
-  <select id="empFilterRole" class="filter-select">
-    <option value="">Wszystkie role</option>
-  </select>
-
-  <label class="small-label">Sortuj:</label>
-  <select id="empSortField" class="filter-select small">
-    <option value="bu">BU</option>
-    <option value="roles">Rola</option>
-    <option value="surname">Nazwisko</option>
-    <option value="firstname">Imię</option>
-  </select>
-
-  <select id="empSortDir" class="filter-select small">
-    <option value="asc">Rosnąco</option>
-    <option value="desc">Malejąco</option>
-  </select>
-
-  <button id="refreshEmpListBtn" class="btn small" style="margin-left:auto;">Odśwież</button>
-</div>
-<div id="permFilterWrap" style="margin:8px 0;">
-  <label class="perm-filter-label" style="font-size:13px;color:#334;">
-    Uprawnienia (filtr AND — pracownik musi mieć wszystkie zaznaczone)
-  </label>
-
-  <div class="perm-filter-chips-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-    <div id="permChips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
-    <button id="clearPermsBtn" class="btn outline small">Wyczyść</button>
-  </div>
-
-  <div class="perm-filter-controls" style="margin-top:6px; display:flex; gap:8px; align-items:center;">
-    <select id="permOptions" style="padding:6px; border-radius:6px; border:1px solid #ccd;">
-      <option value="">— wybierz —</option>
-      <option value="P100">P100</option>
-      <option value="P70">P70</option>
-      <option value="F350">F350</option>
-      <option value="F550">F550</option>
-      <option value="GD">GD</option>
-      <option value="GDX">GDX</option>
-      <option value="751">751</option>
-      <option value="411">411</option>
-      <option value="407">407</option>
-      <option value="408">408</option>
-      <option value="409">409</option>
-      <option value="487">487</option>
-      <option value="489">489</option>
-    </select>
-
-    <button id="addPermBtn" class="btn small">Dodaj</button>
-
-    <div class="perm-filter-hint" style="font-size:12px;color:#778;">
-      (kliknij × aby usunąć uprawnienie)
-    </div>
-  </div>
-</div>
-
-    <div id="adminEmployeesApp" class="card" style="padding:8px; max-height:52vh; overflow:auto;">
-      <!-- lista renderowana dynamicznie -->
-    </div>
-  </div>
-
-  
-
-  
   <script src="./a_script.js"></script>
-
-  <!-- lekki skrypt UI: podłączenia kliknięć w nav do istniejących selektorów (nie rusza Twojej logiki) -->
-  <script>
-    (function(){
-      // helper: pokaż zakładkę "Modyfikacja maszyn" (wywołuje render z a_script.js jeśli dostępne)
-      function showModifyFromNav(){
-        const el = document.getElementById('tabModify');
-        if(!el) return;
-        // wizualne ustawienia
-        document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-        el.classList.add('active');
-        // pokaż sekcję maszyn, ukryj pracowników
-        const machines = document.getElementById('adminMachinesSection');
-        const emps = document.getElementById('adminEmployeesSection');
-        if(machines) machines.style.display = '';
-        if(emps) emps.style.display = 'none';
-        // jeśli moduł AdminMachines dostępny — wyrenderuj
-        try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
-      }
-
-      // inicjalizacja zdarzeń nav po załadowaniu DOM
-      document.addEventListener('DOMContentLoaded', () => {
-        // podłącz listenery do wszystkich nav-item
-        document.querySelectorAll('.nav-item').forEach(it => {
-          it.addEventListener('click', (e) => {
-            if(it.classList.contains('disabled')) return;
-
-            if(it.dataset.tab === 'modify') {
-              // pokaż modyfikację maszyn
-              document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-              it.classList.add('active');
-              document.getElementById('adminMachinesSection').style.display = '';
-              const empSec = document.getElementById('adminEmployeesSection');
-              if(empSec) empSec.style.display = 'none';
-              try { window.AdminMachines && window.AdminMachines.renderList && window.AdminMachines.renderList(); } catch(e){ console.warn(e); }
-
-            } else if(it.dataset.tab === 'employees') {
-              // pokaż listę pracowników
-              document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-              it.classList.add('active');
-              document.getElementById('adminMachinesSection').style.display = 'none';
-              document.getElementById('adminEmployeesSection').style.display = '';
-              try { window.AdminEmployees && window.AdminEmployees.init && window.AdminEmployees.init(); } catch(e){ console.warn(e); }
-
-            } else {
-              // placeholdery: inne zakładki
-              alert('Ta zakładka jest jeszcze nieaktywna.');
-            }
-          });
-        });
-
-        // bardziej widoczny back button
-        document.getElementById('backToMainBtn')?.addEventListener('click', () => { window.location.href = '../index.html'; });
-
-        // po załadowaniu automatycznie „kliknij” Modyfikację (jeśli jest)
-        const first = document.querySelector('.nav-item[data-tab="modify"]');
-        if(first) first.click();
-      });
-    })();
-  </script>
 </body>
 </html>

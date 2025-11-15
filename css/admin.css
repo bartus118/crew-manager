@@ -2,6 +2,14 @@
    Styles only for the admin panel (a_index.html). Loaded after common.css
 */
 
+/* admin layout */
+.admin-main { display: flex; flex-direction: column; gap: 24px; max-width: 1400px; margin: 0 auto; padding: 20px; }
+.admin-section { padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+.admin-section-header { margin-bottom: 20px; }
+.admin-section-header h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #0f1724; }
+.admin-section-desc { margin: 0; font-size: 14px; color: #6b7280; }
+.admin-section-content { margin-top: 16px; }
+
 /* admin nav */
 .admin-nav { margin-left: 18px; display:flex; align-items:center; }
 .admin-nav .nav-list { display:flex; gap:8px; list-style:none; margin:0; padding:0; align-items:center; }
@@ -31,11 +39,13 @@
 }
 
 /* employee filters and controls */
-.emp-filters.row { display:flex; gap:10px; align-items:center; margin:10px 0; flex-wrap:wrap; }
-.filter-input { padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; min-width:220px; }
-.filter-select { padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; background:#fff; min-width:140px; }
-.filter-select.small { min-width:110px; }
-.small-label { color:var(--muted); font-size:13px; margin-left:6px; }
+.emp-filters { display: flex; gap: 10px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
+.filter-input { padding: 8px 10px; border-radius: 8px; border: 1px solid #e6eef8; min-width: 220px; font-size: 14px; background: #fff; }
+.filter-select { padding: 8px 10px; border-radius: 8px; border: 1px solid #e6eef8; background: #fff; min-width: 140px; font-size: 14px; }
+.filter-select.small { min-width: 110px; }
+.perm-filter-controls { display: flex; gap: 8px; align-items: center; }
+.perm-chips-container { margin: 12px 0; }
+.small-label { color: var(--muted); font-size: 13px; margin-left: 6px; }
 
 /* perm chips */
 #permChips {
@@ -62,12 +72,9 @@
 .chip-x { font-size: 15px; cursor: pointer; color: #3a4a6a; padding: 0 2px; }
 .chip-x:hover { color: #b00020; }
 
-/* perm options controls */
-#permFilterControls { display:flex; gap:10px; align-items:center; margin-top:8px; }
-#permOptions { padding:6px 8px; border:1px solid #ccd3df; border-radius:6px; background:#fff; }
-#addPermBtn { background: #0b74d1; color:white; border:none; padding:6px 12px; border-radius:6px; }
-#addPermBtn:hover { background:#095ca8; }
-#clearPermsBtn { background:#ececec; border:1px solid #d4d4d4; padding:6px 12px; border-radius:6px; }
+/* perm options controls - legacy compatibility */
+#permOptions { padding: 8px 10px; border: 1px solid #e6eef8; border-radius: 8px; background: #fff; font-size: 14px; }
+#clearPermsBtn { background: #ececec; border: 1px solid #d4d4d4; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
 
 /* admin list rows */
 .admin-emp-header { background: #f5f6f8; border-radius: 6px 6px 0 0; padding:8px 12px; display:flex; gap:8px; align-items:center; }
@@ -123,3 +130,72 @@
   .top-bar .brand { font-size: 15px; }
   .back-cta { padding: 6px 8px; font-size:14px; }
 }
+
+/* admin tables: use same .table-card wrapper */
+#adminMachinesSection .card, .admin-machine-list.card {
+  padding: 12px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(9,30,66,0.03);
+  border: 1px solid rgba(15,23,42,0.035);
+}
+
+/* more readable columns in admin: extra padding */
+.admin-machine-list table td, .admin-machine-list table th,
+#adminMachinesApp table td, #adminMachinesApp table th {
+  padding: 12px 14px;
+  vertical-align: middle;
+  font-size: 14px;
+  color: #0f1724;
+}
+
+/* admin header adjustments */
+.admin-emp-header {
+  background: #f8f9fa;
+  border-radius: 0;
+  padding: 12px 0;
+  font-weight: 700;
+  color: #0f1724;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* compact actions */
+.actions .btn { padding:6px 8px; font-size:13px; }
+
+/* overlay modal auth (nie zmienione logicznie) */
+    #adminAuthModal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(12,18,24,0.6);
+      z-index: 20000;
+    }
+    #adminAuthModal .auth-box {
+      background: #fff;
+      padding: 18px;
+      border-radius: 10px;
+      width: 320px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.3);
+      text-align: left;
+    }
+    #adminAuthModal h3 { margin:0 0 8px; font-size:18px; }
+    #adminAuthModal .desc { color:#6b7280; font-size:13px; margin-bottom:12px; }
+    #adminAuthModal input[type="password"] {
+      width:100%; padding:10px; border-radius:8px; border:1px solid #e6eef8; box-sizing:border-box;
+      margin-bottom:10px;
+    }
+    #adminAuthModal .actions { display:flex; gap:8px; justify-content:flex-end; }
+    #adminAuthModal .muted { color:#6b7280; font-size:13px; margin-top:8px; }
+    
+    /* wygląd aktywnego perm-chip (toggle) */
+.perm-chip--active {
+  background: #cfe6ff !important;
+  border-color: #0b74d1 !important;
+  color: #063b7a !important;
+  box-shadow: 0 6px 18px rgba(11,116,209,0.08);
+  transform: translateY(-1px);
+}
+.perm-chip { transition: background .14s ease, transform .12s ease, box-shadow .12s ease; cursor: pointer; }
+.perm-chip[aria-pressed="true"] { outline: 2px solid rgba(11,116,209,0.08); }
