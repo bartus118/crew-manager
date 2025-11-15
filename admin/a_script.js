@@ -34,6 +34,88 @@ function waitForSupabaseGlobal(timeoutMs = 8000) {
   });
 }
 
+  /**
+   * Sprawdza czy pracownik może być przypisany do stanowiska na maszynie wg reguł Protos/Focke i mechanik/operator
+   * @param {Object} employee - obiekt pracownika (musi mieć role, permissions, mechanical_permissions)
+   * @param {string} machineCode - kod maszyny (np. 'P100', 'F550', '411', itp.)
+   * @returns {boolean} true jeśli pracownik ma wymagane uprawnienia
+   */
+  function canAssignEmployeeToMachine(employee, machineCode) {
+    // Rozgraniczenie maszyn
+    const isProtos = machineCode === 'P100' || machineCode === 'P70';
+    const isFocke = !isProtos;
+
+    // Pobierz role
+    const roles = Array.isArray(employee.roles) ? employee.roles : (employee.roles ? String(employee.roles).split(',').map(s=>s.trim()) : []);
+    // Pobierz uprawnienia operatorskie
+    const permissions = Array.isArray(employee.permissions) ? employee.permissions : (employee.permissions ? String(employee.permissions).split(',').map(s=>s.trim()) : []);
+    // Pobierz uprawnienia mechaniczne
+    const mechanical_permissions = employee.mechanical_permissions ? String(employee.mechanical_permissions).split(',').map(s=>s.trim()) : [];
+
+    // Mechanik Focke
+    if (roles.includes('mechanik_focke') && isFocke) {
+      return mechanical_permissions.includes(machineCode);
+    }
+    // Mechanik Protos
+    if (roles.includes('mechanik_protos') && isProtos) {
+      return mechanical_permissions.includes(machineCode);
+    }
+    // Operator Focke
+    if (roles.includes('operator_focke') && isFocke) {
+      return permissions.includes(machineCode);
+    }
+    // Operator Protos
+    if (roles.includes('operator_protos') && isProtos) {
+      return permissions.includes(machineCode);
+    }
+    // W innych przypadkach nie pozwalaj
+    return false;
+  }
+
+  /**
+   * Zwraca brakujące uprawnienia (mechaniczne lub operatorskie) dla danego pracownika i maszyny
+   * @param {Object} employee
+   * @param {string} machineCode
+   * @returns {string|null} - komunikat o brakujących uprawnieniach lub null jeśli wszystko OK
+   */
+  function getMissingAssignmentPermissions(employee, machineCode) {
+    const isProtos = machineCode === 'P100' || machineCode === 'P70';
+    const isFocke = !isProtos;
+    const roles = Array.isArray(employee.roles) ? employee.roles : (employee.roles ? String(employee.roles).split(',').map(s=>s.trim()) : []);
+    const permissions = Array.isArray(employee.permissions) ? employee.permissions : (employee.permissions ? String(employee.permissions).split(',').map(s=>s.trim()) : []);
+    const mechanical_permissions = employee.mechanical_permissions ? String(employee.mechanical_permissions).split(',').map(s=>s.trim()) : [];
+
+    // Mechanik Focke
+    if (roles.includes('mechanik_focke') && isFocke) {
+      if (!mechanical_permissions.includes(machineCode)) {
+        return `Brak uprawnienia mechanicznego: ${machineCode}`;
+      }
+      return null;
+    }
+    // Mechanik Protos
+    if (roles.includes('mechanik_protos') && isProtos) {
+      if (!mechanical_permissions.includes(machineCode)) {
+        return `Brak uprawnienia mechanicznego: ${machineCode}`;
+      }
+      return null;
+    }
+    // Operator Focke
+    if (roles.includes('operator_focke') && isFocke) {
+      if (!permissions.includes(machineCode)) {
+        return `Brak uprawnienia operatorskiego: ${machineCode}`;
+      }
+      return null;
+    }
+    // Operator Protos
+    if (roles.includes('operator_protos') && isProtos) {
+      if (!permissions.includes(machineCode)) {
+        return `Brak uprawnienia operatorskiego: ${machineCode}`;
+      }
+      return null;
+    }
+    // W innych przypadkach
+    return `Brak odpowiedniej roli lub uprawnienia do maszyny: ${machineCode}`;
+  }
 let sb = null;
 async function initSupabaseAdmin(){
   try {
@@ -1064,7 +1146,7 @@ const AdminEmployees = (function(){
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.value = code;
-      cb.dataset.mechPerm = code;
+      cb.dataset.mechperm = code;
       if(currMechPerms.includes(code)) cb.checked = true;
 
       const span = document.createElement('span');
@@ -1371,7 +1453,7 @@ const AdminEmployees = (function(){
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.value = code;
-      cb.dataset.mechPerm = code;
+      cb.dataset.mechperm = code;
 
       const span = document.createElement('span');
       span.textContent = code;

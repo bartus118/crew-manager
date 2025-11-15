@@ -40,6 +40,115 @@ function displayShort(emp){
   }
 }
 
+/**
+ * Sprawdza uprawnienia pracownika dla danego stanowiska na maszynie
+ * 
+ * LOGIKA:
+ * - Focke: F350, F550, GD, GDX, 751, 401, 411, 407, 408, 409, 707, 487, 489
+ * - Protos: P100, P70
+ * 
+ * Sprawdzamy pokrywanie się typów maszyny z uprawnieniami pracownika:
+ * - Mechanik Focke: maszyna ma typy Focke → musi mieć te typy w uprawnieniach mechanicznych
+ * - Mechanik Protos: maszyna ma typy Protos → musi mieć te typy w uprawnieniach mechanicznych
+ * - Operator Focke: maszyna ma typy Focke → musi mieć te typy w uprawnieniach operatorskich
+ * - Operator Protos: maszyna ma typy Protos → musi mieć te typy w uprawnieniach operatorskich
+ * - Filtry/Pomocniczy/Inserty: brak sprawdzenia
+ * 
+ * @param {Object} employee - pracownik z permissions, mechanical_permissions
+ * @param {Object} machine - maszyna z polami maker, paker, celafoniarka, pakieciarka, kartoniarka
+ * @param {string} roleKey - stanowisko (np. 'mechanik_focke', 'operator_focke')
+ * @returns {string|null} - komunikat o brakujących uprawnieniach lub null jeśli OK
+ */
+function getMissingPermissionsForAssign(employee, machine, roleKey){
+  try {
+    const FOCKE_TYPES = ['F350', 'F550', 'GD', 'GDX', '751', '401', '411', '407', '408', '409', '707', '487', '489'];
+    const PROTOS_TYPES = ['P100', 'P70'];
+
+    // Brak sprawdzenia dla tych stanowisk
+    if(['pracownik_pomocniczy', 'filtry', 'inserty'].includes(roleKey)) return null;
+
+    // Pobierz typy maszyny
+    const machineTypes = new Set();
+    const fields = ['maker', 'paker', 'celafoniarka', 'pakieciarka', 'kartoniarka'];
+    fields.forEach(field => {
+      const val = machine[field];
+      if(val && String(val).trim()) machineTypes.add(String(val).trim());
+    });
+
+    if(machineTypes.size === 0) return null; // Maszyna nie ma żadnych typów
+
+    // Pobierz uprawnienia pracownika
+    const empPermissions = Array.isArray(employee.permissions)
+      ? employee.permissions.map(p => String(p).trim())
+      : (employee.permissions ? String(employee.permissions).split(',').map(s => String(s).trim()) : []);
+    
+    const empMechPermissions = employee.mechanical_permissions
+      ? String(employee.mechanical_permissions).split(',').map(m => String(m).trim()).filter(Boolean)
+      : [];
+
+    // === MECHANIK FOCKE ===
+    if(roleKey === 'mechanik_focke'){
+      // Sprawdź czy maszyna ma typy Focke
+      const fockeTypesInMachine = Array.from(machineTypes).filter(t => FOCKE_TYPES.includes(t));
+      if(fockeTypesInMachine.length === 0) return null; // Maszyna nie ma typów Focke
+
+      // Sprawdź czy pracownik ma wszystkie typy Focke z maszyny
+      const missing = fockeTypesInMachine.filter(t => !empMechPermissions.includes(t));
+      if(missing.length > 0) 
+        return `Brakuje uprawnień mechanicznych Focke: ${missing.join(', ')}`;
+      
+      return null;
+    }
+
+    // === MECHANIK PROTOS ===
+    if(roleKey === 'mechanik_protos'){
+      // Sprawdź czy maszyna ma typy Protos
+      const protosTypesInMachine = Array.from(machineTypes).filter(t => PROTOS_TYPES.includes(t));
+      if(protosTypesInMachine.length === 0) return null; // Maszyna nie ma typów Protos
+
+      // Sprawdź czy pracownik ma wszystkie typy Protos z maszyny
+      const missing = protosTypesInMachine.filter(t => !empMechPermissions.includes(t));
+      if(missing.length > 0) 
+        return `Brakuje uprawnień mechanicznych Protos: ${missing.join(', ')}`;
+      
+      return null;
+    }
+
+    // === OPERATOR FOCKE ===
+    if(roleKey === 'operator_focke'){
+      // Sprawdź czy maszyna ma typy Focke
+      const fockeTypesInMachine = Array.from(machineTypes).filter(t => FOCKE_TYPES.includes(t));
+      if(fockeTypesInMachine.length === 0) return null; // Maszyna nie ma typów Focke
+
+      // Sprawdź czy pracownik ma wszystkie typy Focke z maszyny
+      const missing = fockeTypesInMachine.filter(t => !empPermissions.includes(t));
+      if(missing.length > 0) 
+        return `Brakuje uprawnień operatorskich Focke: ${missing.join(', ')}`;
+      
+      return null;
+    }
+
+    // === OPERATOR PROTOS ===
+    if(roleKey === 'operator_protos'){
+      // Sprawdź czy maszyna ma typy Protos
+      const protosTypesInMachine = Array.from(machineTypes).filter(t => PROTOS_TYPES.includes(t));
+      if(protosTypesInMachine.length === 0) return null; // Maszyna nie ma typów Protos
+
+      // Sprawdź czy pracownik ma wszystkie typy Protos z maszyny
+      const missing = protosTypesInMachine.filter(t => !empPermissions.includes(t));
+      if(missing.length > 0) 
+        return `Brakuje uprawnień operatorskich Protos: ${missing.join(', ')}`;
+      
+      return null;
+    }
+
+    return null;
+  } catch(e){
+    console.error('getMissingPermissionsForAssign error', e, {employee, machine, roleKey});
+    return 'Błąd sprawdzenia uprawnień';
+  }
+}
+
 /* -------------------- KONFIGURACJA KOLUMN I STATUSÓW -------------------- */
 const COLUMNS = [
   { key: 'maszyna', title: 'Maszyna' },
@@ -284,7 +393,7 @@ function buildTableFor(date){
           else td.classList.add('assigned-cell');
           td.textContent = val;
           td.style.cursor = 'pointer';
-          td.addEventListener('click', () => openAssignModal(date, m.number, col.key));
+          td.addEventListener('click', () => openAssignModal(date, m, col.key));
         }
 
         tr.appendChild(td);
@@ -299,8 +408,9 @@ function buildTableFor(date){
 async function saveAssignment(date,machine,role,empId){
   try{
     if(!sb){ alert('Brak połączenia z serwerem — zapisywanie przypisań jest zablokowane. Proszę połącz się z Supabase i spróbuj ponownie.'); return; }
-    await sb.from('assignments').delete().eq('date',date).eq('machine_number',machine).eq('role',role);
-    if(empId) await sb.from('assignments').insert([{date,machine_number:machine,role,employee_id:empId}]);
+    const machineNumber = machine.number || machine; // Obsługuj zarówno obiekt jak i numer
+    await sb.from('assignments').delete().eq('date',date).eq('machine_number',machineNumber).eq('role',role);
+    if(empId) await sb.from('assignments').insert([{date,machine_number:machineNumber,role,employee_id:empId}]);
     await loadAssignmentsForDate(date);
     buildTableFor(date);
   }catch(e){ console.error('saveAssignment error', e, { date, machine, role, empId }); }
@@ -345,7 +455,8 @@ function openAssignModal(date, machine, roleKey) {
     assignModal.style.display = 'flex';
     document.body.classList.add('modal-open');
 
-    assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machine})`;
+    const machineNumber = machine.number || machine; // Wspieramy zarówno obiekt jak i numer
+    assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machineNumber})`;
     assignInfo.textContent = 'Ładuję listę pracowników...';
 
     assignList.innerHTML = '';
@@ -436,13 +547,20 @@ function openAssignModal(date, machine, roleKey) {
       }catch(e){ console.error('empPermSet error', e, emp); return new Set(); }
     }
 
-    function missingPermsForEmp(emp, machineNumber){
+    function missingPermsForEmp(emp, machineObj, roleKey){
       try{
-        const req = Array.from(getRequiredPermsForMachine(machineNumber));
-        if(req.length === 0) return [];
-        const empSet = empPermSet(emp);
-        return req.filter(r => !empSet.has(r));
-      }catch(e){ console.error('missingPermsForEmp error', e, {emp, machineNumber}); return []; }
+        // Jeśli machineObj to string (numer), szukamy w machines
+        let machine = machineObj;
+        if(typeof machineObj === 'string'){
+          machine = machines.find(m => m.number === machineObj);
+          if(!machine) return []; // Nie znaleziono maszyny
+        }
+        
+        // użyj nowej logiki z getMissingPermissionsForAssign
+        const msg = getMissingPermissionsForAssign(emp, machine, roleKey);
+        if(!msg) return []; // brak problemów
+        return [msg]; // zwróć komunikat jako tablica
+      }catch(e){ console.error('missingPermsForEmp error', e, {emp, machineObj, roleKey}); return []; }
     }
 
     function renderTable(filterBU = '__all'){
@@ -499,9 +617,9 @@ function openAssignModal(date, machine, roleKey) {
           if(names.length === 0){ const span = document.createElement('div'); span.className='muted'; span.textContent='—'; td.appendChild(span); }
           else{ names.forEach(emp=>{ const div = document.createElement('div'); div.className='emp-name'; div.textContent = displayShort(emp); div.onclick = async ()=>{
                 try{
-                  const missing = missingPermsForEmp(emp, machine);
+                  const missing = missingPermsForEmp(emp, machine, rc.key);
                   if(missing && missing.length){
-                    const ok = confirm('Pracownik nie ma wymaganych uprawnień do tej maszyny (brak: ' + missing.join(', ') + '). Na pewno przypisać?');
+                    const ok = confirm('Pracownik nie ma wymaganych uprawnień — ' + missing.join(', ') + '. Na pewno przypisać?');
                     if(!ok) return;
                   }
                   await saveAssignment(date, machine, roleKey, emp.id);
@@ -516,9 +634,9 @@ function openAssignModal(date, machine, roleKey) {
           if(globalHelpers.length === 0){ const m = document.createElement('div'); m.className='muted'; m.textContent='—'; tdGlobal.appendChild(m); }
           else{ globalHelpers.forEach(emp=>{ const d = document.createElement('div'); d.className='emp-name'; d.textContent = displayShort(emp); d.onclick = async ()=>{
                 try{
-                  const missing = missingPermsForEmp(emp, machine);
+                  const missing = missingPermsForEmp(emp, machine, roleKey);
                   if(missing && missing.length){
-                    const ok = confirm('Pracownik nie ma wymaganych uprawnień do tej maszyny (brak: ' + missing.join(', ') + '). Na pewno przypisać?');
+                    const ok = confirm('Pracownik nie ma wymaganych uprawnień — ' + missing.join(', ') + '. Na pewno przypisać?');
                     if(!ok) return;
                   }
                   await saveAssignment(date, machine, roleKey, emp.id);
