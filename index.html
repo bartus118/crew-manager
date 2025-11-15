@@ -40,6 +40,19 @@
     </div>
   </div>
 
+  <!-- Modal dla alertów o brakujących uprawnieniach -->
+  <div id="permissionAlert" class="modal" style="display:none;">
+    <div class="modal-content permission-alert-box">
+      <div class="permission-alert-icon">⚠️</div>
+      <h3 class="permission-alert-title">Brak wymaganych uprawnień</h3>
+      <p id="permissionAlertMessage" class="permission-alert-message"></p>
+      <div class="permission-alert-buttons">
+        <button id="permissionAlertCancel" class="btn outline">Anuluj</button>
+        <button id="permissionAlertConfirm" class="btn">Przypisz mimo to</button>
+      </div>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>

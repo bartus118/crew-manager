@@ -176,3 +176,63 @@ table td:hover,
 }
 
 /* Drag & drop placeholder used in admin only still defined in admin.css */
+
+/* ---------- Permission Alert Modal ---------- */
+.permission-alert-box {
+  max-width: 480px;
+  padding: 28px 32px;
+  text-align: center;
+}
+
+.permission-alert-icon {
+  font-size: 56px;
+  margin-bottom: 16px;
+  animation: alertPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes alertPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.permission-alert-title {
+  color: #d32f2f;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.permission-alert-message {
+  color: #333;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+  padding: 16px;
+  background: #fff3cd;
+  border-left: 4px solid #ff9800;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.permission-alert-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.permission-alert-buttons .btn {
+  min-width: 120px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.permission-alert-buttons .btn.outline {
+  background: transparent;
+  border: 1px solid #ccc;
+  color: #333;
+}
+
+.permission-alert-buttons .btn.outline:hover {
+  background: #f5f5f5;
+}

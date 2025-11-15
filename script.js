@@ -40,6 +40,43 @@ function displayShort(emp){
   }
 }
 
+/* -------------------- CUSTOM PERMISSION ALERT -------------------- */
+function showPermissionAlert(message){
+  return new Promise((resolve) => {
+    const modal = document.getElementById('permissionAlert');
+    const messageEl = document.getElementById('permissionAlertMessage');
+    const confirmBtn = document.getElementById('permissionAlertConfirm');
+    const cancelBtn = document.getElementById('permissionAlertCancel');
+    
+    if(!modal || !messageEl || !confirmBtn || !cancelBtn) {
+      // Fallback do zwykłego confirm jeśli modal nie istnieje
+      resolve(confirm('Pracownik nie ma wymaganych uprawnień — ' + message + '. Na pewno przypisać?'));
+      return;
+    }
+    
+    messageEl.textContent = message;
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    
+    const cleanup = () => {
+      modal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+      confirmBtn.onclick = null;
+      cancelBtn.onclick = null;
+    };
+    
+    confirmBtn.onclick = () => {
+      cleanup();
+      resolve(true);
+    };
+    
+    cancelBtn.onclick = () => {
+      cleanup();
+      resolve(false);
+    };
+  });
+}
+
 /**
  * Sprawdza uprawnienia pracownika dla danego stanowiska na maszynie
  * 
@@ -456,6 +493,8 @@ function openAssignModal(date, machine, roleKey) {
     document.body.classList.add('modal-open');
 
     const machineNumber = machine.number || machine; // Wspieramy zarówno obiekt jak i numer
+    const machineObj = typeof machine === 'object' ? machine : machines.find(m => m.number === String(machineNumber));
+    
     assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machineNumber})`;
     assignInfo.textContent = 'Ładuję listę pracowników...';
 
@@ -615,17 +654,28 @@ function openAssignModal(date, machine, roleKey) {
           const unique = Array.from(new Map((roleToList[rc.key]||[]).map(p=>[p.id,p])).values());
           const names = unique.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
           if(names.length === 0){ const span = document.createElement('div'); span.className='muted'; span.textContent='—'; td.appendChild(span); }
-          else{ names.forEach(emp=>{ const div = document.createElement('div'); div.className='emp-name'; div.textContent = displayShort(emp); div.onclick = async ()=>{
+          else{ 
+            // PRZECHWYTYWANIE rc.key dla każdej kolumny (unikanie closure bug)
+            const capturedRoleKey = rc.key;
+            names.forEach(emp=>{ 
+              const div = document.createElement('div'); 
+              div.className='emp-name'; 
+              div.textContent = displayShort(emp); 
+              div.onclick = async ()=>{
                 try{
-                  const missing = missingPermsForEmp(emp, machine, rc.key);
+                  // WAŻNE: Sprawdzaj uprawnienia dla ORYGINALNEJ roli (roleKey), nie kolumny w modalu!
+                  const missing = missingPermsForEmp(emp, machineObj, roleKey);
                   if(missing && missing.length){
-                    const ok = confirm('Pracownik nie ma wymaganych uprawnień — ' + missing.join(', ') + '. Na pewno przypisać?');
+                    const ok = await showPermissionAlert(missing.join(', '));
                     if(!ok) return;
                   }
-                  await saveAssignment(date, machine, roleKey, emp.id);
+                  await saveAssignment(date, machineNumber, roleKey, emp.id);
                   assignModal.style.display='none'; document.body.classList.remove('modal-open');
                 }catch(e){ console.error('assign click error', e, { emp }); }
-              }; td.appendChild(div); }); }
+              }; 
+              td.appendChild(div); 
+            }); 
+          }
           tr.appendChild(td);
         });
 
@@ -634,12 +684,12 @@ function openAssignModal(date, machine, roleKey) {
           if(globalHelpers.length === 0){ const m = document.createElement('div'); m.className='muted'; m.textContent='—'; tdGlobal.appendChild(m); }
           else{ globalHelpers.forEach(emp=>{ const d = document.createElement('div'); d.className='emp-name'; d.textContent = displayShort(emp); d.onclick = async ()=>{
                 try{
-                  const missing = missingPermsForEmp(emp, machine, roleKey);
+                  const missing = missingPermsForEmp(emp, machineObj, roleKey);
                   if(missing && missing.length){
-                    const ok = confirm('Pracownik nie ma wymaganych uprawnień — ' + missing.join(', ') + '. Na pewno przypisać?');
+                    const ok = await showPermissionAlert(missing.join(', '));
                     if(!ok) return;
                   }
-                  await saveAssignment(date, machine, roleKey, emp.id);
+                  await saveAssignment(date, machineNumber, roleKey, emp.id);
                   assignModal.style.display='none'; document.body.classList.remove('modal-open');
                 }catch(e){ console.error('assign global click error', e, { emp }); }
               }; tdGlobal.appendChild(d); }); }
@@ -658,7 +708,7 @@ function openAssignModal(date, machine, roleKey) {
 
     const clear = document.createElement('button');
     clear.className = 'btn'; clear.style.marginTop='12px'; clear.style.width='100%'; clear.textContent='Wyczyść przypisanie';
-    clear.onclick = async ()=>{ await saveAssignment(date, machine, roleKey, null); assignModal.style.display='none'; document.body.classList.remove('modal-open'); };
+    clear.onclick = async ()=>{ await saveAssignment(date, machineNumber, roleKey, null); assignModal.style.display='none'; document.body.classList.remove('modal-open'); };
     assignList.appendChild(clear);
   }catch(e){ console.error('openAssignModal error', e, { date, machine, roleKey }); if(assignModal){ assignModal.style.display='none'; document.body.classList.remove('modal-open'); } }
 }
