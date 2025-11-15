@@ -46,6 +46,8 @@ async function initSupabaseAdmin(){
   }
 }
 
+  
+
 /* -------------------- Auth modal (prostota) -------------------- */
 function showAuthModal() {
   const modal = document.getElementById('adminAuthModal');
@@ -430,18 +432,7 @@ const AdminMachines = (function(){
         editBtn.textContent = 'Edytuj';
         editBtn.onclick = () => openEditModal(m);
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn danger small';
-        delBtn.style.marginLeft = '8px';
-        delBtn.textContent = 'Usuń';
-        delBtn.onclick = async () => {
-          if(!confirm(`Na pewno usunąć maszynę ${m.number}?`)) return;
-          await deleteMachine(m.number);
-          await renderList();
-        };
-
         tdActions.appendChild(editBtn);
-        tdActions.appendChild(delBtn);
         tr.appendChild(tdActions);
 
         handle.addEventListener('dragstart', (e) => {
@@ -632,6 +623,17 @@ const AdminMachines = (function(){
     actions.style.gap = '8px';
     actions.style.marginTop = '12px';
 
+    // Delete button moved from table row into modal
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn danger';
+    deleteBtn.textContent = 'Usuń maszynę';
+    deleteBtn.onclick = async () => {
+      if(!confirm(`Na pewno usunąć maszynę ${machine.number}?`)) return;
+      modal.remove();
+      await deleteMachine(machine.number);
+      await renderList();
+    };
+
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'btn outline';
     cancelBtn.textContent = 'Anuluj';
@@ -653,6 +655,8 @@ const AdminMachines = (function(){
       await renderList();
     };
 
+    // order: delete, cancel, save
+    actions.appendChild(deleteBtn);
     actions.appendChild(cancelBtn);
     actions.appendChild(saveBtn);
 
@@ -973,6 +977,17 @@ const AdminEmployees = (function(){
     actions.style.gap = '8px';
     actions.style.marginTop = '12px';
 
+    // Delete employee button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn danger';
+    deleteBtn.textContent = 'Usuń pracownika';
+    deleteBtn.onclick = async () => {
+      if(!confirm(`Na pewno usunąć pracownika ${emp.surname || emp.firstname || emp.id}?`)) return;
+      modal.remove();
+      await deleteEmployee(emp.id);
+      try { await renderList(); } catch(e){ console.warn(e); }
+    };
+
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'btn outline';
     cancelBtn.textContent = 'Anuluj';
@@ -1011,6 +1026,9 @@ const AdminEmployees = (function(){
         alert('Błąd podczas zapisu — sprawdź konsolę.');
       }
     };
+    // order: delete, cancel, save
+    actions.appendChild(deleteBtn);
+    actions.appendChild(cancelBtn);
     actions.appendChild(saveBtn);
 
     box.appendChild(actions);
@@ -1025,9 +1043,21 @@ const AdminEmployees = (function(){
   async function saveEmployeeChanges(empId, updates){
     if(sb){
       try{
+        function makeShortName(surname, firstname){
+          const s = (surname || '').toString().trim();
+          const f = (firstname || '').toString().trim();
+          if(!s) return '';
+          if(!f) return s;
+          const firstTwo = f.slice(0,2);
+          const a = firstTwo.charAt(0).toUpperCase();
+          const b = firstTwo.charAt(1) ? firstTwo.charAt(1).toLowerCase() : '';
+          return `${s} ${a}${b}.`;
+        }
+
         const payload = {
           surname: updates.surname,
           firstname: updates.firstname,
+          short_name: makeShortName(updates.surname, updates.firstname),
           bu: updates.bu,
           roles: updates.roles, // as array/text[] type
           permissions: updates.permissions
@@ -1057,6 +1087,155 @@ const AdminEmployees = (function(){
         alert('Nie znaleziono pracownika w pamięci lokalnej.');
       }
     }
+  }
+
+  // Dodaj nowego pracownika
+  async function addEmployee(payload){
+    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    try{
+      const insertObj = {
+        firstname: payload.firstname || '',
+        surname: payload.surname || '',
+        bu: payload.bu || '',
+        roles: Array.isArray(payload.roles) ? payload.roles : (payload.roles ? [payload.roles] : []),
+        permissions: Array.isArray(payload.permissions) ? payload.permissions : (payload.permissions ? payload.permissions.split(',').map(s=>s.trim()) : [])
+      };
+      // create short_name like: "Surname Fi." (first two letters of firstname, dot)
+      (function setShort(){
+        const s = (insertObj.surname || '').toString().trim();
+        const f = (insertObj.firstname || '').toString().trim();
+        if(!s){ insertObj.short_name = f ? (f.slice(0,2).charAt(0).toUpperCase() + (f.slice(0,2).charAt(1) ? f.slice(0,2).charAt(1).toLowerCase() : '') + '.') : ''; return; }
+        if(!f){ insertObj.short_name = s; return; }
+        const firstTwo = f.slice(0,2);
+        const a = firstTwo.charAt(0).toUpperCase();
+        const b = firstTwo.charAt(1) ? firstTwo.charAt(1).toLowerCase() : '';
+        insertObj.short_name = `${s} ${a}${b}.`;
+      })();
+      const { error } = await sb.from('employees').insert([insertObj]);
+      if(error){ alert('Błąd dodawania pracownika: ' + (error.message || error)); return; }
+      // refresh local cache
+      await fetchEmployees();
+      try { await renderList(); } catch(e){ }
+      alert('Dodano pracownika.');
+    }catch(e){
+      console.error('addEmployee error', e);
+      alert('Błąd podczas dodawania pracownika. Sprawdź konsolę.');
+    }
+  }
+
+  // Usuń pracownika (usuwa powiązania i sam rekord)
+  async function deleteEmployee(empId){
+    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    try{
+      try { await sb.from('assignments').delete().eq('employee_id', empId); } catch(e) { /* ignore */ }
+      const { error } = await sb.from('employees').delete().eq('id', empId);
+      if(error){ alert('Błąd usuwania pracownika: ' + (error.message || error)); return; }
+      // remove from local cache
+      const idx = cache.findIndex(x => x.id === empId);
+      if(idx > -1) cache.splice(idx, 1);
+      alert('Usunięto pracownika.');
+    }catch(e){
+      console.error('deleteEmployee error', e);
+      alert('Błąd podczas usuwania. Sprawdź konsolę.');
+    }
+  }
+
+  function openAddEmployeeModal(){
+    const existing = document.getElementById('empAddModal');
+    if(existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'empAddModal';
+    modal.className = 'modal';
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = 30000;
+
+    const box = document.createElement('div');
+    box.style.width = '560px';
+    box.style.maxWidth = '94%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '14px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)';
+    box.style.boxSizing = 'border-box';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Dodaj pracownika';
+    title.style.marginTop = '0';
+    box.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gap = '10px';
+
+    const inpSurname = document.createElement('input');
+    inpSurname.placeholder = 'Nazwisko';
+    inpSurname.style.padding = '8px';
+    inpSurname.style.border = '1px solid #e6eef8';
+    inpSurname.style.borderRadius = '6px';
+    const inpFirstname = document.createElement('input');
+    inpFirstname.placeholder = 'Imię';
+    inpFirstname.style.padding = '8px';
+    inpFirstname.style.border = '1px solid #e6eef8';
+    inpFirstname.style.borderRadius = '6px';
+
+    const wrapSurname = document.createElement('div');
+    const labSurname = document.createElement('label'); labSurname.textContent = 'Nazwisko'; labSurname.style.display='block'; labSurname.style.fontWeight='600'; labSurname.style.marginBottom='6px';
+    wrapSurname.appendChild(labSurname); wrapSurname.appendChild(inpSurname);
+    const wrapFirstname = document.createElement('div');
+    const labFirstname = document.createElement('label'); labFirstname.textContent = 'Imię'; labFirstname.style.display='block'; labFirstname.style.fontWeight='600'; labFirstname.style.marginBottom='6px';
+    wrapFirstname.appendChild(labFirstname); wrapFirstname.appendChild(inpFirstname);
+    grid.appendChild(wrapSurname); grid.appendChild(wrapFirstname);
+
+    // BU select
+    const wrapBu = document.createElement('div'); wrapBu.style.gridColumn='1 / -1';
+    const labBu = document.createElement('label'); labBu.textContent='BU'; labBu.style.display='block'; labBu.style.fontWeight='600'; labBu.style.marginBottom='6px';
+    const selBu = document.createElement('select'); selBu.style.padding='8px'; selBu.style.border='1px solid #e6eef8'; selBu.style.borderRadius='6px'; selBu.style.width='200px';
+    BU_OPTIONS.forEach(opt => { const o = document.createElement('option'); o.value=opt; o.textContent = opt===''?'— wybierz —':opt; selBu.appendChild(o); });
+    wrapBu.appendChild(labBu); wrapBu.appendChild(selBu);
+    grid.appendChild(wrapBu);
+
+    box.appendChild(grid);
+
+    // roles multi-select
+    const labRoles = document.createElement('label'); labRoles.textContent='Role (wybierz jedną lub więcej)'; labRoles.style.display='block'; labRoles.style.fontWeight='600'; labRoles.style.marginTop='10px';
+    const selRoles = document.createElement('select'); selRoles.multiple=true; selRoles.size = Math.min(6, ROLE_OPTIONS.length); selRoles.style.width='100%'; selRoles.style.padding='6px'; selRoles.style.border='1px solid #e6eef8'; selRoles.style.borderRadius='6px';
+    ROLE_OPTIONS.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRoles.appendChild(o); });
+    box.appendChild(labRoles); box.appendChild(selRoles);
+
+    // permissions checkboxes
+    const permsLabel = document.createElement('div'); permsLabel.textContent = 'Uprawnienia'; permsLabel.style.fontWeight='600'; permsLabel.style.marginTop='10px'; box.appendChild(permsLabel);
+    const permGrid = document.createElement('div'); permGrid.style.display='grid'; permGrid.style.gridTemplateColumns='repeat(2,1fr)'; permGrid.style.gap='6px'; permGrid.style.marginTop='6px';
+    PERMISSION_OPTIONS.forEach(code => {
+      const cbWrap = document.createElement('label'); cbWrap.style.display='flex'; cbWrap.style.alignItems='center'; cbWrap.style.gap='8px'; cbWrap.style.padding='6px'; cbWrap.style.cursor='pointer';
+      const cb = document.createElement('input'); cb.type='checkbox'; cb.value = code; const span = document.createElement('span'); span.textContent = code; span.style.fontSize='13px'; cbWrap.appendChild(cb); cbWrap.appendChild(span); permGrid.appendChild(cbWrap);
+    });
+    box.appendChild(permGrid);
+
+    const actions = document.createElement('div'); actions.style.display='flex'; actions.style.justifyContent='flex-end'; actions.style.gap='8px'; actions.style.marginTop='12px';
+    const cancelBtn = document.createElement('button'); cancelBtn.className='btn outline'; cancelBtn.textContent='Anuluj'; cancelBtn.onclick = () => modal.remove();
+    const addBtn = document.createElement('button'); addBtn.className='btn'; addBtn.textContent='Dodaj';
+    addBtn.onclick = async () => {
+      const payload = {
+        surname: (inpSurname.value||'').trim(),
+        firstname: (inpFirstname.value||'').trim(),
+        bu: (selBu.value||'').trim(),
+        roles: Array.from(selRoles.selectedOptions).map(o=>o.value).filter(Boolean),
+        permissions: Array.from(permGrid.querySelectorAll('input[type="checkbox"]')).filter(i=>i.checked).map(i=>i.value)
+      };
+      // minimal validation
+      if(!payload.surname && !payload.firstname){ if(!confirm('Nazwisko i imię są puste — chcesz dodać mimo to?')) return; }
+      await addEmployee(payload);
+      modal.remove();
+    };
+    actions.appendChild(cancelBtn); actions.appendChild(addBtn);
+    box.appendChild(actions);
+    modal.appendChild(box); document.body.appendChild(modal);
   }
 
   // ----------------------------
@@ -1613,6 +1792,13 @@ const AdminEmployees = (function(){
         topControls.style.width = '100%';
         // left: header
         topControls.appendChild(header);
+
+        // right: add employee button
+        const addEmpBtn = document.createElement('button');
+        addEmpBtn.className = 'btn';
+        addEmpBtn.textContent = 'Dodaj pracownika';
+        addEmpBtn.onclick = () => openAddEmployeeModal();
+        topControls.appendChild(addEmpBtn);
         // right: permChips container (if exists in DOM, we'll reattach into wrap later)
         wrap.appendChild(topControls);
 
@@ -1912,6 +2098,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.__permGlobalDelegate = true;
     document.addEventListener('click', function(e){
       const t = e.target;
+      // Ignore clicks that happen inside any modal to avoid interfering
+      // with modal inputs (e.g. add/edit employee permission checkboxes).
+      if (t && t.closest && t.closest('.modal')) return;
       const target = t.closest && t.closest('[data-perm], input[type="checkbox"][value], .perm-box, .perm-item, button[data-perm]');
       if(!target) return;
       let v = '';
