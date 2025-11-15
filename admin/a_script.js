@@ -117,6 +117,89 @@ function waitForSupabaseGlobal(timeoutMs = 8000) {
     return `Brak odpowiedniej roli lub uprawnienia do maszyny: ${machineCode}`;
   }
 let sb = null;
+
+/* -------------------- GENERIC NOTIFICATION FOR ADMIN -------------------- */
+async function showAdminNotification(message, title = 'Powiadomienie', icon = 'ℹ️'){
+  // Sprawdzaj czy modal z głównej strony jest dostępny
+  const modal = document.getElementById('notificationModal');
+  if(modal) {
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+    const iconEl = document.getElementById('notificationIcon');
+    const okBtn = document.getElementById('notificationOkBtn');
+    
+    if(titleEl && messageEl && iconEl && okBtn) {
+      return new Promise((resolve) => {
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        iconEl.textContent = icon;
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+        
+        const cleanup = () => {
+          modal.style.display = 'none';
+          document.body.classList.remove('modal-open');
+          okBtn.onclick = null;
+        };
+        
+        okBtn.onclick = () => {
+          cleanup();
+          resolve();
+        };
+      });
+    }
+  }
+  // Fallback
+  alert(message);
+}
+
+async function showConfirmModal(message, title = 'Potwierdzenie'){
+  const modal = document.getElementById('confirmModal');
+  if(modal){
+    const msgEl = modal.querySelector('.confirm-box p');
+    const titleEl = modal.querySelector('.confirm-box h3');
+    const yesBtn = modal.querySelector('.confirm-box .yes-btn');
+    const noBtn = modal.querySelector('.confirm-box .no-btn');
+    
+    if(titleEl) titleEl.textContent = title;
+    if(msgEl) msgEl.textContent = message;
+    
+    return new Promise(resolve => {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+      
+      const cleanup = () => {
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        yesBtn.onclick = null;
+        noBtn.onclick = null;
+      };
+      
+      yesBtn.onclick = () => {
+        cleanup();
+        resolve(true);
+      };
+      
+      noBtn.onclick = () => {
+        cleanup();
+        resolve(false);
+      };
+      
+      // ESC key closes with false
+      const handleEsc = (e) => {
+        if(e.key === 'Escape'){
+          cleanup();
+          document.removeEventListener('keydown', handleEsc);
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleEsc);
+    });
+  }
+  // Fallback
+  return confirm(message);
+}
+
 async function initSupabaseAdmin(){
   try {
     await waitForSupabaseGlobal();
@@ -161,7 +244,7 @@ function showAuthModal() {
       try { document.dispatchEvent(new CustomEvent('adminAuthenticated')); } catch(e){}
       document.getElementById('tabModify')?.click();
     } else {
-      alert('Błędne hasło.'); if(passInput) passInput.focus();
+      await showAdminNotification('Błędne hasło.', 'Błąd', '❌'); if(passInput) passInput.focus();
     }
   }
 
@@ -375,7 +458,7 @@ const AdminMachines = (function(){
       const cel = selCela.value || '';
       const pak = selPak.value || '';
       const kart = selKart.value || '';
-      if(!num){ return alert('Podaj numer maszyny.'); }
+      if(!num){ return await showAdminNotification('Podaj numer maszyny.', 'Błąd', '⚠️'); }
       await addMachine(num, mk, pk, cel, pak, kart);
       modal.remove();
     };
@@ -637,57 +720,57 @@ const AdminMachines = (function(){
   }
 
   async function addMachine(number, maker='P100', paker='F550', celafoniarka='', pakieciarka='', kartoniarka=''){
-    if(!number || !String(number).trim()) { alert('Podaj numer maszyny.'); return; }
-    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    if(!number || !String(number).trim()) { await showAdminNotification('Podaj numer maszyny.', 'Błąd', '⚠️'); return; }
+    if(!sb){ await showAdminNotification('Brak połączenia z serwerem.', 'Błąd', '❌'); return; }
     const num = String(number).trim();
     try{
       const { data: exists } = await sb.from('machines').select('number').eq('number', num).limit(1);
-      if(exists && exists.length){ alert('Maszyna o numerze ' + num + ' już istnieje.'); return; }
+      if(exists && exists.length){ await showAdminNotification('Maszyna o numerze ' + num + ' już istnieje.', 'Błąd', '⚠️'); return; }
       const { data: last } = await sb.from('machines').select('ord').order('ord', { ascending:false }).limit(1).maybeSingle();
       const nextOrd = last && last.ord ? last.ord + 1 : (machinesCache.length ? (machinesCache[machinesCache.length-1].ord || machinesCache.length) + 1 : 1);
       const insertObj = { number: num, ord: nextOrd, default_view: true, status: 'Produkcja', maker, paker, celafoniarka, pakieciarka, kartoniarka };
       const { error } = await sb.from('machines').insert([insertObj]);
-      if(error){ alert('Błąd dodawania maszyny: ' + (error.message || error)); return; }
-      alert('Dodano maszynę ' + num);
+      if(error){ await showAdminNotification('Błąd dodawania maszyny: ' + (error.message || error), 'Błąd', '❌'); return; }
+      await showAdminNotification('Dodano maszynę ' + num, 'Sukces', '✔️');
       await renderList();
     }catch(e){
       console.error('AdminMachines.addMachine error', e);
-      alert('Błąd podczas dodawania maszyny. Sprawdź konsolę.');
+      await showAdminNotification('Błąd podczas dodawania maszyny. Sprawdź konsolę.', 'Błąd', '❌');
     }
   }
 
   async function deleteMachine(number){
-    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    if(!sb){ await showAdminNotification('Brak połączenia z serwerem.', 'Błąd', '❌'); return; }
     try{
       await sb.from('assignments').delete().eq('machine_number', number);
       const { error } = await sb.from('machines').delete().eq('number', number);
-      if(error){ alert('Błąd usuwania maszyny: ' + (error.message || error)); return; }
-      alert('Usunięto maszynę ' + number);
+      if(error){ await showAdminNotification('Błąd usuwania maszyny: ' + (error.message || error), 'Błąd', '❌'); return; }
+      await showAdminNotification('Usunięto maszynę ' + number, 'Sukces', '✔️');
     }catch(e){
       console.error('AdminMachines.deleteMachine error', e);
-      alert('Błąd podczas usuwania. Sprawdź konsolę.');
+      await showAdminNotification('Błąd podczas usuwania. Sprawdź konsolę.', 'Błąd', '❌');
     }
   }
 
   async function editMachine(oldNumber, newNumber, maker, paker, celafoniarka, pakieciarka, kartoniarka){
-    if(!newNumber || !String(newNumber).trim()) { alert('Numer nie może być pusty.'); return; }
-    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    if(!newNumber || !String(newNumber).trim()) { await showAdminNotification('Numer nie może być pusty.', 'Błąd', '⚠️'); return; }
+    if(!sb){ await showAdminNotification('Brak połączenia z serwerem.', 'Błąd', '❌'); return; }
     const newNum = String(newNumber).trim();
     try{
       if(newNum !== String(oldNumber)){
         const { data: exists } = await sb.from('machines').select('number').eq('number', newNum).limit(1);
-        if(exists && exists.length){ alert('Maszyna o numerze ' + newNum + ' już istnieje.'); return; }
+        if(exists && exists.length){ await showAdminNotification('Maszyna o numerze ' + newNum + ' już istnieje.', 'Błąd', '⚠️'); return; }
       }
       const updates = { number: newNum, maker, paker, celafoniarka, pakieciarka, kartoniarka };
       const { error } = await sb.from('machines').update(updates).eq('number', oldNumber);
-      if(error){ alert('Błąd aktualizacji maszyny: ' + (error.message || error)); return; }
+      if(error){ await showAdminNotification('Błąd aktualizacji maszyny: ' + (error.message || error), 'Błąd', '❌'); return; }
       if(newNum !== String(oldNumber)){
         await sb.from('assignments').update({ machine_number: newNum }).eq('machine_number', oldNumber);
       }
-      alert('Zaktualizowano maszynę: ' + newNum);
+      await showAdminNotification('Zaktualizowano maszynę: ' + newNum, 'Sukces', '✔️');
     }catch(e){
       console.error('AdminMachines.editMachine error', e);
-      alert('Błąd podczas edycji maszyny. Sprawdź konsolę.');
+      await showAdminNotification('Błąd podczas edycji maszyny. Sprawdź konsolę.', 'Błąd', '❌');
     }
   }
 
@@ -766,7 +849,7 @@ const AdminMachines = (function(){
     deleteBtn.className = 'btn danger';
     deleteBtn.textContent = 'Usuń maszynę';
     deleteBtn.onclick = async () => {
-      if(!confirm(`Na pewno usunąć maszynę ${machine.number}?`)) return;
+      if(!await showConfirmModal(`Na pewno usunąć maszynę ${machine.number}?`, 'Usunąć maszynę')) return;
       modal.remove();
       await deleteMachine(machine.number);
       await renderList();
@@ -787,7 +870,7 @@ const AdminMachines = (function(){
       const cel = selCela.value || '';
       const pak = selPak.value || '';
       const kart = selKart.value || '';
-      if(!newNum){ return alert('Numer nie może być pusty.'); }
+      if(!newNum){ return await showAdminNotification('Numer nie może być pusty.', 'Błąd', '⚠️'); }
       await editMachine(machine.number, newNum, mk, pk, cel, pak, kart);
       modal.remove();
       await renderList();
@@ -949,7 +1032,7 @@ const AdminEmployees = (function(){
     modal.style.alignItems = 'center';
     modal.style.justifyContent = 'center';
     modal.style.background = 'rgba(0,0,0,0.4)';
-    modal.style.zIndex = 30000;
+    modal.style.zIndex = 29000;
 
     const box = document.createElement('div');
     box.style.width = '560px';
@@ -1180,7 +1263,7 @@ const AdminEmployees = (function(){
     deleteBtn.className = 'btn danger';
     deleteBtn.textContent = 'Usuń pracownika';
     deleteBtn.onclick = async () => {
-      if(!confirm(`Na pewno usunąć pracownika ${emp.surname || emp.firstname || emp.id}?`)) return;
+      if(!await showConfirmModal(`Na pewno usunąć pracownika ${emp.surname || emp.firstname || emp.id}?`, 'Usunąć pracownika')) return;
       modal.remove();
       await deleteEmployee(emp.id);
       try { await renderList(); } catch(e){ console.warn(e); }
@@ -1217,7 +1300,7 @@ const AdminEmployees = (function(){
 
       // minimalna walidacja
       if(!updates.surname && !updates.firstname){
-        if(!confirm('Nazwisko i imię są puste — chcesz zapisać mimo to?')) return;
+        if(!await showConfirmModal('Nazwisko i imię są puste — chcesz zapisać mimo to?', 'Brak danych')) return;
       }
 
       try {
@@ -1226,7 +1309,7 @@ const AdminEmployees = (function(){
         try { await renderList(); } catch(e){ console.warn(e); }
       } catch (e) {
         console.error('Błąd zapisu pracownika z modala:', e);
-        alert('Błąd podczas zapisu — sprawdź konsolę.');
+        await showAdminNotification('Błąd podczas zapisu — sprawdź konsolę.', 'Błąd', '❌');
       }
     };
     // order: delete, cancel, save
@@ -1267,13 +1350,13 @@ const AdminEmployees = (function(){
           mechanical_permissions: updates.mechanical_permissions || ''
         };
         const { error } = await sb.from('employees').update(payload).eq('id', empId);
-        if(error){ alert('Błąd zapisu: ' + (error.message || error)); console.error(error); return; }
+        if(error){ await showAdminNotification('Błąd zapisu: ' + (error.message || error), 'Błąd', '❌'); console.error(error); return; }
         const idx = cache.findIndex(x => x.id === empId);
         if(idx > -1) cache[idx] = Object.assign({}, cache[idx], payload);
-        alert('Zapisano zmiany.');
+        await showAdminNotification('Zapisano zmiany.', 'Sukces', '✔️');
       }catch(e){
         console.error('saveEmployeeChanges error', e);
-        alert('Błąd podczas zapisu. Sprawdź konsolę.');
+        await showAdminNotification('Błąd podczas zapisu. Sprawdź konsolę.', 'Błąd', '❌');
       }
     } else {
       // offline - update lokalnie
@@ -1286,16 +1369,16 @@ const AdminEmployees = (function(){
           roles: updates.roles,
           permissions: updates.permissions
         });
-        alert('Zapisano lokalnie (offline).');
+        await showAdminNotification('Zapisano lokalnie (offline).', 'Sukces', '✔️');
       } else {
-        alert('Nie znaleziono pracownika w pamięci lokalnej.');
+        await showAdminNotification('Nie znaleziono pracownika w pamięci lokalnej.', 'Błąd', '❌');
       }
     }
   }
 
   // Dodaj nowego pracownika
   async function addEmployee(payload){
-    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    if(!sb){ await showAdminNotification('Brak połączenia z serwerem.', 'Błąd', '❌'); return; }
     try{
       const insertObj = {
         firstname: payload.firstname || '',
@@ -1317,31 +1400,31 @@ const AdminEmployees = (function(){
         insertObj.short_name = `${s} ${a}${b}.`;
       })();
       const { error } = await sb.from('employees').insert([insertObj]);
-      if(error){ alert('Błąd dodawania pracownika: ' + (error.message || error)); return; }
+      if(error){ await showAdminNotification('Błąd dodawania pracownika: ' + (error.message || error), 'Błąd', '❌'); return; }
       // refresh local cache
       await fetchEmployees();
       try { await renderList(); } catch(e){ }
-      alert('Dodano pracownika.');
+      await showAdminNotification('Dodano pracownika.', 'Sukces', '✔️');
     }catch(e){
       console.error('addEmployee error', e);
-      alert('Błąd podczas dodawania pracownika. Sprawdź konsolę.');
+      await showAdminNotification('Błąd podczas dodawania pracownika. Sprawdź konsolę.', 'Błąd', '❌');
     }
   }
 
   // Usuń pracownika (usuwa powiązania i sam rekord)
   async function deleteEmployee(empId){
-    if(!sb){ alert('Brak połączenia z serwerem.'); return; }
+    if(!sb){ await showAdminNotification('Brak połączenia z serwerem.', 'Błąd', '❌'); return; }
     try{
       try { await sb.from('assignments').delete().eq('employee_id', empId); } catch(e) { /* ignore */ }
       const { error } = await sb.from('employees').delete().eq('id', empId);
-      if(error){ alert('Błąd usuwania pracownika: ' + (error.message || error)); return; }
+      if(error){ await showAdminNotification('Błąd usuwania pracownika: ' + (error.message || error), 'Błąd', '❌'); return; }
       // remove from local cache
       const idx = cache.findIndex(x => x.id === empId);
       if(idx > -1) cache.splice(idx, 1);
-      alert('Usunięto pracownika.');
+      await showAdminNotification('Usunięto pracownika.', 'Sukces', '✔️');
     }catch(e){
       console.error('deleteEmployee error', e);
-      alert('Błąd podczas usuwania. Sprawdź konsolę.');
+      await showAdminNotification('Błąd podczas usuwania. Sprawdź konsolę.', 'Błąd', '❌');
     }
   }
 
@@ -1357,7 +1440,7 @@ const AdminEmployees = (function(){
     modal.style.alignItems = 'center';
     modal.style.justifyContent = 'center';
     modal.style.background = 'rgba(0,0,0,0.4)';
-    modal.style.zIndex = 30000;
+    modal.style.zIndex = 29000;
 
     const box = document.createElement('div');
     box.style.width = '560px';
@@ -1491,7 +1574,7 @@ const AdminEmployees = (function(){
         mechanical_permissions: mechPerms
       };
       // minimal validation
-      if(!payload.surname && !payload.firstname){ if(!confirm('Nazwisko i imię są puste — chcesz dodać mimo to?')) return; }
+      if(!payload.surname && !payload.firstname){ if(!await showConfirmModal('Nazwisko i imię są puste — chcesz dodać mimo to?', 'Brak danych')) return; }
       await addEmployee(payload);
       modal.remove();
     };

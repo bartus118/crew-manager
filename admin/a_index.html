@@ -87,6 +87,28 @@
     </section>
   </main>
 
+  <!-- CONFIRM MODAL -->
+  <div id="confirmModal" aria-hidden="true" style="display:none;">
+    <div class="confirm-box" role="dialog" aria-modal="true">
+      <h3>Potwierdzenie</h3>
+      <p></p>
+      <div class="actions">
+        <button class="btn no-btn outline">Nie</button>
+        <button class="btn yes-btn danger">Tak</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION MODAL -->
+  <div id="notificationModal" class="modal" style="display:none;">
+    <div class="notification-box">
+      <div class="notification-icon" id="notificationIcon">ℹ️</div>
+      <h3 id="notificationTitle">Powiadomienie</h3>
+      <p id="notificationMessage"></p>
+      <button id="notificationOkBtn" class="btn">OK</button>
+    </div>
+  </div>
+
   <script src="./a_script.js"></script>
 </body>
 </html>

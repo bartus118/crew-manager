@@ -77,6 +77,97 @@ function showPermissionAlert(message){
   });
 }
 
+/* -------------------- GENERIC NOTIFICATION MODAL -------------------- */
+function showNotification(message, title = 'Powiadomienie', icon = 'ℹ️'){
+  return new Promise((resolve) => {
+    const modal = document.getElementById('notificationModal');
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+    const iconEl = document.getElementById('notificationIcon');
+    const okBtn = document.getElementById('notificationOkBtn');
+    
+    if(!modal || !titleEl || !messageEl || !iconEl || !okBtn) {
+      // Fallback do zwykłego alert
+      alert(message);
+      resolve();
+      return;
+    }
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    iconEl.textContent = icon;
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    
+    const cleanup = () => {
+      modal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+      okBtn.onclick = null;
+    };
+    
+    okBtn.onclick = () => {
+      cleanup();
+      resolve();
+    };
+    
+    // Enter key closes modal
+    const handleKeyPress = (e) => {
+      if(e.key === 'Enter') {
+        document.removeEventListener('keypress', handleKeyPress);
+        cleanup();
+        resolve();
+      }
+    };
+    document.addEventListener('keypress', handleKeyPress);
+  });
+}
+
+/* -------------------- CUSTOM ADMIN LOGIN MODAL -------------------- */
+function showAdminLoginModal(){
+  return new Promise((resolve) => {
+    const modal = document.getElementById('adminLoginModal');
+    const input = document.getElementById('adminPasswordInput');
+    const submitBtn = document.getElementById('adminLoginSubmit');
+    const cancelBtn = document.getElementById('adminLoginCancel');
+    
+    if(!modal || !input || !submitBtn || !cancelBtn) {
+      // Fallback do zwykłego prompt
+      const pass = prompt('Podaj hasło administratora:');
+      resolve(pass);
+      return;
+    }
+    
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    input.value = '';
+    input.focus();
+    
+    const cleanup = () => {
+      modal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+      submitBtn.onclick = null;
+      cancelBtn.onclick = null;
+      input.onkeypress = null;
+    };
+    
+    const submit = () => {
+      cleanup();
+      resolve(input.value);
+    };
+    
+    submitBtn.onclick = submit;
+    
+    cancelBtn.onclick = () => {
+      cleanup();
+      resolve(null);
+    };
+    
+    input.onkeypress = (e) => {
+      if(e.key === 'Enter') submit();
+    };
+  });
+}
+
 /**
  * Sprawdza uprawnienia pracownika dla danego stanowiska na maszynie
  * 
@@ -396,7 +487,7 @@ function buildTableFor(date){
           m.status = newStatus;
 
           if(!sb){
-            alert('Brak połączenia z serwerem — zmiana statusu jest zablokowana.');
+            await showNotification('Brak połączenia z serwerem — zmiana statusu jest zablokowana.', 'Błąd', '❌');
             await loadMachines();
             await loadAssignmentsForDate(date);
             buildTableFor(date);
@@ -444,7 +535,7 @@ function buildTableFor(date){
 /* -------------------- ZAPIS PRZYPISANIA DO BAZY -------------------- */
 async function saveAssignment(date,machine,role,empId){
   try{
-    if(!sb){ alert('Brak połączenia z serwerem — zapisywanie przypisań jest zablokowane. Proszę połącz się z Supabase i spróbuj ponownie.'); return; }
+    if(!sb){ await showNotification('Brak połączenia z serwerem — zapisywanie przypisań jest zablokowane. Proszę połącz się z Supabase i spróbuj ponownie.', 'Błąd', '❌'); return; }
     const machineNumber = machine.number || machine; // Obsługuj zarówno obiekt jak i numer
     await sb.from('assignments').delete().eq('date',date).eq('machine_number',machineNumber).eq('role',role);
     if(empId) await sb.from('assignments').insert([{date,machine_number:machineNumber,role,employee_id:empId}]);
@@ -714,9 +805,9 @@ function openAssignModal(date, machine, roleKey) {
 }
 
 /* -------------------- EXPORT CSV DLA DNIA -------------------- */
-function exportDayToCSV(date){
+async function exportDayToCSV(date){
   try{
-    if(!date){ alert('Wybierz datę przed eksportem.'); return; }
+    if(!date){ await showNotification('Wybierz datę przed eksportem.', 'Błąd', '⚠️'); return; }
     const dateData = assignments[date] || {};
     const roleTitles = COLUMNS.slice(2).map(c=>c.title);
     const headers = ['Data','Maszyna','Status', ...roleTitles];
@@ -734,7 +825,7 @@ function exportDayToCSV(date){
     const filename = `assignments-${date}.csv`;
     const blob = new Blob([csvContent], { type:'text/csv;charset=utf-8;' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-  }catch(e){ console.error('exportDayToCSV error', e, { date }); alert('Błąd eksportu. Sprawdź konsolę.'); }
+  }catch(e){ console.error('exportDayToCSV error', e, { date }); await showNotification('Błąd eksportu. Sprawdź konsolę.', 'Błąd', '❌'); }
 }
 
 /* -------------------- TRYB OFFLINE / ZABLOKOWANIE PRZYCISKÓW -------------------- */
@@ -755,7 +846,7 @@ function enforceOnlineMode(){
       controlsToDisable.forEach(id=>{ const el = document.getElementById(id); if(el){ el.disabled = true; el.classList && el.classList.add('disabled-btn'); } });
 
       if(!_origOpenAssignModal) _origOpenAssignModal = window.openAssignModal || openAssignModal;
-      window.openAssignModal = function(){ alert('Brak połączenia z serwerem — przypisywanie jest zablokowane.'); };
+      window.openAssignModal = function(){ showNotification('Brak połączenia z serwerem — przypisywanie jest zablokowane.', 'Błąd', '❌'); };
     } else {
       const b = document.getElementById('offlineBanner'); if(b) b.remove();
       controlsToDisable.forEach(id=>{ const el = document.getElementById(id); if(el){ el.disabled = false; el.classList && el.classList.remove('disabled-btn'); } });
@@ -769,12 +860,12 @@ document.addEventListener('DOMContentLoaded', () => {
   try{
     const adminLoginBtn = document.getElementById('adminLoginBtn');
     if (adminLoginBtn) {
-      adminLoginBtn.addEventListener('click', () => {
-        const pass = prompt('Podaj hasło administratora:');
+      adminLoginBtn.addEventListener('click', async () => {
+        const pass = await showAdminLoginModal();
         if (pass === 'admin123') {
           try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e) { console.warn('sessionStorage niedostępne', e); }
           window.location.href = './admin/a_index.html';
-        } else if (pass !== null) { alert('Błędne hasło!'); }
+        } else if (pass !== null) { showNotification('Błędne hasło!', 'Błąd', '❌'); }
       });
     }
   }catch(e){ console.error('adminLoginBtn setup error', e); }

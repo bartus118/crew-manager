@@ -53,6 +53,31 @@
     </div>
   </div>
 
+  <!-- Modal dla logowania administratora -->
+  <div id="adminLoginModal" class="modal" style="display:none;">
+    <div class="modal-content admin-login-box">
+      <h3 class="admin-login-title">🔐 Panel Administratora</h3>
+      <p class="admin-login-subtitle">Podaj hasło dostępu</p>
+      <input type="password" id="adminPasswordInput" class="admin-login-input" placeholder="Hasło" autocomplete="off" />
+      <div class="admin-login-buttons">
+        <button id="adminLoginCancel" class="btn outline">Anuluj</button>
+        <button id="adminLoginSubmit" class="btn">Zaloguj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic Notification Modal -->
+  <div id="notificationModal" class="modal" style="display:none;">
+    <div class="modal-content notification-box">
+      <div id="notificationIcon" class="notification-icon">ℹ️</div>
+      <h3 id="notificationTitle" class="notification-title">Powiadomienie</h3>
+      <p id="notificationMessage" class="notification-message"></p>
+      <div class="notification-buttons">
+        <button id="notificationOkBtn" class="btn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>

@@ -190,7 +190,7 @@ td.status-bufor { background: #ffe9e9 !important; color: #7a0f0f !important; }
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 10000;
 }
 #assignModal .modal-content, #adminPanel .modal-content, #adminPanel .modal-box {
   background: #fff;
