@@ -13,26 +13,17 @@
 
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
 const ADMIN_PASSWORD = 'admin123';
-const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
+const SUPABASE_URL = window.CONFIG.supabase.url;
+const SUPABASE_ANON_KEY = window.CONFIG.supabase.anonKey;
 
-/* -------------------- Stałe pomocnicze (dostosuj jeśli trzeba) -------------------- */
-const BU_OPTIONS = ['','BU1','BU2','BU3','BU4'];
-const ROLE_OPTIONS = ['mechanik_focke','mechanik_protos','operator_focke','operator_protos','pracownik_pomocniczy','operator_krosowy'];
-const PERMISSION_OPTIONS = ['P100','P70','F350','F550','GD','GDX','751','401','411','407','408','409','707','487','489'];
+/* -------------------- Stałe pomocnicze (z config.js) -------------------- */
+const BU_OPTIONS = window.CONFIG.admin.bus;
+const ROLE_OPTIONS = window.CONFIG.admin.roles;
+const PERMISSION_OPTIONS = window.CONFIG.admin.permissions;
 
 /* -------------------- Helpers: Supabase init + wait for SDK -------------------- */
-function waitForSupabaseGlobal(timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
-    let waited = 0;
-    const iv = setInterval(() => {
-      if (window.supabase && typeof window.supabase.createClient === 'function') { clearInterval(iv); return resolve(window.supabase); }
-      waited += 200;
-      if (waited >= timeoutMs) { clearInterval(iv); return reject(new Error('Timeout waiting for Supabase SDK')); }
-    }, 200);
-  });
-}
+// Using CONFIG.waitForSupabase from config.js
+const waitForSupabaseGlobalAdmin = window.CONFIG.waitForSupabase;
 
   /**
    * Sprawdza czy pracownik może być przypisany do stanowiska na maszynie wg reguł Protos/Focke i mechanik/operator
@@ -202,7 +193,7 @@ async function showConfirmModal(message, title = 'Potwierdzenie'){
 
 async function initSupabaseAdmin(){
   try {
-    await waitForSupabaseGlobal();
+    await waitForSupabaseGlobalAdmin();
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     console.log('admin: Supabase ready');
   } catch (e) {
@@ -951,9 +942,9 @@ const AdminEmployees = (function(){
         surname: e.surname || '',
         legacy_name: '',
         bu: e.bu || '',
-        roles: Array.isArray(e.roles) ? e.roles.join(', ') : (e.roles || ''),
-        permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).replace(/^{|}$/g,'').replace(/"/g,'').split(',').map(s=>s.trim()).filter(Boolean) : []),
-        mechanical_permissions: e.mechanical_permissions || ''
+        roles: Array.isArray(e.roles) ? e.roles : (e.roles ? String(e.roles).split(',').map(s=>s.trim()).filter(Boolean) : []),
+        permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()).filter(Boolean) : []),
+        mechanical_permissions: Array.isArray(e.mechanical_permissions) ? e.mechanical_permissions : (e.mechanical_permissions ? String(e.mechanical_permissions).split(',').map(s=>s.trim()).filter(Boolean) : [])
       }));
 
       console.info(`fetchEmployees: loaded ${cache.length} rows; with names: ${cache.filter(x => x.firstname || x.surname).length}`);
@@ -989,7 +980,7 @@ const AdminEmployees = (function(){
     // Role
     const rolesCol = document.createElement('div');
     rolesCol.style.flex = '2';
-    rolesCol.textContent = emp.roles || '';
+    rolesCol.textContent = Array.isArray(emp.roles) ? emp.roles.join(', ') : '';
 
     // Uprawnienia (permissions)
     const permsCol = document.createElement('div');
@@ -997,8 +988,8 @@ const AdminEmployees = (function(){
     permsCol.style.whiteSpace = 'nowrap';
     permsCol.style.overflow = 'hidden';
     permsCol.style.textOverflow = 'ellipsis';
-    permsCol.title = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : (emp.permissions || '');
-    permsCol.textContent = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : (emp.permissions || '');
+    permsCol.title = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : '';
+    permsCol.textContent = Array.isArray(emp.permissions) ? emp.permissions.join(', ') : '';
 
     // Akcje -> tylko Edytuj (usunąłem modal Uprawnienia)
     const actionsCol = document.createElement('div');
@@ -1137,7 +1128,7 @@ const AdminEmployees = (function(){
     selRoles.style.border = '1px solid #e6eef8';
     selRoles.style.borderRadius = '6px';
     selRoles.style.width = '100%';
-    const existingRoles = Array.isArray(emp.roles) ? emp.roles.map(r=>String(r).trim()) : (emp.roles ? String(emp.roles).split(',').map(s=>s.trim()) : []);
+    const existingRoles = Array.isArray(emp.roles) ? emp.roles : [];
     ROLE_OPTIONS.forEach(r => {
       const o = document.createElement('option');
       o.value = r;
@@ -1215,9 +1206,7 @@ const AdminEmployees = (function(){
     mechGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
     mechGrid.style.gap = '8px';
 
-    const currMechPerms = (emp.mechanical_permissions && String(emp.mechanical_permissions).trim()) 
-      ? String(emp.mechanical_permissions).split(',').map(m=>String(m).trim()).filter(Boolean)
-      : [];
+    const currMechPerms = Array.isArray(emp.mechanical_permissions) ? emp.mechanical_permissions : [];
 
     PERMISSION_OPTIONS.forEach(code => {
       const cbWrap = document.createElement('label');
@@ -1287,7 +1276,7 @@ const AdminEmployees = (function(){
       
       // zbierz maszyny mechaniczne
       const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
-        .filter(i => i.checked).map(i => i.value).join(',');
+        .filter(i => i.checked).map(i => i.value);
 
       const updates = {
         surname: (inpSurname.value || '').trim(),
@@ -1386,7 +1375,7 @@ const AdminEmployees = (function(){
         bu: payload.bu || '',
         roles: Array.isArray(payload.roles) ? payload.roles : (payload.roles ? [payload.roles] : []),
         permissions: Array.isArray(payload.permissions) ? payload.permissions : (payload.permissions ? payload.permissions.split(',').map(s=>s.trim()) : []),
-        mechanical_permissions: payload.mechanical_permissions || ''
+        mechanical_permissions: Array.isArray(payload.mechanical_permissions) ? payload.mechanical_permissions : (payload.mechanical_permissions ? payload.mechanical_permissions.split(',').map(s=>s.trim()) : [])
       };
       // create short_name like: "Surname Fi." (first two letters of firstname, dot)
       (function setShort(){
@@ -1563,7 +1552,7 @@ const AdminEmployees = (function(){
     addBtn.onclick = async () => {
       const selectedRoles = Array.from(selRoles.selectedOptions).map(o=>o.value).filter(Boolean);
       const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
-        .filter(i => i.checked).map(i => i.value).join(',');
+        .filter(i => i.checked).map(i => i.value);
 
       const payload = {
         surname: (inpSurname.value||'').trim(),
@@ -1960,7 +1949,8 @@ const AdminEmployees = (function(){
       const roleSet = new Set();
       cache.forEach(e => {
         if(e.roles){
-          e.roles.split(',').map(s=>s.trim()).forEach(r => { if(r) roleSet.add(r); });
+          const rolesArray = Array.isArray(e.roles) ? e.roles : (typeof e.roles === 'string' ? e.roles.split(',').map(s=>s.trim()) : []);
+          rolesArray.forEach(r => { if(r) roleSet.add(r); });
         }
       });
       const roleArr = Array.from(roleSet).sort();

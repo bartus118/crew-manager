@@ -9,8 +9,14 @@
  */
 
 /* -------------------- KONFIGURACJA SUPABASE (wstaw swoje dane) -------------------- */
-const SUPABASE_URL = 'https://vuptrwfxgirrkvxkjmnn.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1cHRyd2Z4Z2lycmt2eGtqbW5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3NjUsImV4cCI6MjA3ODAxOTc2NX0.0hLoti7nvGQhQRsrKTt1Yy_cr5Br_XeAHsPdpAnG7NY';
+/* ============================================================
+   GŁÓWNY SKRYPT - Crew Manager
+   Wymagane: config.js musi być załadowany przed tym
+============================================================ */
+
+// Use CONFIG from config.js
+const SUPABASE_URL = window.CONFIG.supabase.url;
+const SUPABASE_ANON_KEY = window.CONFIG.supabase.anonKey;
 /* --------------------------------------------------------------------------------- */
 
 let sb = null; // klient Supabase (null = offline)
@@ -189,8 +195,8 @@ function showAdminLoginModal(){
  */
 function getMissingPermissionsForAssign(employee, machine, roleKey){
   try {
-    const FOCKE_TYPES = ['F350', 'F550', 'GD', 'GDX', '751', '401', '411', '407', '408', '409', '707', '487', '489'];
-    const PROTOS_TYPES = ['P100', 'P70'];
+    const FOCKE_TYPES = window.CONFIG.machineTypes.focke;
+    const PROTOS_TYPES = window.CONFIG.machineTypes.protos;
 
     // Brak sprawdzenia dla tych stanowisk
     if(['pracownik_pomocniczy', 'filtry', 'inserty'].includes(roleKey)) return null;
@@ -315,17 +321,8 @@ const STATUS_ACTIVE_ROLES = {
 const DEFAULT_MACHINES = ['11','12','15','16','17','18','21','22','24','25','26','27','28','31','32','33','34','35','94','96'];
 
 /* -------------------- pomoc: czekaj na globalne supabase (CDN) -------------------- */
-function waitForSupabaseGlobal(timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    if (window.supabase && typeof window.supabase.createClient === 'function') return resolve(window.supabase);
-    let waited = 0;
-    const iv = setInterval(() => {
-      if (window.supabase && typeof window.supabase.createClient === 'function') { clearInterval(iv); return resolve(window.supabase); }
-      waited += 200;
-      if (waited >= timeoutMs) { clearInterval(iv); return reject(new Error('Timeout waiting for Supabase SDK')); }
-    }, 200);
-  });
-}
+// Using CONFIG.waitForSupabase from config.js
+const waitForSupabaseGlobal = window.CONFIG.waitForSupabase;
 
 async function initSupabase(){
   try {
