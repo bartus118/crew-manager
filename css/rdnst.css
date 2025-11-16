@@ -1,0 +1,339 @@
+/* css/rdnst.css - Style dla modułu RDNST */
+
+main {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 0 12px;
+}
+
+.rdnst-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.section-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f1724;
+}
+
+.section-header .section-desc {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #0f1724;
+}
+
+.form-group input[type="date"] {
+  padding: 8px 10px;
+  border: 1px solid #d4dff0;
+  border-radius: 6px;
+  font-size: 14px;
+  width: fit-content;
+}
+
+.form-group input[type="date"]:focus {
+  outline: none;
+  border-color: #0b74d1;
+  box-shadow: 0 0 0 3px rgba(11, 116, 209, 0.1);
+}
+
+.form-group .hint {
+  font-size: 12px;
+  color: #888;
+}
+
+.import-panel {
+  background: #f9f9f9;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.actions .btn {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.preview-box, .status-box {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f5f9ff;
+  border: 1px solid #d6e5ff;
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  font-size: 13px;
+}
+
+.preview-row:last-child {
+  border-bottom: none;
+}
+
+.preview-row .worker-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.preview-row .status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: #e0e0e0;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.preview-row .status.new {
+  background: #c8e6c9;
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.preview-row .status.exists {
+  background: #fff9c4;
+  color: #f57f17;
+  font-weight: 600;
+}
+
+.preview-summary {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  font-weight: 600;
+  font-size: 14px;
+  color: #0f1724;
+}
+
+.status-box {
+  background: #f5f9ff;
+  border-color: #d6e5ff;
+  color: #0f1724;
+}
+
+.status-box.success {
+  background: #c8e6c9;
+  border-color: #81c784;
+  color: #2e7d32;
+}
+
+.status-box.error {
+  background: #ffcdd2;
+  border-color: #e57373;
+  color: #c62828;
+}
+
+.status-box.warning {
+  background: #fff9c4;
+  border-color: #fff59d;
+  color: #f57f17;
+}
+
+.workers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.worker-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.worker-card:hover {
+  background: #fff;
+  border-color: #0b74d1;
+  box-shadow: 0 2px 8px rgba(11, 116, 209, 0.1);
+}
+
+.worker-card .info {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  align-items: center;
+}
+
+.worker-card .name {
+  font-weight: 600;
+  color: #0f1724;
+  min-width: 150px;
+}
+
+.worker-card .short {
+  color: #666;
+  font-size: 12px;
+  background: #f0f0f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.worker-card .date {
+  color: #0b74d1;
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.worker-card .remove-btn {
+  margin-left: auto;
+  padding: 6px 10px;
+  background: #ffcdd2;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #c62828;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.worker-card .remove-btn:hover {
+  background: #ef5350;
+  color: white;
+}
+
+/* Notification modal styles (inherited from common.css) */
+.notification-box {
+  background: linear-gradient(135deg, #f5f7fa 0%, #fff 100%);
+  padding: 32px 36px;
+  border-radius: 12px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 12px 40px rgba(2,6,23,0.25);
+  text-align: center;
+}
+
+.notification-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+#notificationTitle {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f1724;
+}
+
+#notificationMessage {
+  margin: 0 0 16px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#notificationOkBtn {
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
+/* Tabela RDNST pracowników */
+.rdnst-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  background: white;
+  border: 1px solid #d4dff0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rdnst-table thead {
+  background: linear-gradient(to bottom, #f0f4f8, #e8eef5);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.rdnst-table th {
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: #0f1724;
+  border: 1px solid #d4dff0;
+  white-space: pre-line;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.rdnst-table th:first-child {
+  text-align: left;
+  min-width: 150px;
+  border-bottom: 2px solid #0b74d1;
+}
+
+.rdnst-table td {
+  padding: 10px 6px;
+  border: 1px solid #e0e0e0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.rdnst-table td:first-child {
+  text-align: left;
+  font-weight: 500;
+  border-right: 2px solid #d4dff0;
+  padding: 10px 12px;
+}
+
+.rdnst-table tbody tr:hover {
+  background-color: #f9fbff;
+}
+
+.rdnst-table tbody tr:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.rdnst-table tbody tr:nth-child(even):hover {
+  background-color: #f5f8fd;
+}
+
+.rdnst-table td:not(:first-child) {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.rdnst-table td:not(:first-child):hover {
+  filter: brightness(0.95);
+}
+
+

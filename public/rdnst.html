@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RDNST - Pracownicy czasowi</title>
+  <link rel="stylesheet" href="../css/common.css">
+  <link rel="stylesheet" href="../css/rdnst.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="top-bar">
+    <div class="brand">📊 RDNST — Pracownicy czasowi</div>
+    <div class="controls">
+      <button id="backToMainBtn" class="btn">← Powrót do tabeli</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="rdnst-section">
+      <div class="section-header">
+        <h2>Importuj pracowników na dzień</h2>
+        <p class="section-desc">Wklej listę nazwisk w formacie: "Nazwisko imie (PP)"</p>
+      </div>
+
+      <div class="import-panel">
+        <div class="form-group">
+          <label>Data pracy:</label>
+          <input id="rdnstDate" type="date" />
+          <span class="hint">(Dzisiaj: <span id="todayDate"></span>)</span>
+        </div>
+
+        <div class="form-group">
+          <label>Wklej nazwiska (każde w nowej linii):</label>
+          <textarea id="rdnstInput" 
+                    placeholder="Kowalski Krzysztof (PP)&#10;Nowak Anna (PP)&#10;Schmidt Jakub (PP)"
+                    style="width:100%; height:150px; padding:10px; border:1px solid #ccc; border-radius:6px; font-family: monospace;"></textarea>
+        </div>
+
+        <div class="actions">
+          <button id="rdnstPreviewBtn" class="btn">👁️ Podgląd</button>
+          <button id="rdnstImportBtn" class="btn" style="background:#28a745;">📥 Importuj</button>
+        </div>
+
+        <div id="rdnstPreview" class="preview-box" style="display:none;"></div>
+        <div id="rdnstStatus" class="status-box" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="rdnst-section">
+      <div class="section-header">
+        <h2>Pracownicy w systemie</h2>
+        <p class="section-desc">Lista pracowników importowanych na dzień dzisiejszy i poprzednie (do 7 dni wstecz)</p>
+      </div>
+
+      <div class="workers-list" id="workersList">
+        <div class="muted">Ładuję...</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Notification modal -->
+  <div id="notificationModal" class="modal" style="display:none;">
+    <div class="notification-box">
+      <div class="notification-icon" id="notificationIcon">ℹ️</div>
+      <h3 id="notificationTitle">Powiadomienie</h3>
+      <p id="notificationMessage"></p>
+      <button id="notificationOkBtn" class="btn">OK</button>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/rdnst.js"></script>
+</body>
+</html>

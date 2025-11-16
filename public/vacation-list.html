@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lista Nieobecności — Obsada</title>
+  <link rel="stylesheet" href="../css/vacation.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="vacation-container">
+    <div class="vacation-header">
+      <h1>📋 Lista Nieobecności</h1>
+      <button id="backToVacationBtn" class="back-btn">← Powrót do urlopów</button>
+    </div>
+
+    <!-- FILTER SECTION -->
+    <div class="vacation-form" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="vacationListDateFromPicker" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Od:</label>
+          <input id="vacationListDateFromPicker" type="date" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+        </div>
+        
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="vacationListDateToPicker" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Do:</label>
+          <input id="vacationListDateToPicker" type="date" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;" />
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="roleFilter" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Rola:</label>
+          <select id="roleFilter" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 120px;">
+            <option value="">— Wszystkie —</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="buFilter" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">BU:</label>
+          <select id="buFilter" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 120px;">
+            <option value="">— Wszystkie —</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="reasonFilter" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Typ:</label>
+          <select id="reasonFilter" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 140px;">
+            <option value="">— Wszystkie —</option>
+            <option value="Urlop wypoczynkowy">Urlop wypoczynkowy</option>
+            <option value="Urlop na żądanie">Urlop na żądanie</option>
+            <option value="L4">L4</option>
+            <option value="Delegacja">Delegacja</option>
+            <option value="Szkolenie">Szkolenie</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center; position: relative;">
+          <label for="employeeSearch" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Pracownik:</label>
+          <div style="position: relative; min-width: 140px;">
+            <input id="employeeSearch" type="text" placeholder="Szukaj..." style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; width: 100%; box-sizing: border-box;" />
+            <div id="employeeSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            </div>
+          </div>
+        </div>
+
+        <button id="clearAllFiltersBtn" class="btn" style="padding: 6px 12px; font-size: 11px; background: #f44336; color: white; display: none; white-space: nowrap;">🗑️ Wyczyść</button>
+      </div>
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 24px;">
+        <label style="font-size: 12px; color: #666; font-weight: 600;">Filtry:</label>
+        <div id="activeFiltersChips" style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span style="color: #999; font-size: 11px;">brak</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIST SECTION -->
+    <div class="vacation-list-section">
+      <h2 style="margin-top: 0;">Szczegółowa lista nieobecności</h2>
+      <div id="vacationList">
+        <div class="muted">⏳ Ładuję...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification modal -->
+  <div id="notificationModal">
+    <div class="notification-modal-content">
+      <div class="notification-icon" id="notificationIcon">ℹ️</div>
+      <h3 id="notificationTitle">Powiadomienie</h3>
+      <p id="notificationMessage"></p>
+      <button id="notificationOkBtn">OK</button>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/vacation-list.js"></script>
+</body>
+</html>

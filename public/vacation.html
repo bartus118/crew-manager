@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nieobecności — Obsada</title>
+  <link rel="stylesheet" href="../css/vacation.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="vacation-container">
+    <div class="vacation-header">
+      <h1>📅 Nieobecności pracowników</h1>
+      <div style="display: flex; gap: 8px;">
+        <button id="viewListBtn" class="back-btn" style="background: #667eea; color: white;">📋 Pokaż listę</button>
+        <button id="backToMainBtn" class="back-btn">← Powrót</button>
+      </div>
+    </div>
+
+    <!-- FORM SECTION -->
+    <div class="vacation-form">
+      <h2 style="margin-top: 0; color: #0f1724; font-size: 16px;">Dodaj nieobecność</h2>
+      
+      <div class="form-group">
+        <label>Pracownik:</label>
+        <div class="employee-search-wrapper">
+          <input 
+            id="vacationEmployeeSearch" 
+            type="text" 
+            placeholder="Wpisz imię lub nazwisko..."
+            autocomplete="off"
+          />
+          <div id="vacationEmployeeDropdown" class="employee-dropdown" style="display: none;">
+            <div class="dropdown-list"></div>
+          </div>
+        </div>
+        <input id="vacationEmployeeSelect" type="hidden" />
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-group">
+          <label>Od:</label>
+          <input id="vacationStartDate" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Do:</label>
+          <input id="vacationEndDate" type="date" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Rodzaj nieobecności:</label>
+        <select id="vacationReason">
+          <option value="">— Wybierz rodzaj —</option>
+          <option value="Urlop wypoczynkowy">Urlop wypoczynkowy</option>
+          <option value="Urlop na żądanie">Urlop na żądanie</option>
+          <option value="L4">L4</option>
+          <option value="Delegacja">Delegacja</option>
+          <option value="Szkolenie">Szkolenie</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button id="vacationAddBtn" class="btn primary">➕ Dodaj nieobecność</button>
+      </div>
+
+      <div id="vacationStatus" class="status-box"></div>
+    </div>
+  </div>
+
+  <!-- Notification modal -->
+  <div id="notificationModal">
+    <div class="notification-modal-content">
+      <div class="notification-icon" id="notificationIcon">ℹ️</div>
+      <h3 id="notificationTitle">Powiadomienie</h3>
+      <p id="notificationMessage"></p>
+      <button id="notificationOkBtn">OK</button>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="js/vacation.js"></script>
+</body>
+</html>

@@ -348,4 +348,41 @@ table td:hover,
   padding: 10px 20px;
 }
 
+/* ---------- Absence/Vacation Column ---------- */
+td.absence-column {
+  background: #f0f4f8 !important;
+  border-left: 3px solid #234a75 !important;
+  vertical-align: top !important;
+  min-width: 220px;
+  max-width: 300px;
+  overflow-y: auto;
+  max-height: 400px;
+  border-radius: 0 10px 10px 0 !important;
+  padding: 12px !important;
+  text-align: left;
+  line-height: 1.4;
+}
+
+td.absence-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+td.absence-column::-webkit-scrollbar-track {
+  background: #e0e0e0;
+  border-radius: 3px;
+}
+
+td.absence-column::-webkit-scrollbar-thumb {
+  background: #999;
+  border-radius: 3px;
+}
+
+td.absence-column::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* Zaokrąglenie dla kolumny na ostatnim wierszu */
+tbody tr:last-child td.absence-column {
+  border-radius: 0 10px 10px 0 !important;
+}
 

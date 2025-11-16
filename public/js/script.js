@@ -1214,7 +1214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pass = await showAdminLoginModal();
         if (pass === 'admin123') {
           try { sessionStorage.setItem('adminAuthenticated', '1'); } catch(e) { console.warn('sessionStorage niedostępne', e); }
-          window.location.href = './admin/a_index.html';
+          window.location.href = './admin.html';
         } else if (pass !== null) { showNotification('Błędne hasło!', 'Błąd', '❌'); }
       });
     }
@@ -1240,9 +1240,20 @@ async function bootstrap(){
 
     currentDate = dateInput ? dateInput.value : (new Date().toISOString().slice(0,10));
     await loadAssignmentsForDate(currentDate);
+    await loadVacationsForDate(currentDate);
     buildTableFor(currentDate);
 
     enforceOnlineMode();
+
+    // Event listener na zmianę daty w input polu
+    if(dateInput) {
+      dateInput.addEventListener('change', async () => {
+        currentDate = dateInput.value;
+        await loadAssignmentsForDate(currentDate);
+        await loadVacationsForDate(currentDate);
+        buildTableFor(currentDate);
+      });
+    }
 
     const loadBtn = document.getElementById('loadDay');
     if(loadBtn) loadBtn.onclick = async ()=>{

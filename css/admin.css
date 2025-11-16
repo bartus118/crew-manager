@@ -1,5 +1,5 @@
 /* css/admin.css
-   Styles only for the admin panel (a_index.html). Loaded after common.css
+   Styles only for the admin panel (public/admin.html). Loaded after common.css
 */
 
 /* admin layout */
@@ -169,8 +169,8 @@
 /* compact actions */
 .actions .btn { padding:6px 8px; font-size:13px; }
 
-/* overlay modal auth (nie zmienione logicznie) */
-    #adminAuthModal {
+/* overlay modal auth - login modal dla panelu admin */
+    #adminLoginModal {
       position: fixed;
       inset: 0;
       display: flex;
@@ -179,7 +179,7 @@
       background: rgba(12,18,24,0.6);
       z-index: 20000;
     }
-    #adminAuthModal .auth-box {
+    #adminLoginModal .auth-box {
       background: linear-gradient(135deg, #f5f7fa 0%, #fff 100%);
       padding: 32px 36px;
       border-radius: 12px;
@@ -188,7 +188,7 @@
       box-shadow: 0 12px 40px rgba(2,6,23,0.25);
       text-align: center;
     }
-    #adminAuthModal h3 { 
+    #adminLoginModal h3 { 
       margin: 0 0 8px;
       font-size: 22px;
       font-weight: 700;
@@ -198,13 +198,13 @@
       justify-content: center;
       gap: 10px;
     }
-    #adminAuthModal h3::before { content: '🔐'; font-size: 24px; }
-    #adminAuthModal .desc { 
+    #adminLoginModal h3::before { content: '🔐'; font-size: 24px; }
+    #adminLoginModal .desc { 
       color: #666;
       font-size: 14px;
       margin-bottom: 20px;
     }
-    #adminAuthModal input[type="password"] {
+    #adminLoginModal input[type="password"] {
       width: 100%;
       padding: 12px 14px;
       border-radius: 8px;
@@ -215,35 +215,35 @@
       font-family: "Segoe UI", Arial, sans-serif;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    #adminAuthModal input[type="password"]:focus {
+    #adminLoginModal input[type="password"]:focus {
       outline: none;
       border-color: #0078d4;
       box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
     }
-    #adminAuthModal input[type="password"]::placeholder {
+    #adminLoginModal input[type="password"]::placeholder {
       color: #999;
     }
-    #adminAuthModal .actions { 
+    #adminLoginModal .actions { 
       display: flex;
       gap: 12px;
       justify-content: center;
       margin-bottom: 16px;
     }
-    #adminAuthModal .actions .btn {
+    #adminLoginModal .actions .btn {
       min-width: 120px;
       padding: 10px 20px;
       font-size: 15px;
       font-weight: 500;
     }
-    #adminAuthModal .actions .btn.ghost {
+    #adminLoginModal .actions .btn.ghost {
       background: transparent;
       border: 1px solid #ccc;
       color: #333;
     }
-    #adminAuthModal .actions .btn.ghost:hover {
+    #adminLoginModal .actions .btn.ghost:hover {
       background: #f5f5f5;
     }
-    #adminAuthModal .muted { 
+    #adminLoginModal .muted { 
       color: #999;
       font-size: 13px;
       margin-top: 8px;

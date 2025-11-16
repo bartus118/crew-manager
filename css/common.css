@@ -41,6 +41,21 @@ body {
 .top-bar .brand { font-weight: 700; font-size: 16px; }
 .top-bar .controls { margin-left: auto; display:flex; gap:8px; align-items:center; }
 
+/* Przyciski w top-bar — taki sam styl jak .nav-item w admin */
+.top-bar .btn {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.95);
+  border: 1px solid rgba(255,255,255,0.15);
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background 0.12s ease, transform 0.06s ease;
+}
+.top-bar .btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.18);
+}
+
 /* -------------------- Przyciski globalne (base) -------------------- */
 .btn {
   padding: 6px 10px;

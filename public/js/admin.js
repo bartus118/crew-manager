@@ -1,6 +1,6 @@
 
 /**
- * admin/a_script.js
+ * public/js/admin.js
  *
  * Pełny plik admin — AdminMachines + AdminEmployees
  * - czytelne logi błędów
@@ -206,10 +206,10 @@ async function initSupabaseAdmin(){
 
 /* -------------------- Auth modal (prostota) -------------------- */
 function showAuthModal() {
-  const modal = document.getElementById('adminAuthModal');
-  const passInput = document.getElementById('adminAuthPass');
-  const okBtn = document.getElementById('adminAuthBtn');
-  const cancelBtn = document.getElementById('adminAuthCancel');
+  const modal = document.getElementById('adminLoginModal');
+  const passInput = document.getElementById('adminPasswordInput');
+  const okBtn = document.getElementById('adminLoginSubmit');
+  const cancelBtn = document.getElementById('adminLoginCancel');
 
   if(!modal) return;
 
@@ -2396,12 +2396,15 @@ window.AdminEmployees = AdminEmployees;
 
 /* -------------------- Zakładki i bootstrapping admin -------------------- */
 document.addEventListener('DOMContentLoaded', async () => {
+  // Przycisk powrotu — dostępny zawsze, niezależnie od autentykacji
+  const backToMainBtn = document.getElementById('backToMainBtn');
+  if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = './index.html'; });
+
   ensureAuthThen(() => {
     const tabModify = document.getElementById('tabModify');
     const tabEmployees = document.getElementById('tabEmployees');
     const machinesSection = document.getElementById('adminMachinesSection');
     const employeesSection = document.getElementById('adminEmployeesSection');
-    const backToMainBtn = document.getElementById('backToMainBtn');
 
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
@@ -2421,13 +2424,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
-    if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = '../index.html'; });
 
     // open machines by default
     showModify();
   });
   /* === Perm bridge (safe append) ===
-   Append this at the very end of a_script.js (safe, idempotent).
+   Append this at the very end of admin.js (safe, idempotent).
 */
 (function(){
   if(window.__permBridgeAppended) return;
