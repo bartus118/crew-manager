@@ -731,6 +731,14 @@ async function initVacation() {
   const viewListBtn = document.getElementById('viewListBtn');
   if (viewListBtn) viewListBtn.addEventListener('click', () => window.location.href = './vacation-list.html');
   
+  // View plan button
+  const viewPlanBtn = document.getElementById('viewPlanBtn');
+  if (viewPlanBtn) viewPlanBtn.addEventListener('click', () => window.location.href = './vacation-plan.html');
+
+  // View calendar button
+  const viewCalendarBtn = document.getElementById('viewCalendarBtn');
+  if (viewCalendarBtn) viewCalendarBtn.addEventListener('click', () => window.location.href = './vacation-calendar.html');
+  
   // Render statistics table
   const listDiv = document.createElement('div');
   listDiv.id = 'statisticsContainer';

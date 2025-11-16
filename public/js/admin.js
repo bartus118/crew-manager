@@ -290,9 +290,9 @@ const AdminMachines = (function(){
 
   const MAKER_OPTIONS = ['P100','P70'];
   const PAKER_OPTIONS = ['F550','F350','GD','GDX'];
-  const CELA_OPTIONS = ['', '751','401'];
-  const PAK_OPTIONS  = ['', '411','407','408','409','707'];
-  const KART_OPTIONS = ['', '487','489'];
+  const CELA_OPTIONS = ['751','401'];
+  const PAK_OPTIONS  = ['411','407','408','409','707'];
+  const KART_OPTIONS = ['487','489'];
 
   function makeMuted(text){
     const d = document.createElement('div');
@@ -417,16 +417,16 @@ const AdminMachines = (function(){
 
     const selMaker = makeSelect(MAKER_OPTIONS, MAKER_OPTIONS[0]);
     const selPaker = makeSelect(PAKER_OPTIONS, PAKER_OPTIONS[0]);
-    const selCela = makeSelect(CELA_OPTIONS, '');
-    const selPak  = makeSelect(PAK_OPTIONS, '');
-    const selKart = makeSelect(KART_OPTIONS, '');
+    const selCela = makeSelect(CELA_OPTIONS, CELA_OPTIONS[0]);
+    const selPak  = makeSelect(PAK_OPTIONS, PAK_OPTIONS[0]);
+    const selKart = makeSelect(KART_OPTIONS, KART_OPTIONS[0]);
 
-    grid.appendChild(makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12).'));
-    grid.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.'));
-    grid.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.'));
-    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
-    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
-    grid.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
+    grid.appendChild(makeField('Numer', inpNum, 'Numer identyfikacyjny maszyny (np. 11, 12). *Obowiązkowe'));
+    grid.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70. *Obowiązkowe'));
+    grid.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX. *Obowiązkowe'));
+    grid.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401. *Obowiązkowe'));
+    grid.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod z listy. *Obowiązkowe'));
+    grid.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489. *Obowiązkowe'));
 
     const actions = document.createElement('div');
     actions.style.display = 'flex';
@@ -446,10 +446,17 @@ const AdminMachines = (function(){
       const num = (inpNum.value || '').trim();
       const mk = selMaker.value;
       const pk = selPaker.value;
-      const cel = selCela.value || '';
-      const pak = selPak.value || '';
-      const kart = selKart.value || '';
+      const cel = selCela.value;
+      const pak = selPak.value;
+      const kart = selKart.value;
+      
       if(!num){ return await showAdminNotification('Podaj numer maszyny.', 'Błąd', '⚠️'); }
+      if(!mk){ return await showAdminNotification('Wybierz Maker (Producent).', 'Błąd', '⚠️'); }
+      if(!pk){ return await showAdminNotification('Wybierz Paker (Pakarkę).', 'Błąd', '⚠️'); }
+      if(!cel){ return await showAdminNotification('Wybierz Celafoniarkę.', 'Błąd', '⚠️'); }
+      if(!pak){ return await showAdminNotification('Wybierz Pakieciarkę.', 'Błąd', '⚠️'); }
+      if(!kart){ return await showAdminNotification('Wybierz Kartoniarkę.', 'Błąd', '⚠️'); }
+      
       await addMachine(num, mk, pk, cel, pak, kart);
       modal.remove();
     };
@@ -795,9 +802,9 @@ const AdminMachines = (function(){
 
     const selMaker = makeSelect(MAKER_OPTIONS, machine.maker || MAKER_OPTIONS[0]);
     const selPaker = makeSelect(PAKER_OPTIONS, machine.paker || PAKER_OPTIONS[0]);
-    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || '');
-    const selPak  = makeSelect(PAK_OPTIONS, machine.pakieciarka || '');
-    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || '');
+    const selCela = makeSelect(CELA_OPTIONS, machine.celafoniarka || CELA_OPTIONS[0]);
+    const selPak  = makeSelect(PAK_OPTIONS, machine.pakieciarka || PAK_OPTIONS[0]);
+    const selKart = makeSelect(KART_OPTIONS, machine.kartoniarka || KART_OPTIONS[0]);
 
     const inpOld = document.createElement('input');
     inpOld.type = 'text';
@@ -811,17 +818,17 @@ const AdminMachines = (function(){
     leftCol.style.display = 'flex';
     leftCol.style.flexDirection = 'column';
     leftCol.style.gap = '8px';
-    leftCol.appendChild(makeField('Numer', inpOld, 'Numer identyfikacyjny maszyny (np. 11, 12).'));
-    leftCol.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70.'));
-    leftCol.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX.'));
+    leftCol.appendChild(makeField('Numer', inpOld, 'Numer identyfikacyjny maszyny (np. 11, 12). *Obowiązkowe'));
+    leftCol.appendChild(makeField('Maker', selMaker, 'Typ maszyny — wybierz P100 lub P70. *Obowiązkowe'));
+    leftCol.appendChild(makeField('Paker', selPaker, 'Model pakowarki: F550, F350, GD lub GDX. *Obowiązkowe'));
 
     const rightCol = document.createElement('div');
     rightCol.style.display = 'flex';
     rightCol.style.flexDirection = 'column';
     rightCol.style.gap = '8px';
-    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 753.'));
-    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod: 411, 413 lub 707.'));
-    rightCol.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489.'));
+    rightCol.appendChild(makeField('Celafoniarka', selCela, 'Celafoniarka — wybierz kod: 751 lub 401. *Obowiązkowe'));
+    rightCol.appendChild(makeField('Pakieciarka', selPak, 'Pakieciarka — wybierz kod z listy. *Obowiązkowe'));
+    rightCol.appendChild(makeField('Kartoniarka', selKart, 'Kartoniarka — wybierz kod: 487 lub 489. *Obowiązkowe'));
 
     const cols = document.createElement('div');
     cols.style.display = 'flex';
@@ -858,10 +865,17 @@ const AdminMachines = (function(){
       const newNum = inpOld.value.trim();
       const mk = selMaker.value;
       const pk = selPaker.value;
-      const cel = selCela.value || '';
-      const pak = selPak.value || '';
-      const kart = selKart.value || '';
+      const cel = selCela.value;
+      const pak = selPak.value;
+      const kart = selKart.value;
+      
       if(!newNum){ return await showAdminNotification('Numer nie może być pusty.', 'Błąd', '⚠️'); }
+      if(!mk){ return await showAdminNotification('Wybierz Maker (Producent).', 'Błąd', '⚠️'); }
+      if(!pk){ return await showAdminNotification('Wybierz Paker (Pakarkę).', 'Błąd', '⚠️'); }
+      if(!cel){ return await showAdminNotification('Wybierz Celafoniarkę.', 'Błąd', '⚠️'); }
+      if(!pak){ return await showAdminNotification('Wybierz Pakieciarkę.', 'Błąd', '⚠️'); }
+      if(!kart){ return await showAdminNotification('Wybierz Kartoniarkę.', 'Błąd', '⚠️'); }
+      
       await editMachine(machine.number, newNum, mk, pk, cel, pak, kart);
       modal.remove();
       await renderList();
@@ -1278,19 +1292,25 @@ const AdminEmployees = (function(){
       const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
         .filter(i => i.checked).map(i => i.value);
 
+      const surname = (inpSurname.value || '').trim();
+      const firstname = (inpFirstname.value || '').trim();
+      const bu = (selBu.value || '').trim();
+
+      // Walidacja obowiązkowych pól
+      if(!surname){ return await showAdminNotification('Nazwisko jest obowiązkowe.', 'Błąd', '⚠️'); }
+      if(!firstname){ return await showAdminNotification('Imię jest obowiązkowe.', 'Błąd', '⚠️'); }
+      if(!bu){ return await showAdminNotification('Wybierz BU (Business Unit).', 'Błąd', '⚠️'); }
+      if(selectedRoles.length === 0){ return await showAdminNotification('Wybierz przynajmniej jedną rolę.', 'Błąd', '⚠️'); }
+      if(checkedPerms.length === 0){ return await showAdminNotification('Przydziel przynajmniej jedno uprawnienie.', 'Błąd', '⚠️'); }
+
       const updates = {
-        surname: (inpSurname.value || '').trim(),
-        firstname: (inpFirstname.value || '').trim(),
-        bu: (selBu.value || '').trim(),
+        surname: surname,
+        firstname: firstname,
+        bu: bu,
         roles: selectedRoles,
         permissions: checkedPerms,
         mechanical_permissions: mechPerms
       };
-
-      // minimalna walidacja
-      if(!updates.surname && !updates.firstname){
-        if(!await showConfirmModal('Nazwisko i imię są puste — chcesz zapisać mimo to?', 'Brak danych')) return;
-      }
 
       try {
         await saveEmployeeChanges(emp.id, updates);
@@ -1553,17 +1573,28 @@ const AdminEmployees = (function(){
       const selectedRoles = Array.from(selRoles.selectedOptions).map(o=>o.value).filter(Boolean);
       const mechPerms = Array.from(mechanicalSection.querySelectorAll('input[data-mechperm]'))
         .filter(i => i.checked).map(i => i.value);
+      const selectedPerms = Array.from(permGrid.querySelectorAll('input[type="checkbox"]')).filter(i=>i.checked).map(i=>i.value);
+
+      const surname = (inpSurname.value||'').trim();
+      const firstname = (inpFirstname.value||'').trim();
+      const bu = (selBu.value||'').trim();
+
+      // Walidacja obowiązkowych pól
+      if(!surname){ return await showAdminNotification('Nazwisko jest obowiązkowe.', 'Błąd', '⚠️'); }
+      if(!firstname){ return await showAdminNotification('Imię jest obowiązkowe.', 'Błąd', '⚠️'); }
+      if(!bu){ return await showAdminNotification('Wybierz BU (Business Unit).', 'Błąd', '⚠️'); }
+      if(selectedRoles.length === 0){ return await showAdminNotification('Wybierz przynajmniej jedną rolę.', 'Błąd', '⚠️'); }
+      if(selectedPerms.length === 0){ return await showAdminNotification('Przydziel przynajmniej jedno uprawnienie.', 'Błąd', '⚠️'); }
 
       const payload = {
-        surname: (inpSurname.value||'').trim(),
-        firstname: (inpFirstname.value||'').trim(),
-        bu: (selBu.value||'').trim(),
+        surname: surname,
+        firstname: firstname,
+        bu: bu,
         roles: selectedRoles,
-        permissions: Array.from(permGrid.querySelectorAll('input[type="checkbox"]')).filter(i=>i.checked).map(i=>i.value),
+        permissions: selectedPerms,
         mechanical_permissions: mechPerms
       };
-      // minimal validation
-      if(!payload.surname && !payload.firstname){ if(!await showConfirmModal('Nazwisko i imię są puste — chcesz dodać mimo to?', 'Brak danych')) return; }
+      
       await addEmployee(payload);
       modal.remove();
     };
