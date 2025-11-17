@@ -7,6 +7,7 @@ let currentYear = new Date().getFullYear();
 let currentMonth = new Date().getMonth(); // 0-11
 let viewMode = 'month'; // 'month' lub 'year'
 let absencesCache = {}; // { "YYYY-MM-DD": "Urlop wypoczynkowy", ... }
+let planedVacations = {}; // { "YYYY-MM-DD": true } - zaplanowane urlopy z vacation_plans
 let selectedAbsences = {}; // Dla starego interfejsu (roczny widok)
 let selectedDayForModal = null;
 let rangeStartDate = null; // Pierwszy wybrany dzień zakresu
@@ -82,10 +83,28 @@ async function loadEmployeesForCalendar() {
     const searchInput = document.getElementById('calendarEmployeeSearch');
     if (searchInput) {
       searchInput.addEventListener('input', filterEmployeeDropdown);
+      searchInput.addEventListener('focus', showAllEmployees);
     }
   } catch (e) {
     console.error('Load employees error', e);
   }
+}
+
+function showAllEmployees(e) {
+  const dropdown = document.getElementById('calendarEmployeeDropdown');
+  dropdown.innerHTML = '';
+  
+  employees.forEach(emp => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 12px;';
+    item.textContent = `${emp.surname} ${emp.firstname}`;
+    item.onmouseover = () => item.style.background = '#f0f0f0';
+    item.onmouseout = () => item.style.background = 'white';
+    item.onclick = () => selectEmployee(emp.id, `${emp.surname} ${emp.firstname}`);
+    dropdown.appendChild(item);
+  });
+  
+  dropdown.style.display = 'block';
 }
 
 function filterEmployeeDropdown(e) {
@@ -93,7 +112,7 @@ function filterEmployeeDropdown(e) {
   const dropdown = document.getElementById('calendarEmployeeDropdown');
   
   if (!searchValue) {
-    dropdown.style.display = 'none';
+    showAllEmployees(e);
     return;
   }
   
@@ -156,17 +175,34 @@ async function loadAbsences() {
       end = endDate;
     }
 
-    const { data, error } = await sb
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
+    // Pobierz nieobecności ze starej tabeli (vacation)
+    const { data: vacationData, error: vacationError } = await sb
       .from('vacation')
       .select('*')
       .eq('employee_id', currentEmployeeId)
-      .gte('start_date', start.toISOString().split('T')[0])
-      .lte('end_date', end.toISOString().split('T')[0]);
+      .gte('start_date', startStr)
+      .lte('end_date', endStr);
     
-    if (error) throw error;
+    if (vacationError) throw vacationError;
+    
+    // Pobierz plany urlopów z nowej tabeli (vacation_plans) - zaplanowane urlopy
+    const { data: planData, error: planError } = await sb
+      .from('vacation_plans')
+      .select('*')
+      .eq('employee_id', currentEmployeeId)
+      .eq('year', currentYear)
+      .gte('start_date', startStr)
+      .lte('end_date', endStr);
+    
+    if (planError) throw planError;
     
     absencesCache = {};
-    (data || []).forEach(record => {
+    
+    // Zaznacz nieobecności ze starej tabeli (vacation)
+    (vacationData || []).forEach(record => {
       const start = new Date(record.start_date);
       const end = new Date(record.end_date);
       
@@ -174,6 +210,19 @@ async function loadAbsences() {
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         absencesCache[dateStr] = record.reason;
+      }
+    });
+
+    // Zaznacz urlopy zaplanowane (vacation_plans) - zamiast typów będziemy używać specjalnego markera
+    planedVacations = {};
+    (planData || []).forEach(record => {
+      const start = new Date(record.start_date);
+      const end = new Date(record.end_date);
+      
+      // Zaznacz każdy dzień z zakresu - niezależnie od tego czy już ma nieobecność
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        planedVacations[dateStr] = true;
       }
     });
     
@@ -237,6 +286,7 @@ function renderMonthView() {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const type = absencesCache[dateStr];
+    const hasPlannedVacation = planedVacations[dateStr];
     
     // Check if date is in selected range
     let isInRange = false;
@@ -266,13 +316,27 @@ function renderMonthView() {
     cell.style.flexDirection = 'column';
     cell.style.gap = '1px';
     cell.style.padding = '2px';
+    cell.style.position = 'relative';
     
-    if (type) {
+    if (type && hasPlannedVacation) {
+      // Zarówno nieobecność jak i zaplanowany urlop - ikona planowania nad dniem
       const color = typeColors[type];
       cell.style.background = color.bg;
       cell.style.borderColor = color.border;
       cell.style.color = '#333';
-      cell.innerHTML = `<div>${day}</div><div style="font-size: 10px;">${color.icon}</div>`;
+      cell.innerHTML = `<div style="font-size: 16px; line-height: 1; margin: 0 auto 2px auto; display: flex; justify-content: center;">📅</div><div>${day}</div>`;
+    } else if (type) {
+      const color = typeColors[type];
+      cell.style.background = color.bg;
+      cell.style.borderColor = color.border;
+      cell.style.color = '#333';
+      cell.textContent = day;
+    } else if (hasPlannedVacation) {
+      // Zaplanowany urlop - lekki żółty kolor z ikoną nad dniem
+      cell.style.background = '#FFFDE7';
+      cell.style.borderColor = '#ddd';
+      cell.style.color = '#333';
+      cell.innerHTML = `<div style="font-size: 16px; line-height: 1; margin: 0 auto 2px auto; display: flex; justify-content: center;">📅</div><div>${day}</div>`;
     } else if (isInRange) {
       // Zaznaczony zakres
       cell.style.background = '#E3F2FD';
@@ -349,7 +413,31 @@ function createMonthMiniCard(month, monthName) {
   title.style.fontWeight = '600';
   title.style.marginBottom = '6px';
   title.style.textAlign = 'center';
+  title.style.cursor = 'pointer';
+  title.style.padding = '4px';
+  title.style.borderRadius = '4px';
+  title.style.transition = 'all 0.2s';
   title.textContent = monthName;
+  
+  // Hover effect na tytuł
+  title.onmouseover = () => {
+    title.style.background = '#f0f0f0';
+    title.style.color = '#667eea';
+  };
+  title.onmouseout = () => {
+    title.style.background = 'transparent';
+    title.style.color = '#0f1724';
+  };
+  
+  // Klik na tytuł - przejście do widoku miesiąca
+  title.onclick = () => {
+    currentMonth = month;
+    viewMode = 'month';
+    document.getElementById('calendarViewMode').value = 'month';
+    updateViewMode();
+    loadAbsences();
+  };
+  
   card.appendChild(title);
 
   const miniGrid = document.createElement('div');
@@ -370,6 +458,7 @@ function createMonthMiniCard(month, monthName) {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const type = absencesCache[dateStr];
+    const hasPlannedVacation = planedVacations[dateStr];
     
     const cell = document.createElement('button');
     cell.style.aspectRatio = '1';
@@ -382,22 +471,49 @@ function createMonthMiniCard(month, monthName) {
     cell.style.transition = 'all 0.2s';
     cell.textContent = day;
 
-    if (type) {
+    if (type && hasPlannedVacation) {
+      // Zarówno nieobecność jak i zaplanowany urlop - żółty z kwadratem nieobecności w środku
+      const color = typeColors[type];
+      cell.style.background = '#FFFDE7';
+      cell.style.color = '#333';
+      cell.style.position = 'relative';
+      cell.innerHTML = `
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50%; height: 50%; background: ${color.bg}; border: 0.5px solid ${color.border}; border-radius: 1px;"></div>
+        <div style="position: relative; z-index: 1; font-size: 8px;">📅</div>
+      `;
+    } else if (type) {
       const color = typeColors[type];
       cell.style.background = color.bg;
       cell.style.color = '#333';
+    } else if (hasPlannedVacation) {
+      // Zaplanowany urlop - lekki żółty kolor
+      cell.style.background = '#FFFDE7';
+      cell.style.color = '#333';
+      cell.innerHTML = `<div style="font-size: 8px;">📅</div>`;
     } else {
       cell.style.background = '#f5f5f5';
       cell.style.color = '#999';
     }
 
     const clickMonth = month;
-    cell.onclick = () => {
-      currentMonth = clickMonth;
-      viewMode = 'month';
-      document.getElementById('calendarViewMode').value = 'month';
-      updateViewMode();
-      loadAbsences();
+    const clickDay = day;
+    cell.onclick = (e) => {
+      e.stopPropagation();
+      
+      // Najpierw sprawdź czy jest zaznaczony pracownik
+      if (!currentEmployeeId) {
+        showCalendarNotification('Wybierz pracownika', 'Najpierw musisz wybrać pracownika', '⚠️');
+        return;
+      }
+      
+      // Otwórz modal do dodania nieobecności
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const cellDate = new Date(`${dateStr}T00:00:00Z`);
+      const isPast = cellDate < today;
+      
+      selectedDayForModal = { dateStr: dateStr, day: clickDay, isPast, isRange: false };
+      openAbsenceDayModal();
     };
 
     miniGrid.appendChild(cell);

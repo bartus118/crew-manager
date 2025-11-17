@@ -11,7 +11,10 @@
   <div class="vacation-container">
     <div class="vacation-header">
       <h1>📅 Plan Urlopów Roczny</h1>
-      <button id="backToVacationBtn" class="back-btn">← Powrót do urlopów</button>
+      <div style="display: flex; gap: 8px;">
+        <button id="backToVacationBtn" class="back-btn">Powrót do urlopów</button>
+        <button id="backToMainBtn" class="back-btn">Powrót do przypisań</button>
+      </div>
     </div>
 
     <!-- CONTROLS SECTION -->
@@ -31,11 +34,7 @@
           </select>
         </div>
 
-        <div style="display: flex; gap: 6px; align-items: center;">
-          <label for="vacationLimitInput" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Limit dni:</label>
-          <input id="vacationLimitInput" type="number" min="0" max="365" value="20" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; width: 70px;" />
-          <button id="saveLimitBtn" class="btn" style="padding: 6px 12px; font-size: 11px; background: #4CAF50; color: white; white-space: nowrap;">💾 Zapisz limit</button>
-        </div>
+        <button id="editPlanBtn" class="btn" style="padding: 6px 12px; font-size: 11px; background: #667eea; color: white; white-space: nowrap;">✏️ Edycja</button>
 
       <!-- LEGEND -->
       <div style="display: flex; gap: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px; margin-top: 12px; font-size: 12px; flex-wrap: wrap;">
@@ -57,14 +56,6 @@
     <div id="planCalendarContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
       <!-- Will be populated by JavaScript -->
     </div>
-
-    <!-- ACTION BUTTONS -->
-    <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button id="savePlanBtn" class="btn" style="padding: 12px 24px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">💾 Zapisz plan</button>
-      <button id="clearAllPlanBtn" class="btn" style="padding: 12px 24px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">🗑️ Wyczyść wszystko</button>
-      <button id="resetPlanViewBtn" class="btn" style="padding: 12px 24px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">↻ Załaduj plan</button>
-    </div>
-  </div>
 
   <!-- Modal do planowania dnia urlopu -->
   <div id="planDayModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">

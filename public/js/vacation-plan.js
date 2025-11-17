@@ -1,13 +1,14 @@
-/* vacation-plan.js — Kalendarz planowania urlopów (tylko Urlop wypoczynkowy) */
+/* vacation-plan.js — Plan urlopów na rok z edycją (hasło admina) */
 
 let sb = null;
 let employees = [];
 let currentEmployeeId = null;
 let currentYear = new Date().getFullYear();
-let vacationLimit = 20;
-let selectedPlanDays = {}; // { "YYYY-MM-DD": "Urlop wypoczynkowy" lub "Wolne" }
-let selectedDayForPlanModal = null;
-let existingPlans = [];
+let vacationLimitValue = 26; // domyślny limit
+let vacationPlans = []; // lista urlopów z bazy
+let selectedRangeStart = null;
+let selectedRangeEnd = null;
+let isEditMode = false; // czy jesteśmy w trybie edycji
 
 /* ============ INIT SUPABASE ============ */
 async function initSupabasePlan() {
@@ -87,61 +88,51 @@ async function loadExistingPlans() {
       .from('vacation_plans')
       .select('*')
       .eq('employee_id', currentEmployeeId)
-      .eq('year', currentYear);
+      .eq('year', currentYear)
+      .order('start_date', { ascending: true });
     
     if (error) {
-      // Tabela może nie istnieć, to OK
-      existingPlans = [];
+      console.warn('Load vacation_plans error:', error);
+      vacationPlans = [];
     } else {
-      existingPlans = data || [];
-      // Załaduj dni do selectedPlanDays
-      selectedPlanDays = {};
-      existingPlans.forEach(plan => {
-        if (plan.plan_data && plan.plan_data.days) {
-          selectedPlanDays = { ...selectedPlanDays, ...plan.plan_data.days };
-        }
-      });
+      vacationPlans = data || [];
     }
-    renderCalendarView();
+    renderYearView();
     updatePlanStats();
   } catch (e) {
     console.error('Load existing plans error', e);
-    selectedPlanDays = {};
-    renderCalendarView();
+    vacationPlans = [];
+    renderYearView();
   }
 }
 
 /* ============ UPDATE PLAN STATS ============ */
 function updatePlanStats() {
-  const plannedDays = Object.values(selectedPlanDays).filter(v => v === 'Urlop wypoczynkowy').length;
-  const freeDays = Object.values(selectedPlanDays).filter(v => v === 'Wolne').length;
-  const totalMarked = plannedDays + freeDays;
+  let plannedDays = 0;
+  vacationPlans.forEach(plan => {
+    const start = new Date(plan.start_date);
+    const end = new Date(plan.end_date);
+    const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    plannedDays += days;
+  });
   
   const limitDisplay = document.getElementById('limitDisplay');
   const plannedDisplay = document.getElementById('plannedDisplay');
   const remainingDisplay = document.getElementById('remainingDisplay');
-  const statusDisplay = document.getElementById('statusDisplay');
 
-  if (limitDisplay) limitDisplay.textContent = vacationLimit;
+  if (limitDisplay) limitDisplay.textContent = vacationLimitValue;
   if (plannedDisplay) plannedDisplay.textContent = plannedDays;
-  if (remainingDisplay) remainingDisplay.textContent = Math.max(0, vacationLimit - plannedDays);
-  
-  if (statusDisplay) {
-    if (plannedDays > vacationLimit) {
-      statusDisplay.textContent = `⚠️ Przekroczono limit o ${plannedDays - vacationLimit} dni`;
-      statusDisplay.style.color = '#f44336';
-    } else if (plannedDays === vacationLimit) {
-      statusDisplay.textContent = '✅ Limit wyczerpany';
-      statusDisplay.style.color = '#4CAF50';
-    } else {
-      statusDisplay.textContent = '📝 Plan otwarty';
-      statusDisplay.style.color = '#666';
-    }
-  }
+  if (remainingDisplay) remainingDisplay.textContent = Math.max(0, vacationLimitValue - plannedDays);
 }
 
 /* ============ RENDER CALENDAR VIEW ============ */
 function renderCalendarView() {
+  // deprecated - use renderYearView() instead
+  renderYearView();
+}
+
+/* ============ RENDER YEAR VIEW ============ */
+function renderYearView() {
   const container = document.getElementById('planCalendarContainer');
   if (!container) return;
   container.innerHTML = '';
@@ -150,13 +141,13 @@ function renderCalendarView() {
                       'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
 
   for (let month = 0; month < 12; month++) {
-    const monthCard = createMonthCardForPlan(month, monthNames[month]);
+    const monthCard = createMonthCalendarYear(month, monthNames[month]);
     container.appendChild(monthCard);
   }
 }
 
-/* ============ CREATE MONTH CARD FOR PLAN ============ */
-function createMonthCardForPlan(month, monthName) {
+/* ============ CREATE MONTH CALENDAR FOR YEAR VIEW ============ */
+function createMonthCalendarYear(month, monthName) {
   const card = document.createElement('div');
   card.style.background = 'white';
   card.style.border = '1px solid #ddd';
@@ -168,18 +159,91 @@ function createMonthCardForPlan(month, monthName) {
   title.style.margin = '0 0 12px 0';
   title.style.fontSize = '14px';
   title.style.color = '#0f1724';
+  title.style.textAlign = 'center';
   title.textContent = `${monthName} ${currentYear}`;
   card.appendChild(title);
 
+  // Grid tygodniowych nagłówków
+  const headerGrid = document.createElement('div');
+  headerGrid.style.display = 'grid';
+  headerGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+  headerGrid.style.gap = '2px';
+  headerGrid.style.marginBottom = '4px';
+  
+  const dayNames = ['Pn', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
+  dayNames.forEach(dayName => {
+    const dayHeader = document.createElement('div');
+    dayHeader.style.textAlign = 'center';
+    dayHeader.style.fontSize = '10px';
+    dayHeader.style.fontWeight = '700';
+    dayHeader.style.color = '#666';
+    dayHeader.style.padding = '4px 0';
+    dayHeader.textContent = dayName;
+    headerGrid.appendChild(dayHeader);
+  });
+  card.appendChild(headerGrid);
+
+  // Grid dni
   const daysInMonth = new Date(currentYear, month + 1, 0).getDate();
+  const firstDay = new Date(currentYear, month, 1).getDay(); // 0=Nd, 1=Pn, ...
+  const firstDayMondayBased = firstDay === 0 ? 6 : firstDay - 1; // Konwertuj na Pn=0, Nd=6
+
   const grid = document.createElement('div');
   grid.style.display = 'grid';
   grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-  grid.style.gap = '4px';
-  grid.style.marginBottom = '12px';
+  grid.style.gap = '2px';
 
+  // Puste komórki przed pierwszym dniem
+  for (let i = 0; i < firstDayMondayBased; i++) {
+    const emptyCell = document.createElement('div');
+    grid.appendChild(emptyCell);
+  }
+
+  // Dni miesiąca
   for (let day = 1; day <= daysInMonth; day++) {
-    const dayBtn = createDayButtonForPlan(month, day);
+    const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Sprawdź czy ten dzień ma urlop
+    const hasVacation = vacationPlans.some(vac => {
+      const vacStart = new Date(vac.start_date);
+      const vacEnd = new Date(vac.end_date);
+      const currentDate = new Date(dateStr);
+      return currentDate >= vacStart && currentDate <= vacEnd;
+    });
+
+    const dayBtn = document.createElement('button');
+    dayBtn.style.padding = '6px 2px';
+    dayBtn.style.fontSize = '10px';
+    dayBtn.style.fontWeight = '600';
+    dayBtn.style.border = '1px solid #ddd';
+    dayBtn.style.borderRadius = '3px';
+    dayBtn.style.cursor = 'pointer';
+    dayBtn.style.transition = 'all 0.2s';
+    dayBtn.textContent = day;
+
+    if (hasVacation) {
+      dayBtn.style.background = '#FFE082';
+      dayBtn.style.borderColor = '#FBC02D';
+      dayBtn.style.color = '#333';
+    } else {
+      dayBtn.style.background = 'white';
+      dayBtn.style.color = '#333';
+    }
+
+    dayBtn.onclick = () => {
+      // Pokaż listę urlopów tego dnia
+      const dayVacations = vacationPlans.filter(vac => {
+        const vacStart = new Date(vac.start_date);
+        const vacEnd = new Date(vac.end_date);
+        const currentDate = new Date(dateStr);
+        return currentDate >= vacStart && currentDate <= vacEnd;
+      });
+
+      if (dayVacations.length > 0) {
+        showEditVacationModal(dayVacations[0]);
+      }
+    };
+
     grid.appendChild(dayBtn);
   }
 
@@ -187,413 +251,248 @@ function createMonthCardForPlan(month, monthName) {
   return card;
 }
 
-/* ============ CREATE DAY BUTTON FOR PLAN ============ */
-function createDayButtonForPlan(month, day) {
-  const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const marked = selectedPlanDays[dateStr];
-
-  const btn = document.createElement('button');
-  btn.style.padding = '8px 4px';
-  btn.style.border = '1px solid #ddd';
-  btn.style.borderRadius = '4px';
-  btn.style.fontSize = '11px';
-  btn.style.cursor = 'pointer';
-  btn.style.fontWeight = '600';
-  btn.style.transition = 'all 0.2s';
-  btn.textContent = day;
-
-  if (marked === 'Urlop wypoczynkowy') {
-    btn.style.background = '#FFE082';
-    btn.style.borderColor = '#FBC02D';
-    btn.style.color = '#333';
-  } else if (marked === 'Wolne') {
-    btn.style.background = '#F5F5F5';
-    btn.style.borderColor = '#999';
-    btn.style.color = '#666';
-  } else {
-    btn.style.background = 'white';
-    btn.style.color = '#333';
+/* ============ SHOW EDIT VACATION MODAL ============ */
+function showEditVacationModal(vacation) {
+  // Zażądaj hasła admina
+  const password = prompt('Wpisz hasło admina:');
+  if (password !== 'admin123') {
+    showPlanNotification('Błędne hasło', 'Błąd', '❌');
+    return;
   }
 
-  btn.onclick = () => {
-    selectedDayForPlanModal = { dateStr, day, month };
-    openPlanDayModal();
-  };
-
-  return btn;
-}
-
-/* ============ OPEN PLAN DAY MODAL ============ */
-function openPlanDayModal() {
-  if (!selectedDayForPlanModal) return;
-  
-  const modal = document.getElementById('planDayModal');
-  const dateSpan = document.getElementById('modalPlanDayDate');
-  
-  const dateObj = new Date(selectedDayForPlanModal.dateStr);
-  const dayName = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'][dateObj.getDay()];
-  dateSpan.textContent = `${dayName} ${selectedDayForPlanModal.day} (${selectedDayForPlanModal.dateStr})`;
-  
+  // Pokaż modal edycji z opcją zmiany limitu
+  const modal = document.createElement('div');
+  modal.id = 'editVacationModal';
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
   modal.style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.background = 'rgba(0,0,0,0.5)';
+  modal.style.zIndex = 2001;
 
-/* ============ CLOSE PLAN DAY MODAL ============ */
-function closePlanDayModal() {
-  const modal = document.getElementById('planDayModal');
-  modal.style.display = 'none';
-  document.body.style.overflow = 'auto';
-  selectedDayForPlanModal = null;
-  renderCalendarView();
-}
+  const box = document.createElement('div');
+  box.style.background = 'white';
+  box.style.padding = '20px';
+  box.style.borderRadius = '10px';
+  box.style.maxWidth = '400px';
+  box.style.width = '90%';
+  box.style.boxShadow = '0 10px 40px rgba(0,0,0,0.2)';
 
-/* ============ ADD PLAN DAY ============ */
-function addPlanDay(type) {
-  if (!selectedDayForPlanModal) return;
-
-  const dateStr = selectedDayForPlanModal.dateStr;
-  
-  if (selectedPlanDays[dateStr]) {
-    // Jeśli już jest zaznaczony, usuń
-    delete selectedPlanDays[dateStr];
-  } else {
-    // Dodaj
-    selectedPlanDays[dateStr] = type;
-  }
-
-  updatePlanStats();
-  closePlanDayModal();
-}
-
-/* ============ CLEAR ALL PLAN ============ */
-function clearAllPlan() {
-  if (confirm('Na pewno chcesz wyczyścić wszystkie zaznaczenia?')) {
-    selectedPlanDays = {};
-    updatePlanStats();
-    renderCalendarView();
-  }
-}
-
-/* ============ RENDER CALENDAR VIEW ============ */
-function renderCalendarView() {
-  const container = document.getElementById('viewContainer');
-  container.innerHTML = '';
-
-  const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 
-                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+  const title = document.createElement('h2');
+  title.textContent = 'Edycja planu urlopów';
+  title.style.marginTop = '0';
+  box.appendChild(title);
 
   const grid = document.createElement('div');
   grid.style.display = 'grid';
-  grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
-  grid.style.gap = '16px';
-  grid.style.marginBottom = '20px';
+  grid.style.gridTemplateColumns = '1fr 1fr';
+  grid.style.gap = '12px';
+  grid.style.marginBottom = '16px';
 
-  for (let month = 0; month < 12; month++) {
-    const monthCard = createMonthCard(month, monthNames[month]);
-    grid.appendChild(monthCard);
-  }
+  // Start date
+  const labStart = document.createElement('label');
+  labStart.textContent = 'Od:';
+  labStart.style.fontWeight = '600';
+  labStart.style.display = 'block';
+  labStart.style.marginBottom = '4px';
+  const inpStart = document.createElement('input');
+  inpStart.type = 'date';
+  inpStart.value = vacation.start_date;
+  const wrapStart = document.createElement('div');
+  wrapStart.appendChild(labStart);
+  wrapStart.appendChild(inpStart);
+  grid.appendChild(wrapStart);
 
-  container.appendChild(grid);
-  addNewPlanButton(container);
-}
+  // End date
+  const labEnd = document.createElement('label');
+  labEnd.textContent = 'Do:';
+  labEnd.style.fontWeight = '600';
+  labEnd.style.display = 'block';
+  labEnd.style.marginBottom = '4px';
+  const inpEnd = document.createElement('input');
+  inpEnd.type = 'date';
+  inpEnd.value = vacation.end_date;
+  const wrapEnd = document.createElement('div');
+  wrapEnd.appendChild(labEnd);
+  wrapEnd.appendChild(inpEnd);
+  grid.appendChild(wrapEnd);
 
-/* ============ CREATE MONTH CARD ============ */
-function createMonthCard(month, monthName) {
-  const card = document.createElement('div');
-  card.style.background = 'white';
-  card.style.border = '1px solid #ddd';
-  card.style.borderRadius = '8px';
-  card.style.padding = '12px';
-  card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+  box.appendChild(grid);
 
-  const title = document.createElement('h3');
-  title.style.margin = '0 0 12px 0';
-  title.style.fontSize = '14px';
-  title.style.color = '#0f1724';
-  title.textContent = `${monthName} ${currentYear}`;
-  card.appendChild(title);
+  // Reason
+  const labReason = document.createElement('label');
+  labReason.textContent = 'Powód:';
+  labReason.style.fontWeight = '600';
+  labReason.style.display = 'block';
+  labReason.style.marginBottom = '4px';
+  const inpReason = document.createElement('input');
+  inpReason.type = 'text';
+  inpReason.value = vacation.reason || '';
+  inpReason.placeholder = 'np. Urlop wypoczynkowy';
+  inpReason.style.width = '100%';
+  inpReason.style.padding = '8px';
+  inpReason.style.border = '1px solid #ddd';
+  inpReason.style.borderRadius = '4px';
+  inpReason.style.marginBottom = '12px';
+  box.appendChild(labReason);
+  box.appendChild(inpReason);
 
-  const monthStart = new Date(currentYear, month, 1);
-  const monthEnd = new Date(currentYear, month + 1, 0);
+  // Separator
+  const sep = document.createElement('div');
+  sep.style.height = '1px';
+  sep.style.background = '#ddd';
+  sep.style.margin = '12px 0';
+  box.appendChild(sep);
 
-  const monthVacations = vacationPlans.filter(vac => {
-    const vacStart = new Date(vac.start_date);
-    const vacEnd = new Date(vac.end_date);
-    return vacStart <= monthEnd && vacEnd >= monthStart;
-  });
+  // Limit dni
+  const labLimit = document.createElement('label');
+  labLimit.textContent = 'Limit dni urlopu:';
+  labLimit.style.fontWeight = '600';
+  labLimit.style.display = 'block';
+  labLimit.style.marginBottom = '4px';
+  const inpLimit = document.createElement('input');
+  inpLimit.type = 'number';
+  inpLimit.value = vacationLimitValue;
+  inpLimit.min = '0';
+  inpLimit.max = '365';
+  inpLimit.style.width = '100%';
+  inpLimit.style.padding = '8px';
+  inpLimit.style.border = '1px solid #ddd';
+  inpLimit.style.borderRadius = '4px';
+  inpLimit.style.marginBottom = '12px';
+  box.appendChild(labLimit);
+  box.appendChild(inpLimit);
 
-  if (monthVacations.length === 0) {
-    const empty = document.createElement('div');
-    empty.style.fontSize = '12px';
-    empty.style.color = '#999';
-    empty.textContent = 'Brak zaplanowanych urlopów';
-    card.appendChild(empty);
-  } else {
-    monthVacations.forEach(vac => {
-      const vacItem = document.createElement('div');
-      vacItem.style.padding = '8px';
-      vacItem.style.marginBottom = '6px';
-      vacItem.style.background = vac.approved ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 152, 0, 0.1)';
-      vacItem.style.border = `2px solid ${vac.approved ? '#4CAF50' : '#ff9800'}`;
-      vacItem.style.borderRadius = '4px';
-      vacItem.style.cursor = 'pointer';
-      vacItem.style.fontSize = '11px';
-      vacItem.style.color = '#333';
+  // Actions
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+  actions.style.marginTop = '16px';
 
-      const status = vac.approved ? '✅' : '⏳';
-      const dates = `${vac.start_date} do ${vac.end_date}`;
-      vacItem.innerHTML = `<div><strong>${status} ${vac.reason}</strong></div><div>${dates}</div>`;
-      
-      if (vac.notes) {
-        const notesDiv = document.createElement('div');
-        notesDiv.style.marginTop = '4px';
-        notesDiv.style.fontSize = '10px';
-        notesDiv.style.color = '#666';
-        notesDiv.style.fontStyle = 'italic';
-        notesDiv.textContent = `📝 ${vac.notes}`;
-        vacItem.appendChild(notesDiv);
-      }
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = '🗑️ Usuń';
+  deleteBtn.style.padding = '8px 16px';
+  deleteBtn.style.background = '#f44336';
+  deleteBtn.style.color = 'white';
+  deleteBtn.style.border = 'none';
+  deleteBtn.style.borderRadius = '4px';
+  deleteBtn.style.cursor = 'pointer';
+  deleteBtn.onclick = async () => {
+    if (confirm('Na pewno usunąć urlop?')) {
+      await deleteVacationFromDB(vacation.id);
+      modal.remove();
+      if (currentEmployeeId) await loadExistingPlans();
+    }
+  };
 
-      vacItem.onclick = () => openVacationModal(vac);
-      card.appendChild(vacItem);
-    });
-  }
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Anuluj';
+  cancelBtn.style.padding = '8px 16px';
+  cancelBtn.style.background = '#999';
+  cancelBtn.style.color = 'white';
+  cancelBtn.style.border = 'none';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.cursor = 'pointer';
+  cancelBtn.onclick = () => modal.remove();
 
-  const addBtn = document.createElement('button');
-  addBtn.textContent = '+ Dodaj urlop';
-  addBtn.style.width = '100%';
-  addBtn.style.padding = '8px';
-  addBtn.style.marginTop = '8px';
-  addBtn.style.background = '#667eea';
-  addBtn.style.color = 'white';
-  addBtn.style.border = 'none';
-  addBtn.style.borderRadius = '4px';
-  addBtn.style.fontSize = '12px';
-  addBtn.style.cursor = 'pointer';
-  addBtn.onclick = () => openVacationModal(null, new Date(currentYear, month, 1).toISOString().split('T')[0]);
-  card.appendChild(addBtn);
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Zapisz';
+  saveBtn.style.padding = '8px 16px';
+  saveBtn.style.background = '#4CAF50';
+  saveBtn.style.color = 'white';
+  saveBtn.style.border = 'none';
+  saveBtn.style.borderRadius = '4px';
+  saveBtn.style.cursor = 'pointer';
+  saveBtn.onclick = async () => {
+    const startDate = inpStart.value;
+    const endDate = inpEnd.value;
+    const reason = inpReason.value || 'Urlop';
+    const newLimit = parseInt(inpLimit.value);
 
-  return card;
-}
+    if (!startDate || !endDate) {
+      showPlanNotification('Uzupełnij daty', 'Błąd', '⚠️');
+      return;
+    }
 
-/* ============ RENDER LIST VIEW ============ */
-function renderListView() {
-  const container = document.getElementById('viewContainer');
-  container.innerHTML = '';
+    if (startDate > endDate) {
+      showPlanNotification('Data "od" nie może być później niż "do"', 'Błąd', '⚠️');
+      return;
+    }
 
-  const listDiv = document.createElement('div');
-  listDiv.style.background = 'white';
-  listDiv.style.border = '1px solid #ddd';
-  listDiv.style.borderRadius = '8px';
-  listDiv.style.overflow = 'hidden';
+    if (isNaN(newLimit) || newLimit < 0) {
+      showPlanNotification('Limit musi być liczbą dodatnią', 'Błąd', '⚠️');
+      return;
+    }
 
-  if (vacationPlans.length === 0) {
-    const empty = document.createElement('div');
-    empty.style.padding = '24px';
-    empty.style.textAlign = 'center';
-    empty.style.color = '#999';
-    empty.textContent = 'Brak zaplanowanych urlopów';
-    listDiv.appendChild(empty);
-  } else {
-    vacationPlans.forEach((vac, idx) => {
-      const item = document.createElement('div');
-      item.style.padding = '12px';
-      item.style.borderBottom = idx < vacationPlans.length - 1 ? '1px solid #eee' : 'none';
-      item.style.display = 'flex';
-      item.style.justifyContent = 'space-between';
-      item.style.alignItems = 'center';
-      item.style.cursor = 'pointer';
-      item.style.transition = 'background 0.2s';
-      item.onmouseenter = () => item.style.background = '#f9f9f9';
-      item.onmouseleave = () => item.style.background = 'white';
-
-      const infoDiv = document.createElement('div');
-      infoDiv.style.flex = '1';
-      infoDiv.innerHTML = `
-        <div style="font-size: 13px; font-weight: 600; color: #0f1724; margin-bottom: 4px;">
-          ${vac.approved ? '✅' : '⏳'} ${vac.reason}
-        </div>
-        <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
-          ${vac.start_date} do ${vac.end_date}
-        </div>
-        ${vac.notes ? `<div style="font-size: 11px; color: #999; font-style: italic;">📝 ${vac.notes}</div>` : ''}
-      `;
-      item.appendChild(infoDiv);
-
-      const actionBtn = document.createElement('button');
-      actionBtn.textContent = 'Edytuj';
-      actionBtn.style.padding = '6px 12px';
-      actionBtn.style.background = '#667eea';
-      actionBtn.style.color = 'white';
-      actionBtn.style.border = 'none';
-      actionBtn.style.borderRadius = '4px';
-      actionBtn.style.cursor = 'pointer';
-      actionBtn.style.fontSize = '11px';
-      actionBtn.onclick = (e) => {
-        e.stopPropagation();
-        openVacationModal(vac);
-      };
-      item.appendChild(actionBtn);
-
-      item.onclick = () => openVacationModal(vac);
-      listDiv.appendChild(item);
-    });
-  }
-
-  container.appendChild(listDiv);
-
-  const addBtn = document.createElement('button');
-  addBtn.textContent = '+ Dodaj urlop';
-  addBtn.style.marginTop = '16px';
-  addBtn.style.padding = '12px 24px';
-  addBtn.style.width = '100%';
-  addBtn.style.background = '#4CAF50';
-  addBtn.style.color = 'white';
-  addBtn.style.border = 'none';
-  addBtn.style.borderRadius = '4px';
-  addBtn.style.fontSize = '13px';
-  addBtn.style.cursor = 'pointer';
-  addBtn.style.fontWeight = '600';
-  addBtn.onclick = () => openVacationModal(null);
-  container.appendChild(addBtn);
-}
-
-/* ============ ADD NEW PLAN BUTTON ============ */
-function addNewPlanButton(container) {
-  const addBtn = document.createElement('button');
-  addBtn.textContent = '+ Dodaj urlop';
-  addBtn.style.padding = '12px 24px';
-  addBtn.style.width = '100%';
-  addBtn.style.background = '#4CAF50';
-  addBtn.style.color = 'white';
-  addBtn.style.border = 'none';
-  addBtn.style.borderRadius = '4px';
-  addBtn.style.fontSize = '13px';
-  addBtn.style.cursor = 'pointer';
-  addBtn.style.fontWeight = '600';
-  addBtn.onclick = () => openVacationModal(null);
-  container.appendChild(addBtn);
-}
-
-/* ============ OPEN VACATION MODAL ============ */
-function openVacationModal(vacation = null, defaultDate = null) {
-  // Ta funkcja nie jest używana w nowej wersji
-  // Kalendarz planowania urlopów używa openPlanDayModal()
-}
-
-/* ============ CLOSE MODAL ============ */
-function closeModal() {
-  // Ta funkcja nie jest używana w nowej wersji
-}
-
-/* ============ SAVE VACATION PLAN ============ */
-async function saveVacationPlan(startDate, endDate, reason, notes) {
-  // Ta funkcja nie jest używana w nowej wersji
-}
-
-/* ============ DELETE VACATION PLAN ============ */
-async function deleteVacationPlan() {
-  // Ta funkcja nie jest używana w nowej wersji
-}
-
-/* ============ SAVE VACATION LIMIT ============ */
-async function saveVacationLimit() {
-  if (!sb || !currentEmployeeId) return;
-  
-  const limitValue = parseInt(document.getElementById('vacationLimitInput').value);
-  
-  if (isNaN(limitValue) || limitValue < 0) {
-    await showPlanNotification('Wprowadź prawidłowy limit dni', 'Błąd', '❌');
-    return;
-  }
-
-  try {
-    // Spróbuj aktualizować, jeśli nie ma rekordu - wstaw nowy
-    const { data: existing } = await sb
-      .from('vacation_limits')
-      .select('id')
-      .eq('employee_id', currentEmployeeId)
-      .eq('year', currentYear)
-      .single();
+    // Zapisz urlop
+    await updateVacationInDB(vacation.id, startDate, endDate, reason);
     
-    if (existing) {
-      const { error } = await sb
-        .from('vacation_limits')
-        .update({ limit_days: limitValue })
-        .eq('employee_id', currentEmployeeId)
-        .eq('year', currentYear);
-      
-      if (error) throw error;
-    } else {
-      const { error } = await sb
-        .from('vacation_limits')
-        .insert({
-          employee_id: currentEmployeeId,
-          year: currentYear,
-          limit_days: limitValue
-        });
-      
-      if (error) throw error;
+    // Aktualizuj limit jeśli się zmienił
+    if (newLimit !== vacationLimitValue) {
+      try {
+        await sb
+          .from('employees')
+          .update({ vacation_limit: newLimit })
+          .eq('id', currentEmployeeId);
+        vacationLimitValue = newLimit;
+      } catch (e) {
+        console.error('Update limit error:', e);
+      }
     }
 
-    vacationLimit = limitValue;
-    updatePlanStats();
-    await showPlanNotification('Limit urlopów zapisany', 'Sukces', '✅');
+    modal.remove();
+    if (currentEmployeeId) await loadExistingPlans();
+  };
+
+  actions.appendChild(deleteBtn);
+  actions.appendChild(cancelBtn);
+  actions.appendChild(saveBtn);
+  box.appendChild(actions);
+
+  modal.appendChild(box);
+  document.body.appendChild(modal);
+
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.remove();
+  };
+}
+
+/* ============ UPDATE VACATION IN DB ============ */
+async function updateVacationInDB(vacationId, startDate, endDate, reason) {
+  if (!sb) return;
+
+  try {
+    const { error } = await sb
+      .from('vacation_plans')
+      .update({ start_date: startDate, end_date: endDate, reason: reason })
+      .eq('id', vacationId);
+
+    if (error) throw error;
+
+    showPlanNotification('Urlop zaktualizowany', 'Sukces', '✅');
   } catch (e) {
-    console.error('Save vacation limit error', e);
-    await showPlanNotification('Błąd przy zapisywaniu limitu', 'Błąd', '❌');
+    console.error('Update vacation error', e);
+    showPlanNotification('Błąd przy aktualizacji', 'Błąd', '❌');
   }
 }
 
-/* ============ SAVE PLAN TO DATABASE ============ */
-async function savePlanToDatabase() {
-  if (!sb || !currentEmployeeId) return;
-
-  // Policz dni Urlop wypoczynkowy
-  const plannedDays = Object.values(selectedPlanDays).filter(v => v === 'Urlop wypoczynkowy').length;
-  
-  if (plannedDays > vacationLimit) {
-    await showPlanNotification(`Plan przewyższa limit o ${plannedDays - vacationLimit} dni`, 'Ostrzeżenie', '⚠️');
-    return;
-  }
+/* ============ DELETE VACATION FROM DB ============ */
+async function deleteVacationFromDB(vacationId) {
+  if (!sb) return;
 
   try {
-    // Sprawdź czy już istnieje plan na ten rok
-    const { data: existing } = await sb
+    const { error } = await sb
       .from('vacation_plans')
-      .select('id')
-      .eq('employee_id', currentEmployeeId)
-      .eq('year', currentYear)
-      .single();
+      .delete()
+      .eq('id', vacationId);
 
-    if (existing) {
-      const { error } = await sb
-        .from('vacation_plans')
-        .update({
-          plan_data: { days: selectedPlanDays },
-          updated_at: new Date().toISOString()
-        })
-        .eq('employee_id', currentEmployeeId)
-        .eq('year', currentYear);
-      
-      if (error) throw error;
-    } else {
-      const { error } = await sb
-        .from('vacation_plans')
-        .insert({
-          employee_id: currentEmployeeId,
-          year: currentYear,
-          plan_data: { days: selectedPlanDays },
-          created_at: new Date().toISOString()
-        });
-      
-      if (error) throw error;
-    }
+    if (error) throw error;
 
-    await showPlanNotification('Plan urlopów zapisany pomyślnie', 'Sukces', '✅');
+    showPlanNotification('Urlop usunięty', 'Sukces', '✅');
   } catch (e) {
-    console.error('Save plan error', e);
-    await showPlanNotification('Błąd przy zapisywaniu planu', 'Błąd', '❌');
+    console.error('Delete vacation error', e);
+    showPlanNotification('Błąd przy usuwaniu', 'Błąd', '❌');
   }
 }
 
@@ -603,13 +502,13 @@ async function initVacationPlan() {
   await loadEmployeesForPlan();
 
   // Populate year selector
-  const currentYear = new Date().getFullYear();
+  const currentYearNow = new Date().getFullYear();
   const yearSelect = document.getElementById('planYearSelect');
-  for (let year = currentYear - 1; year <= currentYear + 3; year++) {
+  for (let year = currentYearNow; year <= currentYearNow + 1; year++) {
     const option = document.createElement('option');
     option.value = year;
     option.textContent = year;
-    if (year === currentYear) option.selected = true;
+    if (year === currentYearNow) option.selected = true;
     yearSelect.appendChild(option);
   }
 
@@ -618,28 +517,29 @@ async function initVacationPlan() {
     window.location.href = './vacation.html';
   });
 
+  document.getElementById('backToMainBtn').addEventListener('click', () => {
+    window.location.href = './index.html';
+  });
+
   document.getElementById('planEmployeeSelect').addEventListener('change', async (e) => {
     currentEmployeeId = e.target.value;
     if (currentEmployeeId) {
-      // Załaduj limit
+      // Wczytaj limit dla pracownika z bazy
       try {
         const { data, error } = await sb
-          .from('vacation_limits')
-          .select('limit_days')
-          .eq('employee_id', currentEmployeeId)
-          .eq('year', currentYear)
+          .from('employees')
+          .select('vacation_limit')
+          .eq('id', currentEmployeeId)
           .single();
         
-        if (data) {
-          vacationLimit = data.limit_days;
+        if (data && data.vacation_limit) {
+          vacationLimitValue = data.vacation_limit;
         } else {
-          vacationLimit = 20;
+          vacationLimitValue = 26; // domyślnie
         }
-        
-        document.getElementById('vacationLimitInput').value = vacationLimit;
-      } catch (e) {
-        vacationLimit = 20;
-        document.getElementById('vacationLimitInput').value = vacationLimit;
+      } catch (err) {
+        console.warn('Load vacation limit error:', err);
+        vacationLimitValue = 26;
       }
       
       await loadExistingPlans();
@@ -651,42 +551,439 @@ async function initVacationPlan() {
   document.getElementById('planYearSelect').addEventListener('change', async (e) => {
     currentYear = parseInt(e.target.value);
     if (currentEmployeeId) {
-      // Załaduj limit dla nowego roku
-      try {
-        const { data, error } = await sb
-          .from('vacation_limits')
-          .select('limit_days')
-          .eq('employee_id', currentEmployeeId)
-          .eq('year', currentYear)
-          .single();
-        
-        if (data) {
-          vacationLimit = data.limit_days;
-        } else {
-          vacationLimit = 20;
-        }
-        
-        document.getElementById('vacationLimitInput').value = vacationLimit;
-      } catch (e) {
-        vacationLimit = 20;
-        document.getElementById('vacationLimitInput').value = vacationLimit;
-      }
-      
       await loadExistingPlans();
     }
   });
 
-  document.getElementById('saveLimitBtn').addEventListener('click', saveVacationLimit);
-  document.getElementById('savePlanBtn').addEventListener('click', savePlanToDatabase);
-  document.getElementById('clearAllPlanBtn').addEventListener('click', clearAllPlan);
-  document.getElementById('resetPlanViewBtn').addEventListener('click', async () => {
-    if (currentEmployeeId) {
-      await loadExistingPlans();
-      await showPlanNotification('Plan załadowany ponownie', 'Info', 'ℹ️');
-    }
-  });
+  // Przycisk edycji urlopów
+  const editPlanBtn = document.getElementById('editPlanBtn');
+  if (editPlanBtn) {
+    editPlanBtn.addEventListener('click', async () => {
+      if (!currentEmployeeId) {
+        showPlanNotification('Najpierw wybierz pracownika', 'Info', 'ℹ️');
+        return;
+      }
+
+      if (!isEditMode) {
+        // Wejdź w tryb edycji
+        const password = prompt('Wpisz hasło admina:');
+        if (password !== 'admin123') {
+          showPlanNotification('Błędne hasło', 'Błąd', '❌');
+          return;
+        }
+
+        isEditMode = true;
+        editPlanBtn.textContent = '💾 Zapisz';
+        editPlanBtn.style.background = '#4CAF50';
+        
+        // Dodaj przycisk anuluj
+        const cancelBtn = document.createElement('button');
+        cancelBtn.id = 'cancelEditBtn';
+        cancelBtn.className = 'btn';
+        cancelBtn.textContent = '✕ Anuluj';
+        cancelBtn.style.padding = '6px 12px';
+        cancelBtn.style.fontSize = '11px';
+        cancelBtn.style.background = '#999';
+        cancelBtn.style.color = 'white';
+        cancelBtn.style.border = 'none';
+        cancelBtn.style.borderRadius = '4px';
+        cancelBtn.style.cursor = 'pointer';
+        cancelBtn.style.whiteSpace = 'nowrap';
+        cancelBtn.onclick = () => exitEditMode();
+        
+        editPlanBtn.parentElement.insertBefore(cancelBtn, editPlanBtn.nextSibling);
+        
+        // Pokaż pole limitu
+        showLimitInput();
+        
+        // Zmień tryb kalendarza
+        renderEditModeCalendar();
+        
+        showPlanNotification('Tryb edycji aktywny. Kliknij dwa dni w kalendarzu aby zaznaczyć urlop.', 'Info', 'ℹ️');
+      } else {
+        // Zapisz zmiany
+        await savePlanEdits();
+      }
+    });
+  }
 
   console.log('Vacation Plan module initialized');
 }
 
 document.addEventListener('DOMContentLoaded', initVacationPlan);
+
+/* ============ EDIT MODE FUNCTIONS ============ */
+
+function exitEditMode() {
+  isEditMode = false;
+  selectedRangeStart = null;
+  selectedRangeEnd = null;
+  
+  const editPlanBtn = document.getElementById('editPlanBtn');
+  editPlanBtn.textContent = '✏️ Edycja';
+  editPlanBtn.style.background = '#667eea';
+  
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  if (cancelBtn) cancelBtn.remove();
+  
+  hideLimitInput();
+  renderYearView();
+}
+
+function showLimitInput() {
+  let limitContainer = document.getElementById('limitEditContainer');
+  if (limitContainer) return; // już pokazany
+  
+  limitContainer = document.createElement('div');
+  limitContainer.id = 'limitEditContainer';
+  limitContainer.style.display = 'flex';
+  limitContainer.style.gap = '8px';
+  limitContainer.style.alignItems = 'center';
+  limitContainer.style.padding = '12px';
+  limitContainer.style.background = 'rgba(102, 126, 234, 0.1)';
+  limitContainer.style.borderRadius = '8px';
+  limitContainer.style.marginBottom = '12px';
+  
+  const label = document.createElement('label');
+  label.textContent = 'Limit dni:';
+  label.style.fontWeight = '600';
+  
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.id = 'editLimitInput';
+  input.value = vacationLimitValue;
+  input.min = '0';
+  input.max = '365';
+  input.style.padding = '6px 8px';
+  input.style.border = '1px solid #ddd';
+  input.style.borderRadius = '4px';
+  input.style.width = '70px';
+  
+  // Zmiana limitu w real-time
+  input.addEventListener('change', async () => {
+    const newLimit = parseInt(input.value);
+    if (!isNaN(newLimit) && newLimit >= 0) {
+      try {
+        await sb
+          .from('employees')
+          .update({ vacation_limit: newLimit })
+          .eq('id', currentEmployeeId);
+        vacationLimitValue = newLimit;
+        updatePlanStats();
+        showPlanNotification('Limit zaktualizowany', 'Sukces', '✅');
+      } catch (e) {
+        console.error('Update limit error:', e);
+        showPlanNotification('Błąd przy aktualizacji limitu', 'Błąd', '❌');
+        input.value = vacationLimitValue;
+      }
+    }
+  });
+  
+  limitContainer.appendChild(label);
+  limitContainer.appendChild(input);
+  
+  const vacationForm = document.querySelector('.vacation-form');
+  if (vacationForm) {
+    vacationForm.insertBefore(limitContainer, vacationForm.lastElementChild);
+  }
+}
+
+function hideLimitInput() {
+  const limitContainer = document.getElementById('limitEditContainer');
+  if (limitContainer) limitContainer.remove();
+}
+
+function renderEditModeCalendar() {
+  const container = document.getElementById('planCalendarContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Jeśli nie jesteśmy w trybie edycji, renderuj zwykły widok
+  if (!isEditMode) {
+    renderYearView();
+    return;
+  }
+
+  const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 
+                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+
+  for (let month = 0; month < 12; month++) {
+    const monthCard = createEditModeMonthCalendar(month, monthNames[month]);
+    container.appendChild(monthCard);
+  }
+}
+
+let isMouseDown = false;
+
+function calculatePlannedDays() {
+  return vacationPlans.reduce((sum, vac) => {
+    const start = new Date(vac.start_date);
+    const end = new Date(vac.end_date);
+    const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    return sum + days;
+  }, 0);
+}
+
+function createEditModeMonthCalendar(month, monthName) {
+  const card = document.createElement('div');
+  card.style.background = 'white';
+  card.style.border = '1px solid #ddd';
+  card.style.borderRadius = '8px';
+  card.style.padding = '12px';
+  card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+
+  const title = document.createElement('h3');
+  title.style.margin = '0 0 12px 0';
+  title.style.fontSize = '14px';
+  title.style.color = '#0f1724';
+  title.style.textAlign = 'center';
+  title.textContent = `${monthName} ${currentYear}`;
+  card.appendChild(title);
+
+  // Grid tygodniowych nagłówków
+  const headerGrid = document.createElement('div');
+  headerGrid.style.display = 'grid';
+  headerGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+  headerGrid.style.gap = '2px';
+  headerGrid.style.marginBottom = '4px';
+  
+  const dayNames = ['Pn', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
+  dayNames.forEach(dayName => {
+    const dayHeader = document.createElement('div');
+    dayHeader.style.textAlign = 'center';
+    dayHeader.style.fontSize = '10px';
+    dayHeader.style.fontWeight = '700';
+    dayHeader.style.color = '#666';
+    dayHeader.style.padding = '4px 0';
+    dayHeader.textContent = dayName;
+    headerGrid.appendChild(dayHeader);
+  });
+  card.appendChild(headerGrid);
+
+  // Grid dni
+  const daysInMonth = new Date(currentYear, month + 1, 0).getDate();
+  const firstDay = new Date(currentYear, month, 1).getDay();
+  const firstDayMondayBased = firstDay === 0 ? 6 : firstDay - 1;
+
+  const grid = document.createElement('div');
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+  grid.style.gap = '2px';
+
+  // Puste komórki
+  for (let i = 0; i < firstDayMondayBased; i++) {
+    const emptyCell = document.createElement('div');
+    grid.appendChild(emptyCell);
+  }
+
+  // Dni miesiąca
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    const hasVacation = vacationPlans.some(vac => {
+      const vacStart = new Date(vac.start_date);
+      const vacEnd = new Date(vac.end_date);
+      const currentDate = new Date(dateStr);
+      return currentDate >= vacStart && currentDate <= vacEnd;
+    });
+
+    const isInRange = selectedRangeStart && selectedRangeEnd && 
+      dateStr >= (selectedRangeStart < selectedRangeEnd ? selectedRangeStart : selectedRangeEnd) &&
+      dateStr <= (selectedRangeStart > selectedRangeEnd ? selectedRangeStart : selectedRangeEnd);
+
+    const dayBtn = document.createElement('button');
+    dayBtn.style.padding = '6px 2px';
+    dayBtn.style.fontSize = '10px';
+    dayBtn.style.fontWeight = '600';
+    dayBtn.style.border = '1px solid #ddd';
+    dayBtn.style.borderRadius = '3px';
+    dayBtn.style.cursor = 'grab';
+    dayBtn.style.transition = 'all 0.2s';
+    dayBtn.style.userSelect = 'none';
+    dayBtn.textContent = day;
+
+    if (hasVacation) {
+      dayBtn.style.background = '#FFE082';
+      dayBtn.style.borderColor = '#FBC02D';
+      dayBtn.style.color = '#333';
+      dayBtn.style.cursor = 'pointer';
+      // Kliknięcie na zaplanowany dzień - trim lub split zakresu
+      dayBtn.addEventListener('mouseup', (e) => {
+        if (!isMouseDown) { // tylko jeśli nie było drag-and-drop
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Znajdź urlop zawierający ten dzień
+          const vacationIndex = vacationPlans.findIndex(vac => {
+            const vacStart = new Date(vac.start_date);
+            const vacEnd = new Date(vac.end_date);
+            const currentDate = new Date(dateStr);
+            return currentDate >= vacStart && currentDate <= vacEnd;
+          });
+
+          if (vacationIndex >= 0) {
+            const vacation = vacationPlans[vacationIndex];
+            const vacStart = vacation.start_date;
+            const vacEnd = vacation.end_date;
+            const clickedDate = dateStr;
+
+            // Jeśli kliknięty dzień to początek zakresu
+            if (clickedDate === vacStart) {
+              // Przesunąć początek o dzień dalej
+              const nextDate = new Date(clickedDate);
+              nextDate.setDate(nextDate.getDate() + 1);
+              vacation.start_date = nextDate.toISOString().split('T')[0];
+              
+              if (vacation.start_date > vacation.end_date) {
+                // Jeśli zakres stał się pusty, usuń
+                vacationPlans.splice(vacationIndex, 1);
+              }
+            }
+            // Jeśli kliknięty dzień to koniec zakresu
+            else if (clickedDate === vacEnd) {
+              // Przesunąć koniec o dzień wcześniej
+              const prevDate = new Date(clickedDate);
+              prevDate.setDate(prevDate.getDate() - 1);
+              vacation.end_date = prevDate.toISOString().split('T')[0];
+              
+              if (vacation.start_date > vacation.end_date) {
+                // Jeśli zakres stał się pusty, usuń
+                vacationPlans.splice(vacationIndex, 1);
+              }
+            }
+            // Jeśli kliknięty dzień jest w środku - split na dwie części
+            else {
+              const beforeEnd = new Date(clickedDate);
+              beforeEnd.setDate(beforeEnd.getDate() - 1);
+              
+              const afterStart = new Date(clickedDate);
+              afterStart.setDate(afterStart.getDate() + 1);
+              
+              // Zmień koniec pierwszego okresu
+              vacation.end_date = beforeEnd.toISOString().split('T')[0];
+              
+              // Dodaj drugi okres
+              vacationPlans.push({
+                id: 'temp_' + Date.now(),
+                employee_id: currentEmployeeId,
+                start_date: afterStart.toISOString().split('T')[0],
+                end_date: vacEnd,
+                reason: vacation.reason,
+                year: currentYear
+              });
+            }
+            
+            renderEditModeCalendar();
+            updatePlanStats();
+          }
+        }
+      });
+    } else if (isInRange) {
+      dayBtn.style.background = '#E3F2FD';
+      dayBtn.style.borderColor = '#2196F3';
+      dayBtn.style.color = '#333';
+      
+      dayBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isMouseDown = true;
+        selectedRangeStart = dateStr;
+        selectedRangeEnd = null;
+        dayBtn.style.cursor = 'grabbing';
+        renderEditModeCalendar();
+      });
+
+      dayBtn.addEventListener('mouseover', () => {
+        if (isMouseDown && selectedRangeStart) {
+          selectedRangeEnd = dateStr;
+          renderEditModeCalendar();
+        }
+      });
+    } else {
+      dayBtn.style.background = 'white';
+      dayBtn.style.color = '#333';
+      
+      dayBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isMouseDown = true;
+        selectedRangeStart = dateStr;
+        selectedRangeEnd = null;
+        dayBtn.style.cursor = 'grabbing';
+        renderEditModeCalendar();
+      });
+
+      dayBtn.addEventListener('mouseover', () => {
+        if (isMouseDown && selectedRangeStart) {
+          selectedRangeEnd = dateStr;
+          renderEditModeCalendar();
+        }
+      });
+    }
+
+    grid.appendChild(dayBtn);
+  }
+
+  card.appendChild(grid);
+  return card;
+}
+
+// Globalny mouseup na dokumentzie
+document.addEventListener('mouseup', () => {
+  if (isMouseDown && selectedRangeStart && selectedRangeEnd) {
+    const startDate = selectedRangeStart < selectedRangeEnd ? selectedRangeStart : selectedRangeEnd;
+    const endDate = selectedRangeStart > selectedRangeEnd ? selectedRangeStart : selectedRangeEnd;
+    
+    // Oblicz ilość dni w nowym zakresie
+    const newDays = Math.floor((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
+    const currentPlanned = calculatePlannedDays();
+    const available = vacationLimitValue - currentPlanned;
+
+    if (newDays > available) {
+      showPlanNotification(`Za mało dni! Dostępnych: ${available}, a chcesz zaplanować: ${newDays}`, 'Błąd', '⚠️');
+    } else {
+      // Dodaj do vacationPlans lokalnie
+      vacationPlans.push({
+        id: 'temp_' + Date.now(),
+        employee_id: currentEmployeeId,
+        start_date: startDate,
+        end_date: endDate,
+        reason: 'Urlop',
+        year: currentYear
+      });
+      updatePlanStats();
+    }
+  }
+  
+  isMouseDown = false;
+  selectedRangeStart = null;
+  selectedRangeEnd = null;
+  renderEditModeCalendar();
+}, { once: false });
+
+
+
+
+async function savePlanEdits() {
+  if (!sb || !currentEmployeeId) return;
+
+  try {
+    // Dodaj tylko nowe urlopy (limit jest już zapisany automatycznie)
+    const tempVacations = vacationPlans.filter(v => v.id.startsWith('temp_'));
+
+    for (const vac of tempVacations) {
+      await sb.from('vacation_plans').insert({
+        employee_id: currentEmployeeId,
+        year: currentYear,
+        start_date: vac.start_date,
+        end_date: vac.end_date,
+        reason: vac.reason
+      });
+    }
+
+    showPlanNotification('Urlopy zapisane do bazy!', 'Sukces', '✅');
+    exitEditMode();
+    await loadExistingPlans();
+  } catch (e) {
+    console.error('Save plan edits error:', e);
+    showPlanNotification('Błąd przy zapisywaniu', 'Błąd', '❌');
+  }
+}

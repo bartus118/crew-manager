@@ -11,6 +11,19 @@
  * Uwaga: dopasuj stałe (BU_OPTIONS, ROLE_OPTIONS, PERMISSION_OPTIONS) jeśli trzeba.
  */
 
+/* -------------------- ROLE DISPLAY MAPPING -------------------- */
+const ROLE_DISPLAY_NAMES = {
+  'mechanik_focke': 'Mechanik Focke',
+  'mechanik_protos': 'Mechanik Protos',
+  'operator_focke': 'Operator Focke',
+  'operator_krosowy': 'Operator Krosowy',
+  'operator_protos': 'Operator Protos'
+};
+
+function getDisplayRoleName(roleKey) {
+  return ROLE_DISPLAY_NAMES[roleKey] || roleKey;
+}
+
 /* -------------------- KONFIGURACJA: hasło + supabase -------------------- */
 const ADMIN_PASSWORD = 'admin123';
 const SUPABASE_URL = window.CONFIG.supabase.url;
@@ -994,7 +1007,7 @@ const AdminEmployees = (function(){
     // Role
     const rolesCol = document.createElement('div');
     rolesCol.style.flex = '2';
-    rolesCol.textContent = Array.isArray(emp.roles) ? emp.roles.join(', ') : '';
+    rolesCol.textContent = Array.isArray(emp.roles) ? emp.roles.map(r => getDisplayRoleName(r)).join(', ') : '';
 
     // Uprawnienia (permissions)
     const permsCol = document.createElement('div');
@@ -1146,7 +1159,7 @@ const AdminEmployees = (function(){
     ROLE_OPTIONS.forEach(r => {
       const o = document.createElement('option');
       o.value = r;
-      o.textContent = r;
+      o.textContent = getDisplayRoleName(r);
       if(existingRoles.includes(r)) o.selected = true;
       selRoles.appendChild(o);
     });
@@ -1502,7 +1515,7 @@ const AdminEmployees = (function(){
     // roles multi-select
     const labRoles = document.createElement('label'); labRoles.textContent='Role (wybierz jedną lub więcej)'; labRoles.style.display='block'; labRoles.style.fontWeight='600'; labRoles.style.marginTop='10px';
     const selRoles = document.createElement('select'); selRoles.multiple=true; selRoles.size = Math.min(6, ROLE_OPTIONS.length); selRoles.style.width='100%'; selRoles.style.padding='6px'; selRoles.style.border='1px solid #e6eef8'; selRoles.style.borderRadius='6px';
-    ROLE_OPTIONS.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; selRoles.appendChild(o); });
+    ROLE_OPTIONS.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = getDisplayRoleName(r); selRoles.appendChild(o); });
     box.appendChild(labRoles); box.appendChild(selRoles);
 
     // permissions checkboxes
@@ -1741,7 +1754,7 @@ const AdminEmployees = (function(){
     const btn = document.getElementById('roleMultiFilterBtn');
     if(!btn) return;
     const selArr = Array.from(selectedRoleFilters);
-    btn.textContent = selArr.length ? selArr.join(', ') : '— Role —';
+    btn.textContent = selArr.length ? selArr.map(r => getDisplayRoleName(r)).join(', ') : '— Role —';
   }
 
   // inicjalizacja hooków UI dla chipów — wywołać w init()
@@ -1994,7 +2007,7 @@ const AdminEmployees = (function(){
         cb.checked = selectedRoleFilters.has(role);
 
         const span = document.createElement('span');
-        span.textContent = role;
+        span.textContent = getDisplayRoleName(role);
 
         cb.addEventListener('change', function(){
           if(this.checked) addRoleFilter(role);
@@ -2434,12 +2447,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureAuthThen(() => {
     const tabModify = document.getElementById('tabModify');
     const tabEmployees = document.getElementById('tabEmployees');
+    const tabVacationPlan = document.getElementById('tabVacationPlan');
     const machinesSection = document.getElementById('adminMachinesSection');
     const employeesSection = document.getElementById('adminEmployeesSection');
+    const vacationPlanSection = document.getElementById('adminVacationPlanSection');
 
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
       if(employeesSection) employeesSection.style.display = 'none';
+      if(vacationPlanSection) vacationPlanSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
       try { await AdminMachines.renderList(); } catch(e){ console.warn('showModify renderList error', e); }
@@ -2448,13 +2464,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function showEmployees(){
       if(machinesSection) machinesSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = '';
+      if(vacationPlanSection) vacationPlanSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabEmployees) tabEmployees.classList.add('active');
       try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
     }
 
+    async function showVacationPlan(){
+      if(machinesSection) machinesSection.style.display = 'none';
+      if(employeesSection) employeesSection.style.display = 'none';
+      if(vacationPlanSection) vacationPlanSection.style.display = '';
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      if(tabVacationPlan) tabVacationPlan.classList.add('active');
+      const app = document.getElementById('adminVacationPlanApp');
+      if(app) {
+        app.innerHTML = '<iframe src="./vacation-plan.html" style="width: 100%; height: 100vh; border: none; border-radius: 8px;"></iframe>';
+      }
+    }
+
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
+    if(tabVacationPlan) tabVacationPlan.addEventListener('click', () => showVacationPlan());
 
     // open machines by default
     showModify();

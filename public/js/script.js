@@ -8,6 +8,19 @@
  * - zachowanie zgodności z dotychczasową logiką (nie zmieniono funkcji biznesowych)
  */
 
+/* -------------------- ROLE DISPLAY MAPPING -------------------- */
+const ROLE_DISPLAY_NAMES = {
+  'mechanik_focke': 'Mechanik Focke',
+  'mechanik_protos': 'Mechanik Protos',
+  'operator_focke': 'Operator Focke',
+  'operator_krosowy': 'Operator Krosowy',
+  'operator_protos': 'Operator Protos'
+};
+
+function getDisplayRoleName(roleKey) {
+  return ROLE_DISPLAY_NAMES[roleKey] || roleKey;
+}
+
 /* -------------------- KONFIGURACJA SUPABASE (wstaw swoje dane) -------------------- */
 /* ============================================================
    GŁÓWNY SKRYPT - Crew Manager
@@ -22,7 +35,7 @@ const SUPABASE_ANON_KEY = window.CONFIG.supabase.anonKey;
 let sb = null; // klient Supabase (null = offline)
 let employees = [];
 let machines = [];
-let assignments = {};
+let assignments = {}; // Nowa zmienna - urlopy na datę
 let vacationsByDate = {}; // Nowa zmienna - urlopy na datę
 let dateInput, tbody, theadRow;
 let currentDate = null;
@@ -862,7 +875,7 @@ function openAssignModal(date, machine, roleKey) {
     const machineNumber = machine.number || machine; // Wspieramy zarówno obiekt jak i numer
     const machineObj = typeof machine === 'object' ? machine : machines.find(m => m.number === String(machineNumber));
     
-    assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machineNumber})`;
+    assignTitle.textContent = `Przypisz — ${getDisplayRoleName(roleKey)} (Maszyna ${machineNumber})`;
     assignInfo.textContent = 'Ładuję listę pracowników...';
 
     assignList.innerHTML = '';
@@ -945,7 +958,7 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
 
     const leftInfo = document.createElement('div');
     leftInfo.className = 'small-muted';
-    leftInfo.textContent = `Data: ${date} • Maszyna: ${machine} • Rola: ${roleKey.replace('_',' ')}`;
+    leftInfo.textContent = `Data: ${date} • Maszyna: ${machine} • Rola: ${getDisplayRoleName(roleKey)}`;
     topRow.appendChild(leftInfo);
 
     const controls = document.createElement('div');
@@ -1144,7 +1157,7 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
     assignList.appendChild(clear);
 
     // Update title and info now that loading is done
-    assignTitle.textContent = `Przypisz — ${roleKey.replace('_',' ')} (Maszyna ${machineNumber})`;
+    assignTitle.textContent = `Przypisz — ${getDisplayRoleName(roleKey)} (Maszyna ${machineNumber})`;
     assignInfo.textContent = `${Array.from(buMap.keys()).length} grupy BU • Pracownicy: ${employees.length}`;
     
     console.log('renderAssignModalContent DONE - modal rendered successfully');

@@ -9,6 +9,19 @@ let selectedBU = null;
 let selectedReason = null;
 let selectedEmployeeId = null;
 
+/* ============ ROLE MAPPING ============ */
+const ROLE_DISPLAY_NAMES = {
+  'mechanik_focke': 'Mechanik Focke',
+  'mechanik_protos': 'Mechanik Protos',
+  'operator_focke': 'Operator Focke',
+  'operator_krosowy': 'Operator Krosowy',
+  'operator_protos': 'Operator Protos'
+};
+
+function getDisplayRoleName(roleKey) {
+  return ROLE_DISPLAY_NAMES[roleKey] || roleKey;
+}
+
 /* ============ INIT SUPABASE ============ */
 async function initSupabaseList() {
   try {
@@ -96,7 +109,7 @@ function updateFilterChips() {
   
   if (selectedVacationDateFrom) filters.push({ label: `Od: ${selectedVacationDateFrom}`, type: 'date' });
   if (selectedVacationDateTo) filters.push({ label: `Do: ${selectedVacationDateTo}`, type: 'date' });
-  if (selectedRole) filters.push({ label: `Rola: ${selectedRole}`, type: 'role' });
+  if (selectedRole) filters.push({ label: `Rola: ${getDisplayRoleName(selectedRole)}`, type: 'role' });
   if (selectedBU) filters.push({ label: `BU: ${selectedBU}`, type: 'bu' });
   if (selectedReason) filters.push({ label: `Typ: ${selectedReason}`, type: 'reason' });
   if (selectedEmployeeId) {
@@ -381,7 +394,7 @@ async function initVacationList() {
   Array.from(roles).sort().forEach(role => {
     const option = document.createElement('option');
     option.value = role;
-    option.textContent = role;
+    option.textContent = getDisplayRoleName(role);
     roleFilter.appendChild(option);
   });
   
@@ -395,6 +408,9 @@ async function initVacationList() {
   // Back button
   const backBtn = document.getElementById('backToVacationBtn');
   if (backBtn) backBtn.addEventListener('click', () => window.location.href = './vacation.html');
+
+  const backToMainBtn = document.getElementById('backToMainBtn');
+  if (backToMainBtn) backToMainBtn.addEventListener('click', () => window.location.href = './index.html');
   
   // Date filters
   const dateFromPicker = document.getElementById('vacationListDateFromPicker');

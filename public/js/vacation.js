@@ -4,6 +4,19 @@ let sb = null;
 let employees = [];
 let selectedVacationDate = null; // Przechowuje wybrany dzień z tabeli
 
+/* ============ ROLE MAPPING ============ */
+const ROLE_DISPLAY_NAMES = {
+  'mechanik_focke': 'Mechanik Focke',
+  'mechanik_protos': 'Mechanik Protos',
+  'operator_focke': 'Operator Focke',
+  'operator_krosowy': 'Operator Krosowy',
+  'operator_protos': 'Operator Protos'
+};
+
+function getDisplayRoleName(roleKey) {
+  return ROLE_DISPLAY_NAMES[roleKey] || roleKey;
+}
+
 /* ============ INIT SUPABASE ============ */
 async function initSupabaseVacation() {
   try {
@@ -327,12 +340,9 @@ async function loadVacationsList() {
 
     listDiv.innerHTML = '';
     
-    // Dodaj sekcję statystyki urlopów (2 dni wstecz, 7 dni naprzód)
-    await renderVacationStatistics(listDiv, today);
-    
     // Sekcja z listą urlopów
     const vacationsLabel = document.createElement('h3');
-    vacationsLabel.style.marginTop = '24px';
+    vacationsLabel.style.marginTop = '0';
     vacationsLabel.style.marginBottom = '12px';
     vacationsLabel.style.color = '#0f1724';
     vacationsLabel.style.fontSize = '14px';
@@ -536,10 +546,13 @@ async function renderVacationStatistics(container, todayStr) {
       }
     });
     
-    // Zbierz wszystkie role
+    // Zbierz wszystkie role ze wszystkich pracowników (nie tylko z nieobecności)
     const allRoles = new Set();
-    Object.values(statsByDate).forEach(dayStats => {
-      Object.keys(dayStats).forEach(role => allRoles.add(role));
+    empData.forEach(emp => {
+      const roles = Array.isArray(emp.roles) 
+        ? emp.roles 
+        : (emp.roles ? [emp.roles] : ['unknown']);
+      roles.forEach(role => allRoles.add(String(role).trim()));
     });
     const sortedRoles = Array.from(allRoles).sort();
     
@@ -631,7 +644,7 @@ async function renderVacationStatistics(container, todayStr) {
       tr.style.borderBottom = '1px solid rgba(102, 126, 234, 0.4)';
       
       const roleCell = document.createElement('td');
-      roleCell.textContent = role || '(brak roli)';
+      roleCell.textContent = getDisplayRoleName(role) || '(brak roli)';
       roleCell.style.padding = '8px';
       roleCell.style.fontWeight = '600';
       roleCell.style.color = '#0f1724';
@@ -688,6 +701,211 @@ async function renderVacationStatistics(container, todayStr) {
   }
 }
 
+/* ============ RENDER VACATION PLAN STATISTICS ============ */
+async function renderVacationPlanStatistics(container, todayStr) {
+  if (!sb) return;
+  
+  // Oblicz przedział: 2 dni wstecz, 7 dni naprzód
+  const today = new Date(todayStr);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 2);
+  const startDateStr = startDate.toISOString().split('T')[0];
+  
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + 7);
+  const endDateStr = endDate.toISOString().split('T')[0];
+  
+  try {
+    // Załaduj wszystkich pracowników z ich rolami
+    const { data: empData, error: empError } = await sb
+      .from('employees')
+      .select('id, surname, firstname, roles')
+      .order('surname', { ascending: true });
+    
+    if (empError) throw empError;
+    
+    const empMap = {};
+    empData.forEach(emp => {
+      empMap[emp.id] = emp;
+    });
+    
+    // Załaduj planowane urlopy w tym przedziale
+    const { data: plans, error: planError } = await sb
+      .from('vacation_plans')
+      .select('employee_id, start_date, end_date')
+      .lte('start_date', endDateStr)
+      .gte('end_date', startDateStr);
+    
+    if (planError) throw planError;
+    
+    // Zbuduj mapę urlop -> pracownicy -> role
+    const statsByDate = {};
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      statsByDate[dateStr] = {};
+    }
+    
+    plans.forEach(plan => {
+      let currentDate = new Date(plan.start_date);
+      const endDateObj = new Date(plan.end_date);
+      
+      while (currentDate <= endDateObj) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        if (statsByDate[dateStr]) {
+          const emp = empMap[plan.employee_id];
+          if (emp) {
+            // Ustaw role (mogą być string, array, lub undefined)
+            const roles = Array.isArray(emp.roles) 
+              ? emp.roles 
+              : (emp.roles ? [emp.roles] : ['unknown']);
+            
+            roles.forEach(role => {
+              const roleStr = String(role).trim();
+              if (!statsByDate[dateStr][roleStr]) {
+                statsByDate[dateStr][roleStr] = 0;
+              }
+              statsByDate[dateStr][roleStr]++;
+            });
+          }
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+    
+    // Zbierz wszystkie role ze wszystkich pracowników (nie tylko z planów)
+    const allRoles = new Set();
+    empData.forEach(emp => {
+      const roles = Array.isArray(emp.roles) 
+        ? emp.roles 
+        : (emp.roles ? [emp.roles] : ['unknown']);
+      roles.forEach(role => allRoles.add(String(role).trim()));
+    });
+    const sortedRoles = Array.from(allRoles).sort();
+    
+    // Renderuj tabelkę
+    const statsContainer = document.createElement('div');
+    statsContainer.className = 'vacation-stats';
+    statsContainer.style.marginBottom = '24px';
+    statsContainer.style.background = 'rgba(255, 255, 255, 0.95)';
+    statsContainer.style.padding = '24px';
+    statsContainer.style.borderRadius = '12px';
+    statsContainer.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.1)';
+    
+    const title = document.createElement('h3');
+    title.style.marginTop = '0';
+    title.style.marginBottom = '12px';
+    title.style.color = '#0f1724';
+    title.style.fontSize = '14px';
+    title.textContent = '📊 Planowane urlopy na 2 dni wstecz i 7 dni naprzód:';
+    statsContainer.appendChild(title);
+    
+    const table = document.createElement('table');
+    table.className = 'vacation-stats-table';
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.fontSize = '12px';
+    
+    // Header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headerRow.style.background = 'rgba(255, 152, 0, 0.5)';
+    headerRow.style.borderBottom = '3px solid rgba(255, 152, 0, 0.8)';
+    
+    const roleHeader = document.createElement('th');
+    roleHeader.textContent = 'Rola';
+    roleHeader.style.padding = '8px';
+    roleHeader.style.textAlign = 'left';
+    roleHeader.style.fontWeight = '700';
+    roleHeader.style.color = '#0f1724';
+    headerRow.appendChild(roleHeader);
+    
+    // Nagłówki dat
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      const [year, month, day] = dateStr.split('-');
+      const dayName = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'][new Date(dateStr).getDay()];
+      
+      const th = document.createElement('th');
+      th.style.padding = '8px';
+      th.style.textAlign = 'center';
+      th.style.fontWeight = '700';
+      th.style.color = '#fff';
+      th.style.borderLeft = '2px solid rgba(255, 152, 0, 0.8)';
+      th.style.cursor = 'pointer';
+      th.style.transition = 'all 0.2s ease';
+      
+      th.innerHTML = `${day}.${month}<br>${dayName}`;
+      
+      th.addEventListener('mouseover', () => {
+        th.style.background = 'rgba(255, 152, 0, 0.7)';
+        th.style.transform = 'scale(1.05)';
+        th.style.fontWeight = '800';
+      });
+      
+      th.addEventListener('mouseout', () => {
+        th.style.background = 'rgba(255, 152, 0, 0.5)';
+        th.style.transform = 'scale(1)';
+        th.style.fontWeight = '700';
+      });
+      
+      headerRow.appendChild(th);
+    }
+    
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Body
+    const tbody = document.createElement('tbody');
+    sortedRoles.forEach((role, idx) => {
+      const tr = document.createElement('tr');
+      if (idx % 2 === 0) {
+        tr.style.background = 'rgba(255, 152, 0, 0.12)';
+      }
+      tr.style.borderBottom = '1px solid rgba(255, 152, 0, 0.4)';
+      
+      const roleCell = document.createElement('td');
+      roleCell.textContent = getDisplayRoleName(role) || '(brak roli)';
+      roleCell.style.padding = '8px';
+      roleCell.style.fontWeight = '600';
+      roleCell.style.color = '#0f1724';
+      roleCell.style.whiteSpace = 'nowrap';
+      tr.appendChild(roleCell);
+      
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        const count = statsByDate[dateStr][role] || 0;
+        
+        const cell = document.createElement('td');
+        cell.style.padding = '8px';
+        cell.style.textAlign = 'center';
+        cell.style.borderLeft = '1px solid rgba(255, 152, 0, 0.5)';
+        cell.style.fontWeight = '600';
+        
+        if (count > 0) {
+          cell.style.color = '#E65100';
+          cell.textContent = count;
+        } else {
+          cell.style.color = '#999';
+          cell.textContent = '—';
+        }
+        
+        tr.appendChild(cell);
+      }
+      
+      tbody.appendChild(tr);
+    });
+    
+    table.appendChild(tbody);
+    statsContainer.appendChild(table);
+    container.appendChild(statsContainer);
+    
+  } catch (e) {
+    console.error('renderVacationPlanStatistics error', e);
+  }
+}
+
 /* ============ CHECK IF EMPLOYEE ON VACATION ============ */
 async function checkIfOnVacation(employeeId, dateStr) {
   if (!sb || !employeeId || !dateStr) return false;
@@ -713,15 +931,12 @@ async function checkIfOnVacation(employeeId, dateStr) {
   }
 }
 
-/* ============ INIT ============ */
-async function initVacation() {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Init Supabase
   await initSupabaseVacation();
   
   // Load employees for select
   await loadEmployeesForSelect();
-  
-  // Attach event listeners
-  document.getElementById('vacationAddBtn').addEventListener('click', addVacation);
   
   // Back button
   const backBtn = document.getElementById('backToMainBtn');
@@ -730,25 +945,17 @@ async function initVacation() {
   // View list button
   const viewListBtn = document.getElementById('viewListBtn');
   if (viewListBtn) viewListBtn.addEventListener('click', () => window.location.href = './vacation-list.html');
-  
-  // View plan button
-  const viewPlanBtn = document.getElementById('viewPlanBtn');
-  if (viewPlanBtn) viewPlanBtn.addEventListener('click', () => window.location.href = './vacation-plan.html');
 
   // View calendar button
   const viewCalendarBtn = document.getElementById('viewCalendarBtn');
   if (viewCalendarBtn) viewCalendarBtn.addEventListener('click', () => window.location.href = './vacation-calendar.html');
   
-  // Render statistics table
-  const listDiv = document.createElement('div');
-  listDiv.id = 'statisticsContainer';
-  const formSection = document.querySelector('.vacation-form');
-  formSection.parentNode.insertBefore(listDiv, formSection.nextSibling);
-  
+  // Render statistics tables
+  const statContainer = document.getElementById('statisticsContainer');
+  const vacationPlanContainer = document.getElementById('vacationPlanStatisticsContainer');
   const today = new Date().toISOString().split('T')[0];
-  await renderVacationStatistics(listDiv, today);
+  await renderVacationStatistics(statContainer, today);
+  await renderVacationPlanStatistics(vacationPlanContainer, today);
 
   console.log('Vacation module initialized');
-}
-
-document.addEventListener('DOMContentLoaded', initVacation);
+});

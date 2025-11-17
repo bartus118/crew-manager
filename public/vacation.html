@@ -13,61 +13,13 @@
       <h1>📅 Nieobecności pracowników</h1>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button id="viewListBtn" class="back-btn" style="background: #667eea; color: white;">📋 Pokaż listę</button>
-        <button id="viewPlanBtn" class="back-btn" style="background: #ff9800; color: white;">📅 Plan roczny</button>
         <button id="viewCalendarBtn" class="back-btn" style="background: #9C27B0; color: white;">🗓️ Kalendarz</button>
-        <button id="backToMainBtn" class="back-btn">← Powrót</button>
+        <button id="backToMainBtn" class="back-btn">Powrót</button>
       </div>
     </div>
 
-    <!-- FORM SECTION -->
-    <div class="vacation-form">
-      <h2 style="margin-top: 0; color: #0f1724; font-size: 16px;">Dodaj nieobecność</h2>
-      
-      <div class="form-group">
-        <label>Pracownik:</label>
-        <div class="employee-search-wrapper">
-          <input 
-            id="vacationEmployeeSearch" 
-            type="text" 
-            placeholder="Wpisz imię lub nazwisko..."
-            autocomplete="off"
-          />
-          <div id="vacationEmployeeDropdown" class="employee-dropdown" style="display: none;">
-            <div class="dropdown-list"></div>
-          </div>
-        </div>
-        <input id="vacationEmployeeSelect" type="hidden" />
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-        <div class="form-group">
-          <label>Od:</label>
-          <input id="vacationStartDate" type="date" />
-        </div>
-        <div class="form-group">
-          <label>Do:</label>
-          <input id="vacationEndDate" type="date" />
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>Rodzaj nieobecności:</label>
-        <select id="vacationReason">
-          <option value="">— Wybierz rodzaj —</option>
-          <option value="Urlop wypoczynkowy">Urlop wypoczynkowy</option>
-          <option value="Urlop na żądanie">Urlop na żądanie</option>
-          <option value="L4">L4</option>
-          <option value="Delegacja">Delegacja</option>
-          <option value="Szkolenie">Szkolenie</option>
-        </select>
-      </div>
-
-      <div class="form-actions">
-        <button id="vacationAddBtn" class="btn primary">➕ Dodaj nieobecność</button>
-      </div>
-
-      <div id="vacationStatus" class="status-box"></div>
-    </div>
+    <div id="statisticsContainer"></div>
+    <div id="vacationPlanStatisticsContainer"></div>
   </div>
 
   <!-- Notification modal -->
