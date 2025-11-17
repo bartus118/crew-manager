@@ -2447,15 +2447,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureAuthThen(() => {
     const tabModify = document.getElementById('tabModify');
     const tabEmployees = document.getElementById('tabEmployees');
-    const tabVacationPlan = document.getElementById('tabVacationPlan');
     const machinesSection = document.getElementById('adminMachinesSection');
     const employeesSection = document.getElementById('adminEmployeesSection');
-    const vacationPlanSection = document.getElementById('adminVacationPlanSection');
 
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
       if(employeesSection) employeesSection.style.display = 'none';
-      if(vacationPlanSection) vacationPlanSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
       try { await AdminMachines.renderList(); } catch(e){ console.warn('showModify renderList error', e); }
@@ -2464,27 +2461,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function showEmployees(){
       if(machinesSection) machinesSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = '';
-      if(vacationPlanSection) vacationPlanSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabEmployees) tabEmployees.classList.add('active');
       try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
     }
 
-    async function showVacationPlan(){
-      if(machinesSection) machinesSection.style.display = 'none';
-      if(employeesSection) employeesSection.style.display = 'none';
-      if(vacationPlanSection) vacationPlanSection.style.display = '';
-      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-      if(tabVacationPlan) tabVacationPlan.classList.add('active');
-      const app = document.getElementById('adminVacationPlanApp');
-      if(app) {
-        app.innerHTML = '<iframe src="./vacation-plan.html" style="width: 100%; height: 100vh; border: none; border-radius: 8px;"></iframe>';
-      }
-    }
-
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
-    if(tabVacationPlan) tabVacationPlan.addEventListener('click', () => showVacationPlan());
 
     // open machines by default
     showModify();

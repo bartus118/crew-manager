@@ -6,6 +6,39 @@
   <title>Nieobecności — Obsada</title>
   <link rel="stylesheet" href="../css/vacation.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .vacation-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 3px solid #e0e0e0;
+      margin-bottom: 24px;
+    }
+    .vacation-tab-btn {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      transition: all 0.2s ease;
+    }
+    .vacation-tab-btn:hover {
+      color: #333;
+      background: rgba(0,0,0,0.02);
+    }
+    .vacation-tab-btn.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+    .vacation-tab-content {
+      display: none;
+    }
+    .vacation-tab-content.active {
+      display: block;
+    }
+  </style>
 </head>
 <body>
   <div class="vacation-container">
@@ -13,13 +46,165 @@
       <h1>📅 Nieobecności pracowników</h1>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button id="viewListBtn" class="back-btn" style="background: #667eea; color: white;">📋 Pokaż listę</button>
-        <button id="viewCalendarBtn" class="back-btn" style="background: #9C27B0; color: white;">🗓️ Kalendarz</button>
         <button id="backToMainBtn" class="back-btn">Powrót</button>
       </div>
     </div>
 
-    <div id="statisticsContainer"></div>
-    <div id="vacationPlanStatisticsContainer"></div>
+    <!-- TABS NAVIGATION -->
+    <div class="vacation-tabs">
+      <button class="vacation-tab-btn active" data-tab="statistics">📊 Statystyki</button>
+      <button class="vacation-tab-btn" data-tab="calendar">📅 Kalendarz</button>
+      <button class="vacation-tab-btn" data-tab="plan">✏️ Plan urlopów</button>
+    </div>
+
+    <!-- STATISTICS TAB -->
+    <div id="statistics" class="vacation-tab-content active">
+      <div id="statisticsContainer"></div>
+      <div id="vacationPlanStatisticsContainer"></div>
+    </div>
+
+    <!-- ========== PLAN URLOPÓW TAB ========== -->
+    <div id="plan" class="vacation-tab-content">
+      <div class="vacation-form" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
+          
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <label for="planEmployeeSelect" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Pracownik:</label>
+            <select id="planEmployeeSelect" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 180px;">
+              <option value="">— Wybierz pracownika —</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <label for="planYearSelect" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Rok:</label>
+            <select id="planYearSelect" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 100px;">
+            </select>
+          </div>
+
+          <button id="editPlanBtn" class="btn" style="padding: 6px 12px; font-size: 11px; background: #667eea; color: white; white-space: nowrap;">✏️ Edycja</button>
+
+          <!-- LEGEND -->
+          <div style="display: flex; gap: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px; margin-top: 12px; font-size: 12px; flex-wrap: wrap; width: 100%;">
+            <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #FFE082; border: 1px solid #FBC02D; border-radius: 3px;"></div> Zaplanowany urlop</div>
+            <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #F5F5F5; border: 1px solid #999; border-radius: 3px;"></div> Wolne dni</div>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div style="display: flex; gap: 20px; padding: 12px; background: rgba(102, 126, 234, 0.08); border-radius: 8px; font-size: 13px; color: #333;">
+          <div><strong>Limit:</strong> <span id="limitDisplay">-</span> dni</div>
+          <div><strong>Zaplanowane:</strong> <span id="plannedDisplay">0</span> dni</div>
+          <div><strong>Do zaplanowania:</strong> <span id="remainingDisplay">-</span> dni</div>
+          <div><strong>Zatwierdzono:</strong> <span id="approvedDisplay">0</span> dni</div>
+        </div>
+      </div>
+
+      <!-- CALENDAR GRID -->
+      <div id="planCalendarContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; width: 100%;">
+        <!-- Will be populated by JavaScript -->
+      </div>
+
+      <!-- Modal do planowania dnia urlopu -->
+      <div id="planDayModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <h2 style="margin-top: 0; color: #0f1724;">Zaplanuj urlop: <span id="modalPlanDayDate" style="font-weight: 600;"></span></h2>
+          
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">Dodać urlop wypoczynkowy w tym dniu?</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button onclick="addPlanDay('Urlop wypoczynkowy')" style="padding: 12px; background: #FFE082; border: 2px solid #FBC02D; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">✅ Tak, zaplanuj urlop</button>
+              <button onclick="addPlanDay('Wolne')" style="padding: 12px; background: #F5F5F5; border: 2px solid #999; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">⊗ Zaznacz jako wolne (bez limitu)</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button id="planModalCloseBtn" onclick="closePlanDayModal()" class="btn" style="flex: 1; padding: 10px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✕ Zamknij</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== CALENDAR TAB ========== -->
+    <div id="calendar" class="vacation-tab-content">
+      <!-- CONTROLS SECTION -->
+      <div class="vacation-form" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
+          
+          <div style="display: flex; gap: 6px; align-items: center; position: relative;">
+            <label for="calendarEmployeeSearch" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Pracownik:</label>
+            <input id="calendarEmployeeSearch" type="search" placeholder="Szukaj pracownika..." autocomplete="off" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 180px; box-sizing: border-box;" />
+            <div id="calendarEmployeeDropdown" style="display: none; position: absolute; top: 100%; left: 60px; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; max-height: 300px; overflow-y: auto;">
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <label for="calendarViewMode" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Widok:</label>
+            <select id="calendarViewMode" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+              <option value="month">Miesiąc</option>
+              <option value="year">Rok</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center;" id="monthNavControls">
+            <button id="prevMonthBtn" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">← Poprzedni</button>
+            <div id="currentMonthDisplay" style="font-size: 12px; font-weight: 600; min-width: 120px; text-align: center;">-</div>
+            <button id="nextMonthBtn" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Następny →</button>
+          </div>
+
+          <div style="display: none; gap: 6px; align-items: center;" id="yearSelectControls">
+            <label for="calendarYearSelect" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Rok:</label>
+            <select id="calendarYearSelect" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 100px;">
+            </select>
+          </div>
+        </div>
+
+        <!-- LEGEND -->
+        <div style="display: flex; gap: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #FFE082; border: 1px solid #FBC02D; border-radius: 3px;"></div> Urlop wypoczynkowy</div>
+          <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #FFB74D; border: 1px solid #F57C00; border-radius: 3px;"></div> Urlop na żądanie</div>
+          <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #F8BBD0; border: 1px solid #EC407A; border-radius: 3px;"></div> L4</div>
+          <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #BBDEFB; border: 1px solid #1976D2; border-radius: 3px;"></div> Delegacja</div>
+          <div style="display: flex; gap: 6px; align-items: center;"><div style="width: 16px; height: 16px; background: #C8E6C9; border: 1px solid #388E3C; border-radius: 3px;"></div> Szkolenie</div>
+          <div style="display: flex; gap: 6px; align-items: center;"><span style="font-size: 14px;">📅</span><div style="width: 16px; height: 16px; background: #FFFDE7; border: 1px solid #ddd; border-radius: 3px;"></div> Zaplanowany urlop</div>
+        </div>
+      </div>
+
+      <!-- CALENDAR GRID -->
+      <div id="calendarContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; width: 100%;">
+        <!-- Will be populated by JavaScript -->
+      </div>
+
+      <!-- Modal do zaznaczenia typu nieobecności -->
+      <div id="absenceDayModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <h2 style="margin-top: 0; color: #0f1724;">Zaznacz nieobecność: <span id="modalAbsenceDayDate" style="font-weight: 600;"></span></h2>
+          
+          <div id="adminPasswordWarning" style="display: none; padding: 12px; background: #FFF3E0; border-left: 4px solid #FF9800; margin-bottom: 16px; border-radius: 4px; font-size: 12px; color: #E65100;">
+            ⚠️ Zaznaczanie sprzed więcej niż 7 dni wymaga hasła admina
+          </div>
+
+          <div id="passwordFieldContainer" style="margin-bottom: 16px; display: none;">
+            <label style="font-size: 12px; color: #666; font-weight: 600; display: block; margin-bottom: 4px;">Hasło admina:</label>
+            <input id="adminPasswordInput" type="password" placeholder="Wpisz hasło..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 12px 0; font-size: 13px; color: #666;">Wybierz rodzaj nieobecności:</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button onclick="setAbsenceType('Urlop wypoczynkowy')" style="padding: 10px; background: #FFE082; border: 2px solid #FBC02D; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">📅 Urlop wypoczynkowy</button>
+              <button onclick="setAbsenceType('Urlop na żądanie')" style="padding: 10px; background: #FFB74D; border: 2px solid #F57C00; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">📆 Urlop na żądanie</button>
+              <button onclick="setAbsenceType('L4')" style="padding: 10px; background: #F8BBD0; border: 2px solid #EC407A; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">🏥 L4</button>
+              <button onclick="setAbsenceType('Delegacja')" style="padding: 10px; background: #BBDEFB; border: 2px solid #1976D2; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">✈️ Delegacja</button>
+              <button onclick="setAbsenceType('Szkolenie')" style="padding: 10px; background: #C8E6C9; border: 2px solid #388E3C; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;">📚 Szkolenie</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button id="absenceModalCloseBtn" onclick="closeAbsenceDayModal()" class="btn" style="flex: 1; padding: 10px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✕ Zamknij</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Notification modal -->
@@ -34,5 +219,33 @@
 
   <script src="../config.js"></script>
   <script src="js/vacation.js"></script>
+  <script>
+    // Tab switching functionality
+    let planInitialized = false;
+    let calendarInitialized = false;
+    
+    document.querySelectorAll('.vacation-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.dataset.tab;
+        
+        // Remove active class from all buttons and contents
+        document.querySelectorAll('.vacation-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.vacation-tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Add active class to clicked button and corresponding content
+        btn.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+        
+        // Initialize specific modules on first tab access
+        if (tabName === 'plan' && !planInitialized) {
+          initVacationPlan();
+          planInitialized = true;
+        } else if (tabName === 'calendar' && !calendarInitialized) {
+          initCalendar();
+          calendarInitialized = true;
+        }
+      });
+    });
+  </script>
 </body>
 </html>
