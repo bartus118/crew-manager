@@ -1274,6 +1274,10 @@ async function bootstrap(){
     const vacationBtn = document.getElementById('vacationBtn');
     if(vacationBtn) vacationBtn.onclick = ()=> window.location.href = './vacation.html';
 
+    // Przycisk Kalendarz (na stronie vacation.html)
+    const viewCalendarBtn = document.getElementById('viewCalendarBtn');
+    if(viewCalendarBtn) viewCalendarBtn.onclick = ()=> window.location.href = './vacation-calendar.html';
+
     // Przycisk do czyszczenia przypisań (TEST)
     const clearBtn = document.getElementById('clearAssignmentsBtn');
     if(clearBtn) {

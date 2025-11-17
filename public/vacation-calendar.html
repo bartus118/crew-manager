@@ -11,21 +11,38 @@
   <div class="vacation-container">
     <div class="vacation-header">
       <h1>🗓️ Kalendarz Nieobecności</h1>
-      <button id="backToVacationBtn" class="back-btn">← Powrót do urlopów</button>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button id="backToVacationBtn" class="back-btn" style="background: #667eea; color: white;">← Powrót do nieobecności</button>
+        <button id="backToMainBtn" class="back-btn">← Powrót do przypisań</button>
+      </div>
     </div>
 
     <!-- CONTROLS SECTION -->
     <div class="vacation-form" style="margin-bottom: 20px;">
       <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
         
-        <div style="display: flex; gap: 6px; align-items: center;">
-          <label for="calendarEmployeeSelect" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Pracownik:</label>
-          <select id="calendarEmployeeSelect" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 180px;">
-            <option value="">— Wybierz pracownika —</option>
-          </select>
+        <div style="display: flex; gap: 6px; align-items: center; position: relative;">
+          <label for="calendarEmployeeSearch" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Pracownik:</label>
+          <input id="calendarEmployeeSearch" type="search" placeholder="Szukaj pracownika..." autocomplete="off" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 180px; box-sizing: border-box;" />
+          <div id="calendarEmployeeDropdown" style="display: none; position: absolute; top: 100%; left: 60px; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; max-height: 300px; overflow-y: auto;">
+          </div>
         </div>
 
         <div style="display: flex; gap: 6px; align-items: center;">
+          <label for="calendarViewMode" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Widok:</label>
+          <select id="calendarViewMode" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+            <option value="month">Miesiąc</option>
+            <option value="year">Rok</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;" id="monthNavControls">
+          <button id="prevMonthBtn" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">← Poprzedni</button>
+          <div id="currentMonthDisplay" style="font-size: 12px; font-weight: 600; min-width: 120px; text-align: center;">-</div>
+          <button id="nextMonthBtn" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">Następny →</button>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;" id="yearSelectControls" style="display: none;">
           <label for="calendarYearSelect" style="font-size: 12px; color: #666; font-weight: 600; white-space: nowrap;">Rok:</label>
           <select id="calendarYearSelect" style="padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; min-width: 100px;">
           </select>
@@ -47,10 +64,7 @@
       <!-- Will be populated by JavaScript -->
     </div>
 
-    <!-- ACTION BUTTONS -->
-    <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-      <button id="clearAllAbsencesBtn" class="btn" style="padding: 12px 24px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">🗑️ Wyczyść wszystko</button>
-    </div>
+
   </div>
 
   <!-- Modal do zaznaczenia typu nieobecności -->

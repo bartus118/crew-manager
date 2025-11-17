@@ -1,12 +1,18 @@
-/* vacation-calendar.js — Moduł kalendarza nieobecności */
+/* vacation-calendar.js — Kalendarz zaznaczania nieobecności */
 
 let sb = null;
 let employees = [];
 let currentEmployeeId = null;
 let currentYear = new Date().getFullYear();
-let selectedAbsences = {}; // { "2025-01-15": "Urlop wypoczynkowy", ... }
+let currentMonth = new Date().getMonth(); // 0-11
+let viewMode = 'month'; // 'month' lub 'year'
+let absencesCache = {}; // { "YYYY-MM-DD": "Urlop wypoczynkowy", ... }
+let selectedAbsences = {}; // Dla starego interfejsu (roczny widok)
 let selectedDayForModal = null;
-const ADMIN_PASSWORD = "admin123"; // Zmień na prawdziwe hasło!
+let rangeStartDate = null; // Pierwszy wybrany dzień zakresu
+let rangeEndDate = null;   // Drugi wybrany dzień zakresu
+
+const ADMIN_PASSWORD = 'admin123';
 
 const typeColors = {
   'Urlop wypoczynkowy': { bg: '#FFE082', border: '#FBC02D', icon: '📅' },
@@ -31,7 +37,7 @@ async function initSupabaseCalendar() {
   }
 }
 
-/* ============ NOTIFICATION ============ */
+/* ============ NOTIFICATION HELPER ============ */
 async function showCalendarNotification(message, title = 'Powiadomienie', icon = 'ℹ️') {
   const modal = document.getElementById('notificationModal');
   if (!modal) {
@@ -40,19 +46,25 @@ async function showCalendarNotification(message, title = 'Powiadomienie', icon =
   }
 
   return new Promise((resolve) => {
-    document.getElementById('notificationTitle').textContent = title;
-    document.getElementById('notificationMessage').textContent = message;
-    document.getElementById('notificationIcon').textContent = icon;
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+    const iconEl = document.getElementById('notificationIcon');
+    const okBtn = document.getElementById('notificationOkBtn');
+
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    if (iconEl) iconEl.textContent = icon;
+
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
 
     const cleanup = () => {
       modal.style.display = 'none';
       document.body.classList.remove('modal-open');
-      document.getElementById('notificationOkBtn').onclick = null;
+      okBtn.onclick = null;
     };
 
-    document.getElementById('notificationOkBtn').onclick = () => {
+    okBtn.onclick = () => {
       cleanup();
       resolve();
     };
@@ -67,302 +79,634 @@ async function loadEmployeesForCalendar() {
     if (error) throw error;
     employees = data || [];
     
-    const select = document.getElementById('calendarEmployeeSelect');
-    select.innerHTML = '<option value="">— Wybierz pracownika —</option>';
-    employees.forEach(emp => {
-      const option = document.createElement('option');
-      option.value = emp.id;
-      option.textContent = `${emp.surname} ${emp.firstname}`;
-      select.appendChild(option);
-    });
+    const searchInput = document.getElementById('calendarEmployeeSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', filterEmployeeDropdown);
+    }
   } catch (e) {
     console.error('Load employees error', e);
   }
 }
 
-/* ============ LOAD EXISTING ABSENCES ============ */
-async function loadExistingAbsences() {
+function filterEmployeeDropdown(e) {
+  const searchValue = e.target.value.toLowerCase();
+  const dropdown = document.getElementById('calendarEmployeeDropdown');
+  
+  if (!searchValue) {
+    dropdown.style.display = 'none';
+    return;
+  }
+  
+  const filtered = employees.filter(emp => 
+    `${emp.surname} ${emp.firstname}`.toLowerCase().includes(searchValue)
+  );
+  
+  dropdown.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div style="padding: 8px; color: #999; font-size: 12px;">Brak wyników</div>';
+  } else {
+    filtered.forEach(emp => {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 12px;';
+      item.textContent = `${emp.surname} ${emp.firstname}`;
+      item.onmouseover = () => item.style.background = '#f0f0f0';
+      item.onmouseout = () => item.style.background = 'white';
+      item.onclick = () => selectEmployee(emp.id, `${emp.surname} ${emp.firstname}`);
+      dropdown.appendChild(item);
+    });
+  }
+  
+  dropdown.style.display = 'block';
+}
+
+function selectEmployee(id, name) {
+  const searchInput = document.getElementById('calendarEmployeeSearch');
+  const dropdown = document.getElementById('calendarEmployeeDropdown');
+  
+  searchInput.value = name;
+  dropdown.style.display = 'none';
+  
+  currentEmployeeId = id;
+  currentMonth = new Date().getMonth();
+  currentYear = new Date().getFullYear();
+  
+  if (viewMode === 'month') {
+    loadAbsences();
+  } else {
+    loadAbsences();
+  }
+}
+
+/* ============ LOAD ABSENCES ============ */
+async function loadAbsences() {
   if (!sb || !currentEmployeeId) return;
+  
   try {
+    const startDate = new Date(currentYear, currentMonth, 1);
+    const endDate = new Date(currentYear, currentMonth + 1, 0);
+    
+    // W widoku roku pobierz cały rok
+    let start, end;
+    if (viewMode === 'year') {
+      start = new Date(currentYear, 0, 1);
+      end = new Date(currentYear, 11, 31);
+    } else {
+      start = startDate;
+      end = endDate;
+    }
+
     const { data, error } = await sb
       .from('vacation')
       .select('*')
       .eq('employee_id', currentEmployeeId)
-      .gte('start_date', `${currentYear}-01-01`)
-      .lte('end_date', `${currentYear}-12-31`);
+      .gte('start_date', start.toISOString().split('T')[0])
+      .lte('end_date', end.toISOString().split('T')[0]);
     
     if (error) throw error;
     
-    selectedAbsences = {};
-    (data || []).forEach(vac => {
-      const start = new Date(vac.start_date);
-      const end = new Date(vac.end_date);
+    absencesCache = {};
+    (data || []).forEach(record => {
+      const start = new Date(record.start_date);
+      const end = new Date(record.end_date);
       
+      // Zaznacz każdy dzień z zakresu
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
-        selectedAbsences[dateStr] = vac.reason;
+        absencesCache[dateStr] = record.reason;
       }
     });
     
-    renderCalendarView();
+    if (viewMode === 'month') {
+      renderMonthView();
+    } else {
+      renderYearView();
+    }
   } catch (e) {
     console.error('Load absences error', e);
-    renderCalendarView();
   }
 }
 
-/* ============ CHECK IF DATE IS PAST ============ */
-function isDayPast(day, month) {
-  const date = new Date(currentYear, month, day);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date < today;
-}
-
-/* ============ CHECK IF NEEDS PASSWORD ============ */
-function needsPassword(day, month) {
-  const date = new Date(currentYear, month, day);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const daysBack = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-  return daysBack > 7;
-}
-
-/* ============ RENDER CALENDAR ============ */
-function renderCalendarView() {
+/* ============ RENDER MONTH VIEW ============ */
+function renderMonthView() {
   const container = document.getElementById('calendarContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 
+                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
+  
+  // Update display
+  const display = document.getElementById('currentMonthDisplay');
+  if (display) {
+    display.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+  }
+
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay(); // 0 = sunday
+  
+  // Build calendar grid
+  const grid = document.createElement('div');
+  grid.style.display = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+  grid.style.gap = '4px';
+  grid.style.padding = '8px';
+  grid.style.background = 'white';
+  grid.style.borderRadius = '8px';
+  grid.style.border = '1px solid #ddd';
+
+  // Day headers
+  const dayHeaders = ['Pn', 'Wt', 'Śr', 'Czw', 'Pt', 'Sb', 'Nd'];
+  dayHeaders.forEach(h => {
+    const header = document.createElement('div');
+    header.textContent = h;
+    header.style.fontWeight = '600';
+    header.style.textAlign = 'center';
+    header.style.fontSize = '10px';
+    header.style.color = '#999';
+    grid.appendChild(header);
+  });
+
+  // Empty cells before first day (adjust for Monday start)
+  const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+  for (let i = 0; i < adjustedFirstDay; i++) {
+    grid.appendChild(document.createElement('div'));
+  }
+
+  // Day cells
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const type = absencesCache[dateStr];
+    
+    // Check if date is in selected range
+    let isInRange = false;
+    if (rangeStartDate && rangeEndDate) {
+      // Porównuj stringi dat: "2025-11-12", "2025-11-15"
+      const start = rangeStartDate < rangeEndDate ? rangeStartDate : rangeEndDate;
+      const end = rangeStartDate < rangeEndDate ? rangeEndDate : rangeStartDate;
+      
+      if (dateStr >= start && dateStr <= end) {
+        isInRange = true;
+      }
+    } else if (rangeStartDate && dateStr === rangeStartDate) {
+      isInRange = true;
+    }
+    
+    const cell = document.createElement('button');
+    cell.style.aspectRatio = '1';
+    cell.style.border = '1px solid #ddd';
+    cell.style.borderRadius = '4px';
+    cell.style.cursor = !currentEmployeeId ? 'not-allowed' : 'pointer';
+    cell.style.fontSize = '12px';
+    cell.style.fontWeight = '600';
+    cell.style.transition = 'all 0.2s';
+    cell.style.display = 'flex';
+    cell.style.alignItems = 'center';
+    cell.style.justifyContent = 'center';
+    cell.style.flexDirection = 'column';
+    cell.style.gap = '1px';
+    cell.style.padding = '2px';
+    
+    if (type) {
+      const color = typeColors[type];
+      cell.style.background = color.bg;
+      cell.style.borderColor = color.border;
+      cell.style.color = '#333';
+      cell.innerHTML = `<div>${day}</div><div style="font-size: 10px;">${color.icon}</div>`;
+    } else if (isInRange) {
+      // Zaznaczony zakres
+      cell.style.background = '#E3F2FD';
+      cell.style.borderColor = '#1976D2';
+      cell.style.color = '#0D47A1';
+      cell.textContent = day;
+    } else {
+      cell.style.background = currentEmployeeId ? 'white' : '#f5f5f5';
+      cell.style.color = currentEmployeeId ? '#333' : '#ccc';
+      cell.textContent = day;
+    }
+
+    // Check if date is past (disable old dates without password)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cellDate = new Date(dateStr);
+    const isPast = cellDate < today;
+
+    if (!type && currentEmployeeId) {
+      cell.onclick = () => {
+        selectRangeDay(dateStr, day, isPast);
+      };
+    } else if (type && currentEmployeeId) {
+      // Click to remove
+      cell.onclick = () => {
+        removeAbsence(dateStr);
+      };
+      cell.title = 'Klikni aby usunąć';
+    } else if (!currentEmployeeId) {
+      // Brak pracownika - wyłącz klikanie
+      cell.disabled = true;
+      cell.style.opacity = '0.6';
+    }
+
+    grid.appendChild(cell);
+  }
+
+  container.appendChild(grid);
+}
+
+/* ============ RENDER YEAR VIEW ============ */
+function renderYearView() {
+  const container = document.getElementById('calendarContainer');
+  if (!container) return;
   container.innerHTML = '';
 
   const monthNames = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 
                       'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
 
+  const yearGrid = document.createElement('div');
+  yearGrid.style.display = 'grid';
+  yearGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+  yearGrid.style.gap = '12px';
+
   for (let month = 0; month < 12; month++) {
-    const monthCard = createMonthCardForAbsence(month, monthNames[month]);
-    container.appendChild(monthCard);
+    const monthCard = createMonthMiniCard(month, monthNames[month]);
+    yearGrid.appendChild(monthCard);
   }
+
+  container.appendChild(yearGrid);
 }
 
-/* ============ CREATE MONTH CARD ============ */
-function createMonthCardForAbsence(month, monthName) {
+/* ============ CREATE MINI MONTH CARD ============ */
+function createMonthMiniCard(month, monthName) {
   const card = document.createElement('div');
   card.style.background = 'white';
   card.style.border = '1px solid #ddd';
   card.style.borderRadius = '8px';
-  card.style.padding = '12px';
+  card.style.padding = '8px';
   card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
 
-  const title = document.createElement('h3');
-  title.style.margin = '0 0 12px 0';
-  title.style.fontSize = '14px';
-  title.style.color = '#0f1724';
-  title.textContent = `${monthName} ${currentYear}`;
+  const title = document.createElement('div');
+  title.style.fontSize = '12px';
+  title.style.fontWeight = '600';
+  title.style.marginBottom = '6px';
+  title.style.textAlign = 'center';
+  title.textContent = monthName;
   card.appendChild(title);
 
+  const miniGrid = document.createElement('div');
+  miniGrid.style.display = 'grid';
+  miniGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
+  miniGrid.style.gap = '2px';
+
   const daysInMonth = new Date(currentYear, month + 1, 0).getDate();
-  
-  const daysGrid = document.createElement('div');
-  daysGrid.style.display = 'grid';
-  daysGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-  daysGrid.style.gap = '4px';
-  daysGrid.style.marginBottom = '12px';
-
-  // Day headers
-  const dayHeaders = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
-  dayHeaders.forEach(day => {
-    const dayHeader = document.createElement('div');
-    dayHeader.style.textAlign = 'center';
-    dayHeader.style.fontSize = '11px';
-    dayHeader.style.fontWeight = '600';
-    dayHeader.style.color = '#999';
-    dayHeader.style.padding = '4px';
-    dayHeader.textContent = day;
-    daysGrid.appendChild(dayHeader);
-  });
-
-  // First day offset
   const firstDay = new Date(currentYear, month, 1).getDay();
-  const offset = firstDay === 0 ? 6 : firstDay - 1;
+  const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
 
-  for (let i = 0; i < offset; i++) {
-    const empty = document.createElement('div');
-    daysGrid.appendChild(empty);
+  // Empty cells
+  for (let i = 0; i < adjustedFirstDay; i++) {
+    miniGrid.appendChild(document.createElement('div'));
   }
 
-  // Days
+  // Day cells
   for (let day = 1; day <= daysInMonth; day++) {
-    const dayBtn = createDayButtonForAbsence(month, day);
-    daysGrid.appendChild(dayBtn);
+    const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const type = absencesCache[dateStr];
+    
+    const cell = document.createElement('button');
+    cell.style.aspectRatio = '1';
+    cell.style.border = 'none';
+    cell.style.borderRadius = '3px';
+    cell.style.cursor = 'pointer';
+    cell.style.fontSize = '9px';
+    cell.style.fontWeight = '600';
+    cell.style.padding = '0';
+    cell.style.transition = 'all 0.2s';
+    cell.textContent = day;
+
+    if (type) {
+      const color = typeColors[type];
+      cell.style.background = color.bg;
+      cell.style.color = '#333';
+    } else {
+      cell.style.background = '#f5f5f5';
+      cell.style.color = '#999';
+    }
+
+    const clickMonth = month;
+    cell.onclick = () => {
+      currentMonth = clickMonth;
+      viewMode = 'month';
+      document.getElementById('calendarViewMode').value = 'month';
+      updateViewMode();
+      loadAbsences();
+    };
+
+    miniGrid.appendChild(cell);
   }
 
-  card.appendChild(daysGrid);
+  card.appendChild(miniGrid);
   return card;
 }
 
-/* ============ CREATE DAY BUTTON FOR ABSENCE ============ */
-function createDayButtonForAbsence(month, day) {
-  const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  const absenceType = selectedAbsences[dateStr];
-  const isPast = isDayPast(day, month);
-  const needsPwd = needsPassword(day, month);
-
-  const btn = document.createElement('button');
-  btn.style.padding = '4px';
-  btn.style.minHeight = '32px';
-  btn.style.border = '1px solid #ddd';
-  btn.style.borderRadius = '4px';
-  btn.style.cursor = isPast && !absenceType ? 'default' : 'pointer';
-  btn.style.fontSize = '11px';
-  btn.style.fontWeight = '600';
-  btn.style.transition = 'all 0.2s';
-  
-  if (absenceType) {
-    const color = typeColors[absenceType];
-    btn.style.background = color.bg;
-    btn.style.border = `2px solid ${color.border}`;
-    btn.textContent = `${color.icon}\n${day}`;
-  } else {
-    btn.style.background = isPast ? '#f0f0f0' : 'white';
-    btn.style.color = isPast ? '#ccc' : '#666';
-    btn.textContent = day;
+/* ============ SELECT RANGE DAY ============ */
+function selectRangeDay(dateStr, day, isPast) {
+  if (!rangeStartDate) {
+    // Pierwszy klik - ustaw początek zakresu
+    rangeStartDate = dateStr;
+    renderMonthView();
+  } else if (!rangeEndDate) {
+    // Drugi klik - ustaw koniec zakresu
+    const start = new Date(rangeStartDate);
+    const end = new Date(dateStr);
+    
+    // Upewni się że start < end
+    if (end < start) {
+      rangeEndDate = rangeStartDate;
+      rangeStartDate = dateStr;
+    } else {
+      rangeEndDate = dateStr;
+    }
+    
+    // Najpierw re-renderuj kalendarz aby podświetlić zakres
+    renderMonthView();
+    
+    // Potem otwórz modal do wyboru typu
+    selectedDayForModal = { dateStr: rangeStartDate, endDate: rangeEndDate, isPast, isRange: true };
+    setTimeout(() => {
+      openAbsenceDayModal();
+    }, 100);
   }
-
-  if (!isPast || absenceType) {
-    btn.onmouseenter = () => {
-      btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-      btn.style.transform = 'scale(1.05)';
-    };
-    btn.onmouseleave = () => {
-      btn.style.boxShadow = 'none';
-      btn.style.transform = 'scale(1)';
-    };
-
-    btn.onclick = () => {
-      if (absenceType) {
-        // Usuń
-        delete selectedAbsences[dateStr];
-        renderCalendarView();
-      } else {
-        // Dodaj
-        selectedDayForModal = { dateStr, day, month, needsPwd };
-        openAbsenceDayModal(day, month, dateStr);
-      }
-    };
-  }
-
-  return btn;
 }
 
 /* ============ OPEN ABSENCE DAY MODAL ============ */
-function openAbsenceDayModal(day, month, dateStr) {
-  const monthNames = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 
-                      'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+function openAbsenceDayModal() {
+  if (!selectedDayForModal) return;
   
-  document.getElementById('modalAbsenceDayDate').textContent = `${day} ${monthNames[month]} ${currentYear}`;
-  document.getElementById('adminPasswordWarning').style.display = selectedDayForModal.needsPwd ? 'block' : 'none';
-  document.getElementById('passwordFieldContainer').style.display = selectedDayForModal.needsPwd ? 'block' : 'none';
-  document.getElementById('adminPasswordInput').value = '';
-  document.getElementById('absenceDayModal').style.display = 'flex';
+  if (!currentEmployeeId) {
+    showCalendarNotification('Wybierz pracownika', 'Najpierw musisz wybrać pracownika', '⚠️');
+    return;
+  }
+  
+  const modal = document.getElementById('absenceDayModal');
+  const dateSpan = document.getElementById('modalAbsenceDayDate');
+  const passwordContainer = document.getElementById('passwordFieldContainer');
+  const warning = document.getElementById('adminPasswordWarning');
+  
+  const dayName = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
+  const date = new Date(`${selectedDayForModal.dateStr}T00:00:00Z`);
+  
+  // Wyświetl datę lub zakres
+  if (selectedDayForModal.isRange && selectedDayForModal.endDate) {
+    const endDate = new Date(`${selectedDayForModal.endDate}T00:00:00Z`);
+    dateSpan.textContent = `Od ${selectedDayForModal.dateStr} do ${selectedDayForModal.endDate}`;
+  } else {
+    dateSpan.textContent = `${dayName[date.getUTCDay()]} ${selectedDayForModal.day || date.getUTCDate()} (${selectedDayForModal.dateStr})`;
+  }
+  
+  // Check if needs password
+  if (selectedDayForModal.isPast) {
+    const daysBack = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
+    if (daysBack > 7) {
+      passwordContainer.style.display = 'block';
+      warning.style.display = 'block';
+    } else {
+      passwordContainer.style.display = 'none';
+      warning.style.display = 'none';
+    }
+  } else {
+    passwordContainer.style.display = 'none';
+    warning.style.display = 'none';
+  }
+  
+  modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 
-/* ============ CLOSE ABSENCE DAY MODAL ============ */
+/* ============ CLOSE MODAL ============ */
 function closeAbsenceDayModal() {
-  document.getElementById('absenceDayModal').style.display = 'none';
+  const modal = document.getElementById('absenceDayModal');
+  modal.style.display = 'none';
   document.body.style.overflow = 'auto';
   selectedDayForModal = null;
+  rangeStartDate = null;
+  rangeEndDate = null;
+  document.getElementById('adminPasswordInput').value = '';
+  renderMonthView();
 }
 
 /* ============ SET ABSENCE TYPE ============ */
 async function setAbsenceType(type) {
-  if (!selectedDayForModal) return;
-  
-  const { dateStr, needsPwd } = selectedDayForModal;
-  
-  // Jeśli potrzebne hasło - sprawdź
-  if (needsPwd) {
-    const password = document.getElementById('adminPasswordInput').value;
-    if (password !== ADMIN_PASSWORD) {
-      await showCalendarNotification('Nieprawidłowe hasło admina', 'Błąd', '❌');
-      return;
+  if (!selectedDayForModal || !sb || !currentEmployeeId) return;
+
+  // Check password if needed
+  if (selectedDayForModal.isPast) {
+    const date = new Date(`${selectedDayForModal.dateStr}T00:00:00Z`);
+    const daysBack = Math.floor((new Date() - date) / (1000 * 60 * 60 * 24));
+    if (daysBack > 7) {
+      const password = document.getElementById('adminPasswordInput').value;
+      if (!password || password !== ADMIN_PASSWORD) {
+        await showCalendarNotification('Nieprawidłowe hasło admina', 'Błąd', '❌');
+        return;
+      }
     }
   }
 
-  // Zapisz w bazie
-  if (!sb || !currentEmployeeId) return;
-
   try {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    // Ustal end_date - jeśli zakres, użyj endDate, inaczej to samo co start_date
+    const endDate = selectedDayForModal.endDate || selectedDayForModal.dateStr;
     
-    const { error } = await sb.from('vacation').insert({
-      employee_id: currentEmployeeId,
-      start_date: dateStr,
-      end_date: dateStr,
-      reason: type,
-      approved: true,
-      created_at: new Date().toISOString()
-    });
-
+    const { error } = await sb
+      .from('vacation')
+      .insert({
+        employee_id: currentEmployeeId,
+        start_date: selectedDayForModal.dateStr,
+        end_date: endDate,
+        reason: type,
+        approved: true
+      });
+    
     if (error) throw error;
 
-    selectedAbsences[dateStr] = type;
+    const dateDisplay = selectedDayForModal.endDate 
+      ? `${selectedDayForModal.dateStr} do ${endDate}`
+      : selectedDayForModal.dateStr;
+    await showCalendarNotification(`Nieobecność dodana: ${dateDisplay}`, 'Sukces', '✅');
     closeAbsenceDayModal();
-    renderCalendarView();
-    await showCalendarNotification(`Nieobecność dodana: ${type}`, 'Sukces', '✅');
+    rangeStartDate = null;
+    rangeEndDate = null;
+    await loadAbsences();
   } catch (e) {
-    console.error('Set absence type error', e);
-    await showCalendarNotification('Błąd przy dodawaniu nieobecności', 'Błąd', '❌');
+    console.error('Set absence error', e);
+    await showCalendarNotification('Błąd przy zaznaczaniu nieobecności', 'Błąd', '❌');
   }
 }
 
-/* ============ CLEAR ALL ABSENCES ============ */
-function clearAllAbsences() {
-  if (confirm('Czy na pewno chcesz usunąć wszystkie zaznaczone nieobecności?')) {
-    selectedAbsences = {};
-    renderCalendarView();
+/* ============ REMOVE ABSENCE ============ */
+async function removeAbsence(dateStr) {
+  if (!sb || !currentEmployeeId) return;
+
+  if (!confirm('Usunąć nieobecność z tego dnia?')) return;
+
+  try {
+    // Znajdź wszystkie rekordy nieobecności, które zawierają ten dzień
+    const { data, error: fetchError } = await sb
+      .from('vacation')
+      .select('*')
+      .eq('employee_id', currentEmployeeId)
+      .lte('start_date', dateStr)
+      .gte('end_date', dateStr);
+    
+    if (fetchError) throw fetchError;
+
+    // Jeśli żaden rekord nie zawiera ten dzień, wyj dź
+    if (!data || data.length === 0) {
+      await showCalendarNotification('Brak nieobecności do usunięcia', 'Info', 'ℹ️');
+      return;
+    }
+
+    // Procesuj każdy znaleziony rekord
+    for (const record of data) {
+      const start = new Date(record.start_date);
+      const end = new Date(record.end_date);
+      const clickedDate = new Date(dateStr);
+
+      // Jeśli to jednodniowa nieobecność - usuń całą
+      if (record.start_date === record.end_date) {
+        await sb.from('vacation').delete().eq('id', record.id);
+      }
+      // Jeśli to pierwszy dzień zakresu - przesunąć start
+      else if (dateStr === record.start_date) {
+        const newStart = new Date(start);
+        newStart.setDate(newStart.getDate() + 1);
+        await sb.from('vacation').update({
+          start_date: newStart.toISOString().split('T')[0]
+        }).eq('id', record.id);
+      }
+      // Jeśli to ostatni dzień zakresu - przesunąć koniec
+      else if (dateStr === record.end_date) {
+        const newEnd = new Date(end);
+        newEnd.setDate(newEnd.getDate() - 1);
+        await sb.from('vacation').update({
+          end_date: newEnd.toISOString().split('T')[0]
+        }).eq('id', record.id);
+      }
+      // Jeśli to dzień pośrodku zakresu - podziel na dwa rekordy
+      else if (clickedDate > start && clickedDate < end) {
+        // Zmień koniec pierwszej części
+        const firstEnd = new Date(clickedDate);
+        firstEnd.setDate(firstEnd.getDate() - 1);
+        await sb.from('vacation').update({
+          end_date: firstEnd.toISOString().split('T')[0]
+        }).eq('id', record.id);
+
+        // Dodaj drugą część
+        const secondStart = new Date(clickedDate);
+        secondStart.setDate(secondStart.getDate() + 1);
+        await sb.from('vacation').insert({
+          employee_id: currentEmployeeId,
+          start_date: secondStart.toISOString().split('T')[0],
+          end_date: record.end_date,
+          reason: record.reason,
+          approved: record.approved
+        });
+      }
+    }
+
+    await showCalendarNotification('Nieobecność usunięta z tego dnia', 'Sukces', '✅');
+    await loadAbsences();
+  } catch (e) {
+    console.error('Remove absence error', e);
+    await showCalendarNotification('Błąd przy usuwaniu nieobecności', 'Błąd', '❌');
+  }
+}
+
+/* ============ UPDATE VIEW MODE ============ */
+function updateViewMode() {
+  const monthNav = document.getElementById('monthNavControls');
+  const yearSelect = document.getElementById('yearSelectControls');
+
+  if (viewMode === 'month') {
+    monthNav.style.display = 'flex';
+    yearSelect.style.display = 'none';
+  } else {
+    monthNav.style.display = 'none';
+    yearSelect.style.display = 'flex';
+  }
+
+  if (currentEmployeeId) {
+    loadAbsences();
   }
 }
 
 /* ============ INIT ============ */
-async function initVacationCalendar() {
+async function initCalendar() {
   await initSupabaseCalendar();
   await loadEmployeesForCalendar();
 
   // Populate year selector
-  const currentYearValue = new Date().getFullYear();
   const yearSelect = document.getElementById('calendarYearSelect');
-  for (let year = currentYearValue - 1; year <= currentYearValue + 3; year++) {
+  for (let year = currentYear - 1; year <= currentYear + 3; year++) {
     const option = document.createElement('option');
     option.value = year;
     option.textContent = year;
-    if (year === currentYearValue) option.selected = true;
+    if (year === currentYear) option.selected = true;
     yearSelect.appendChild(option);
   }
+
+  // Show default month view
+  renderMonthView();
 
   // Event listeners
   document.getElementById('backToVacationBtn').addEventListener('click', () => {
     window.location.href = './vacation.html';
   });
 
-  document.getElementById('calendarEmployeeSelect').addEventListener('change', (e) => {
-    currentEmployeeId = e.target.value;
-    if (currentEmployeeId) {
-      loadExistingAbsences();
-    } else {
-      document.getElementById('calendarContainer').innerHTML = '';
+  document.getElementById('backToMainBtn').addEventListener('click', () => {
+    window.location.href = './index.html';
+  });
+
+  document.getElementById('calendarViewMode').addEventListener('change', (e) => {
+    viewMode = e.target.value;
+    updateViewMode();
+  });
+
+  document.getElementById('prevMonthBtn').addEventListener('click', () => {
+    currentMonth--;
+    if (currentMonth < 0) {
+      currentMonth = 11;
+      currentYear--;
     }
+    renderMonthView();
+  });
+
+  document.getElementById('nextMonthBtn').addEventListener('click', () => {
+    currentMonth++;
+    if (currentMonth > 11) {
+      currentMonth = 0;
+      currentYear++;
+    }
+    renderMonthView();
   });
 
   document.getElementById('calendarYearSelect').addEventListener('change', (e) => {
     currentYear = parseInt(e.target.value);
-    if (currentEmployeeId) {
-      loadExistingAbsences();
+    if (viewMode === 'month') {
+      renderMonthView();
+    } else {
+      renderYearView();
     }
   });
 
-  document.getElementById('clearAllAbsencesBtn').addEventListener('click', clearAllAbsences);
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    const searchInput = document.getElementById('calendarEmployeeSearch');
+    const dropdown = document.getElementById('calendarEmployeeDropdown');
+    
+    if (searchInput && !searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
 
-  console.log('Vacation Calendar module initialized');
+  console.log('Calendar module initialized');
 }
 
-document.addEventListener('DOMContentLoaded', initVacationCalendar);
+document.addEventListener('DOMContentLoaded', initCalendar);
