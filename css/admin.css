@@ -392,3 +392,189 @@
   background: #0d47a1;
 }
 
+/* ========== KIEROWNICY - Manager Cards ========== */
+.managers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.manager-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.manager-card:hover {
+  box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.manager-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.manager-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f1724;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.manager-card-name-surname {
+  display: block;
+  word-break: break-word;
+}
+
+.manager-card-name-sub {
+  font-size: 16px;
+  color: #0f1724;
+  font-weight: 700;
+  display: block;
+  word-break: break-word;
+}
+
+.manager-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.manager-card-actions .btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: #0b74d1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.manager-card-actions .btn:hover {
+  background: #054a91;
+}
+
+.manager-employees-list {
+  font-size: 13px;
+}
+
+.manager-employees-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+}
+
+.manager-employee-item {
+  padding: 6px 8px;
+  background: #fff;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #f0f0f0;
+}
+
+.manager-employee-item:last-child {
+  margin-bottom: 0;
+}
+
+.manager-employee-name {
+  flex: 1;
+}
+
+.manager-employee-remove {
+  color: #b00020;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+
+.manager-employee-remove:hover {
+  background: #ffebee;
+}
+
+.manager-employees-empty {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+  padding: 8px;
+  text-align: center;
+}
+
+.manager-count-badge {
+  background: #667eea;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.unassigned-employee-item {
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.unassigned-employee-info {
+  flex: 1;
+  font-size: 13px;
+}
+
+.unassigned-employee-name {
+  font-weight: 600;
+  color: #0f1724;
+}
+
+.unassigned-employee-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.unassigned-employee-actions select {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.unassigned-employee-actions .btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.unassigned-employee-actions .btn:hover {
+  background: #1e7634;
+}

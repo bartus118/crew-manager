@@ -952,7 +952,7 @@ const AdminEmployees = (function(){
       }
 
       const { data, error, status } = await sb.from('employees')
-        .select('id,firstname,surname,bu,roles,permissions,mechanical_permissions')
+        .select('id,firstname,surname,bu,roles,permissions,mechanical_permissions,manager_id')
         .order('surname', { ascending: true });
 
       console.debug('fetchEmployees: response status=', status, 'error=', error ? error.message : null);
@@ -963,12 +963,31 @@ const AdminEmployees = (function(){
       }
 
       const rows = Array.isArray(data) ? data : [];
+      
+      // Załaduj kierowników
+      let managersMap = new Map();
+      try {
+        if(sb) {
+          const { data: managersData, error: managersError } = await sb.from('managers').select('id,surname,name,firstname');
+          if(!managersError && managersData) {
+            managersData.forEach(m => {
+              const managerName = `${m.surname || ''} ${m.name || m.firstname || ''}`.trim();
+              managersMap.set(m.id, managerName);
+            });
+          }
+        }
+      } catch(e) {
+        console.warn('Error loading managers:', e);
+      }
+
       cache = rows.map(e => ({
         id: e.id,
         firstname: e.firstname || '',
         surname: e.surname || '',
         legacy_name: '',
         bu: e.bu || '',
+        manager_id: e.manager_id || null,
+        managerName: e.manager_id ? managersMap.get(e.manager_id) || 'Nieznany' : null,
         roles: Array.isArray(e.roles) ? e.roles : (e.roles ? String(e.roles).split(',').map(s=>s.trim()).filter(Boolean) : []),
         permissions: Array.isArray(e.permissions) ? e.permissions : (e.permissions ? String(e.permissions).split(',').map(s=>s.trim()).filter(Boolean) : []),
         mechanical_permissions: Array.isArray(e.mechanical_permissions) ? e.mechanical_permissions : (e.mechanical_permissions ? String(e.mechanical_permissions).split(',').map(s=>s.trim()).filter(Boolean) : [])
@@ -1004,6 +1023,11 @@ const AdminEmployees = (function(){
     buCol.style.textAlign = 'center';
     buCol.textContent = emp.bu || '';
 
+    // Kierownik
+    const managerCol = document.createElement('div');
+    managerCol.style.flex = '1.5';
+    managerCol.textContent = emp.manager_id ? emp.managerName || 'Ładuję...' : '—';
+
     // Role
     const rolesCol = document.createElement('div');
     rolesCol.style.flex = '2';
@@ -1032,7 +1056,7 @@ const AdminEmployees = (function(){
     };
     actionsCol.appendChild(editBtn);
 
-    [nameCol, buCol, rolesCol, permsCol, actionsCol].forEach(c => row.appendChild(c));
+    [nameCol, buCol, managerCol, rolesCol, permsCol, actionsCol].forEach(c => row.appendChild(c));
     return row;
   }
 
@@ -1623,6 +1647,7 @@ const AdminEmployees = (function(){
   const selectedPermFilters = new Set();
   const selectedBuFilters = new Set();
   const selectedRoleFilters = new Set();
+  const selectedManagerFilters = new Set();
 
   // domyślna lista możliwych uprawnień (daj znać jeśli chcesz rozszerzyć)
   const DEFAULT_PERM_OPTIONS = PERMISSION_OPTIONS.slice();
@@ -1756,6 +1781,37 @@ const AdminEmployees = (function(){
     const selArr = Array.from(selectedRoleFilters);
     btn.textContent = selArr.length ? selArr.map(r => getDisplayRoleName(r)).join(', ') : '— Role —';
   }
+
+  // Manager filter functions
+  function addManagerFilter(managerId){
+    if(!managerId || !String(managerId).trim()) return;
+    const v = String(managerId).trim();
+    if(selectedManagerFilters.has(v)) return;
+    selectedManagerFilters.add(v);
+    updateManagerFilterBtn();
+    try { renderList(); } catch(e){ safeLog('renderList error after addManagerFilter', e); }
+  }
+
+  function removeManagerFilter(managerId){
+    if(!managerId) return;
+    selectedManagerFilters.delete(String(managerId));
+    updateManagerFilterBtn();
+    try { renderList(); } catch(e){ safeLog('renderList error after removeManagerFilter', e); }
+  }
+
+  function clearManagerFilters(){
+    selectedManagerFilters.clear();
+    updateManagerFilterBtn();
+    try { renderList(); } catch(e){ safeLog('renderList error after clearManagerFilters', e); }
+  }
+
+  function updateManagerFilterBtn(){
+    const btn = document.getElementById('managerMultiFilterBtn');
+    if(!btn) return;
+    const selArr = Array.from(selectedManagerFilters);
+    btn.textContent = selArr.length ? `${selArr.length} kierownik(a)` : '— Kierownik —';
+  }
+
 
   // inicjalizacja hooków UI dla chipów — wywołać w init()
   function initPermFilterUI(){
@@ -2030,6 +2086,62 @@ const AdminEmployees = (function(){
 
       roleWrapper.appendChild(roleMenu);
     }
+
+    // Build Manager multi-dropdown
+    const managerWrapper = document.getElementById('managerMultiFilterWrapper');
+    const managerBtn = document.getElementById('managerMultiFilterBtn');
+
+    if(managerWrapper && managerBtn && !document.getElementById('managerMultiMenu')){
+      const managerMenu = document.createElement('div');
+      managerMenu.id = 'managerMultiMenu';
+      managerMenu.className = 'filter-multi-menu';
+      
+      // collect available managers from cache (where manager_id is not null)
+      const managerSet = new Set();
+      const managerNames = new Map();
+      cache.forEach(e => {
+        if(e.manager_id && e.managerName){
+          managerSet.add(e.manager_id);
+          managerNames.set(e.manager_id, e.managerName);
+        }
+      });
+      const managerArr = Array.from(managerSet).sort((a, b) => {
+        const nameA = managerNames.get(a) || '';
+        const nameB = managerNames.get(b) || '';
+        return nameA.localeCompare(nameB);
+      });
+
+      managerArr.forEach(managerId => {
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.dataset.filterManager = managerId;
+        cb.checked = selectedManagerFilters.has(managerId);
+
+        const span = document.createElement('span');
+        span.textContent = managerNames.get(managerId) || 'Nieznany';
+
+        cb.addEventListener('change', function(){
+          if(this.checked) addManagerFilter(managerId);
+          else removeManagerFilter(managerId);
+        });
+
+        label.appendChild(cb);
+        label.appendChild(span);
+        managerMenu.appendChild(label);
+      });
+
+      managerBtn.addEventListener('click', function(ev){ 
+        ev.stopPropagation(); 
+        managerMenu.style.display = (managerMenu.style.display === 'none') ? 'block' : 'none'; 
+      });
+
+      document.addEventListener('click', function(ev){
+        if(managerMenu && !managerWrapper.contains(ev.target)) managerMenu.style.display = 'none';
+      });
+
+      managerWrapper.appendChild(managerMenu);
+    }
   }
 
   // ----------------------------
@@ -2071,6 +2183,14 @@ const AdminEmployees = (function(){
       out = out.filter(e => {
         const empRoles = (String(e.roles||'')).split(',').map(s=>s.trim()).filter(Boolean);
         return empRoles.some(r => roleSet.has(r));
+      });
+    }
+
+    // Manager filter (OR — employee has any of selected managers)
+    const managerSet = selectedManagerFilters.size > 0 ? selectedManagerFilters : null;
+    if(managerSet && managerSet.size > 0){
+      out = out.filter(e => {
+        return e.manager_id && managerSet.has(e.manager_id);
       });
     }
 
@@ -2146,6 +2266,7 @@ const AdminEmployees = (function(){
         const cols = [
           { label: 'Nazwisko / Imię', width: '240px', flex: '2' },
           { label: 'BU', width: '60px', flex: '0 0 80px' },
+          { label: 'Kierownik', width: '150px', flex: '1.5' },
           { label: 'Role', width: '220px', flex: '2' },
           { label: 'Uprawnienia', width: '180px', flex: '2' },
           { label: 'Akcje', width: '140px', flex: '0 0 120px', align: 'center' }
@@ -2449,6 +2570,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabEmployees = document.getElementById('tabEmployees');
     const machinesSection = document.getElementById('adminMachinesSection');
     const employeesSection = document.getElementById('adminEmployeesSection');
+    const managersSection = document.getElementById('adminManagersSection');
 
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
@@ -2461,13 +2583,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function showEmployees(){
       if(machinesSection) machinesSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = '';
+      if(managersSection) managersSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabEmployees) tabEmployees.classList.add('active');
       try { await AdminEmployees.init(); } catch(e){ console.warn('Błąd init AdminEmployees', e); }
     }
 
+    async function showManagers(){
+      if(machinesSection) machinesSection.style.display = 'none';
+      if(employeesSection) employeesSection.style.display = 'none';
+      if(managersSection) managersSection.style.display = '';
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      if(tabManagers) tabManagers.classList.add('active');
+      setupManagersSection();
+      await renderManagers();
+    }
+
     if(tabModify) tabModify.addEventListener('click', () => showModify());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
+    const tabManagers = document.getElementById('tabManagers');
+    if(tabManagers) tabManagers.addEventListener('click', () => showManagers());
 
     // open machines by default
     showModify();
@@ -2549,5 +2684,520 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('permBridge: global delegation bound');
   }
 })();
+
+/* ==================== KIEROWNICY - MANAGERS MODULE ==================== */
+
+let managers = [];
+let allEmployees = [];
+let currentEditingManagerId = null;
+
+async function loadManagers() {
+  if(!sb) return;
+  try {
+    const { data, error } = await sb.from('managers').select('*').order('surname', { ascending: true });
+    if(error) {
+      console.error('loadManagers error', error);
+      await showAdminNotification(`Błąd ładowania kierowników: ${error.message}`, 'Błąd', '❌');
+      return;
+    }
+    managers = data || [];
+    console.log('Loaded', managers.length, 'managers');
+  } catch(e) {
+    console.error('loadManagers catch', e);
+    await showAdminNotification(`Błąd ładowania kierowników: ${e.message}`, 'Błąd', '❌');
+  }
+}
+
+async function createManager(surname, name, bu, email, phone) {
+  if(!sb) return null;
+  try {
+    const { data, error } = await sb.from('managers').insert([{
+      surname: surname.trim(),
+      name: name.trim(),
+      bu: bu.trim() || null,
+      email: email.trim() || null,
+      phone: phone.trim() || null
+    }]).select();
+    
+    if(error) {
+      console.error('createManager error', error);
+      await showAdminNotification(`Błąd dodawania kierownika: ${error.message}`, 'Błąd', '❌');
+      return null;
+    }
+    
+    await showAdminNotification('Kierownik dodany pomyślnie!', 'Sukces', '✅');
+    return data[0];
+  } catch(e) {
+    console.error('createManager catch', e);
+    await showAdminNotification(`Błąd dodawania kierownika: ${e.message}`, 'Błąd', '❌');
+    return null;
+  }
+}
+
+async function updateManager(id, surname, name, bu, email, phone) {
+  if(!sb) return false;
+  try {
+    const { error } = await sb.from('managers').update({
+      surname: surname.trim(),
+      name: name.trim(),
+      bu: bu.trim() || null,
+      email: email.trim() || null,
+      phone: phone.trim() || null
+    }).eq('id', id);
+    
+    if(error) {
+      console.error('updateManager error', error);
+      await showAdminNotification(`Błąd aktualizacji kierownika: ${error.message}`, 'Błąd', '❌');
+      return false;
+    }
+    
+    await showAdminNotification('Kierownik zaktualizowany pomyślnie!', 'Sukces', '✅');
+    return true;
+  } catch(e) {
+    console.error('updateManager catch', e);
+    await showAdminNotification(`Błąd aktualizacji kierownika: ${e.message}`, 'Błąd', '❌');
+    return false;
+  }
+}
+
+async function deleteManager(id) {
+  if(!sb) return false;
+  try {
+    const { error } = await sb.from('managers').delete().eq('id', id);
+    
+    if(error) {
+      console.error('deleteManager error', error);
+      await showAdminNotification(`Błąd usuwania kierownika: ${error.message}`, 'Błąd', '❌');
+      return false;
+    }
+    
+    await showAdminNotification('Kierownik usunięty pomyślnie!', 'Sukces', '✅');
+    return true;
+  } catch(e) {
+    console.error('deleteManager catch', e);
+    await showAdminNotification(`Błąd usuwania kierownika: ${e.message}`, 'Błąd', '❌');
+    return false;
+  }
+}
+
+async function loadAllEmployeesForManagers() {
+  if(!sb) return;
+  try {
+    const { data, error } = await sb.from('employees').select('*').order('surname', { ascending: true });
+    if(error) {
+      console.error('loadAllEmployeesForManagers error', error);
+      return;
+    }
+    allEmployees = data || [];
+    console.log('Loaded', allEmployees.length, 'employees for managers');
+  } catch(e) {
+    console.error('loadAllEmployeesForManagers catch', e);
+  }
+}
+
+async function getEmployeesByManager(managerId) {
+  if(!sb) return [];
+  try {
+    const { data, error } = await sb.from('employees').select('*').eq('manager_id', managerId).order('surname', { ascending: true });
+    if(error) {
+      console.error('getEmployeesByManager error', error);
+      return [];
+    }
+    return data || [];
+  } catch(e) {
+    console.error('getEmployeesByManager catch', e);
+    return [];
+  }
+}
+
+async function getUnassignedEmployees() {
+  if(!sb) return [];
+  try {
+    const { data, error } = await sb.from('employees').select('*').is('manager_id', null).order('surname', { ascending: true });
+    if(error) {
+      console.error('getUnassignedEmployees error', error);
+      return [];
+    }
+    return data || [];
+  } catch(e) {
+    console.error('getUnassignedEmployees catch', e);
+    return [];
+  }
+}
+
+async function assignEmployeeToManager(employeeId, managerId) {
+  if(!sb) return false;
+  try {
+    const { error } = await sb.from('employees').update({ manager_id: managerId }).eq('id', employeeId);
+    if(error) {
+      console.error('assignEmployeeToManager error', error);
+      await showAdminNotification(`Błąd przypisania: ${error.message}`, 'Błąd', '❌');
+      return false;
+    }
+    await showAdminNotification('Pracownik przypisany do kierownika!', 'Sukces', '✅');
+    return true;
+  } catch(e) {
+    console.error('assignEmployeeToManager catch', e);
+    await showAdminNotification(`Błąd przypisania: ${e.message}`, 'Błąd', '❌');
+    return false;
+  }
+}
+
+async function removeEmployeeFromManager(employeeId) {
+  if(!sb) return false;
+  try {
+    const { error } = await sb.from('employees').update({ manager_id: null }).eq('id', employeeId);
+    if(error) {
+      console.error('removeEmployeeFromManager error', error);
+      await showAdminNotification(`Błąd usunięcia: ${error.message}`, 'Błąd', '❌');
+      return false;
+    }
+    await showAdminNotification('Pracownik usunięty z zespołu!', 'Sukces', '✅');
+    return true;
+  } catch(e) {
+    console.error('removeEmployeeFromManager catch', e);
+    await showAdminNotification(`Błąd usunięcia: ${e.message}`, 'Błąd', '❌');
+    return false;
+  }
+}
+
+async function renderManagers() {
+  const container = document.getElementById('adminManagersApp');
+  if(!container) return;
+
+  try {
+    await loadManagers();
+    await loadAllEmployeesForManagers();
+
+    container.innerHTML = '';
+
+    if(managers.length === 0) {
+      container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">Brak kierowników w systemie.</div>';
+      return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'managers-grid';
+
+    for(const manager of managers) {
+      const employees = await getEmployeesByManager(manager.id);
+      const card = createManagerCard(manager, employees);
+      grid.appendChild(card);
+    }
+
+    container.appendChild(grid);
+  } catch(e) {
+    console.error('renderManagers error', e);
+    await showAdminNotification(`Błąd renderowania: ${e.message}`, 'Błąd', '❌');
+  }
+}
+
+function createManagerCard(manager, employees) {
+  const card = document.createElement('div');
+  card.className = 'manager-card';
+
+  const headerDiv = document.createElement('div');
+  headerDiv.className = 'manager-card-header';
+
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'manager-card-name';
+  nameDiv.innerHTML = `
+    <div class="manager-card-name-surname">${manager.surname || ''}</div>
+    <div class="manager-card-name-sub">${manager.name || manager.firstname || ''}</div>
+  `;
+  headerDiv.appendChild(nameDiv);
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'manager-card-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn';
+  editBtn.textContent = '✏️ Edycja';
+  editBtn.onclick = () => openManagerFormModal(manager.id);
+  actionsDiv.appendChild(editBtn);
+
+  const manageBtn = document.createElement('button');
+  manageBtn.className = 'btn';
+  manageBtn.textContent = '👥 Zespół';
+  manageBtn.onclick = () => openManagerEditModal(manager, employees);
+  actionsDiv.appendChild(manageBtn);
+
+  headerDiv.appendChild(actionsDiv);
+  card.appendChild(headerDiv);
+
+  const employeesDiv = document.createElement('div');
+  employeesDiv.className = 'manager-employees-list';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'manager-employees-title';
+  titleDiv.innerHTML = `Pracownicy <span class="manager-count-badge">${employees.length}</span>`;
+  employeesDiv.appendChild(titleDiv);
+
+  if(employees.length === 0) {
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'manager-employees-empty';
+    emptyDiv.textContent = 'Brak przypisanych pracowników';
+    employeesDiv.appendChild(emptyDiv);
+  } else {
+    employees.forEach(emp => {
+      const empItem = document.createElement('div');
+      empItem.className = 'manager-employee-item';
+      const empName = `${emp.surname || ''} ${emp.name || emp.firstname || ''}`.trim();
+      empItem.innerHTML = `
+        <div class="manager-employee-name">${empName}</div>
+      `;
+      employeesDiv.appendChild(empItem);
+    });
+  }
+
+  card.appendChild(employeesDiv);
+  return card;
+}
+
+async function openManagerEditModal(manager, employees) {
+  currentEditingManagerId = manager.id;
+  const modal = document.getElementById('managerEditModal');
+  const titleEl = document.getElementById('managerEditTitle');
+  const listEl = document.getElementById('managerEmployeesList');
+  const selectEl = document.getElementById('managerEmployeeSelect');
+  const addBtn = document.getElementById('managerAddEmployeeBtn');
+  const closeBtn = document.getElementById('managerEditCloseBtn');
+
+  const managerName = `${manager.surname || ''} ${manager.name || manager.firstname || ''}`.trim();
+  titleEl.textContent = managerName;
+
+  // Render pracowników
+  listEl.innerHTML = '';
+  if(employees.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding: 10px; text-align: center; color: #999;';
+    empty.textContent = 'Brak przypisanych pracowników';
+    listEl.appendChild(empty);
+  } else {
+    employees.forEach(emp => {
+      const empDiv = document.createElement('div');
+      empDiv.style.cssText = 'padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;';
+      const empName = `${emp.surname || ''} ${emp.name || emp.firstname || ''}`.trim();
+      const removeBtn = document.createElement('button');
+      removeBtn.style.cssText = 'background: #b00020; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;';
+      removeBtn.textContent = 'Usuń';
+      removeBtn.onclick = async () => {
+        const ok = await showConfirmModal(`Usunąć ${empName} z zespołu?`, 'Potwierdzenie');
+        if(ok) {
+          const success = await removeEmployeeFromManager(emp.id);
+          if(success) {
+            await renderManagers();
+            await openManagerEditModal(manager, await getEmployeesByManager(manager.id));
+          }
+        }
+      };
+      empDiv.innerHTML = `<span>${empName}</span>`;
+      empDiv.appendChild(removeBtn);
+      listEl.appendChild(empDiv);
+    });
+  }
+
+  // Populate select
+  selectEl.innerHTML = '<option value="">— Wybierz pracownika —</option>';
+  const unassigned = await getUnassignedEmployees();
+  unassigned.forEach(emp => {
+    const opt = document.createElement('option');
+    opt.value = emp.id;
+    opt.textContent = `${emp.surname || ''} ${emp.name || emp.firstname || ''}`.trim();
+    selectEl.appendChild(opt);
+  });
+
+  // Add button handler
+  addBtn.onclick = async () => {
+    const empId = selectEl.value;
+    if(!empId) {
+      await showAdminNotification('Wybierz pracownika', 'Błąd', '⚠️');
+      return;
+    }
+    const success = await assignEmployeeToManager(empId, manager.id);
+    if(success) {
+      await renderManagers();
+      await openManagerEditModal(manager, await getEmployeesByManager(manager.id));
+    }
+  };
+
+  closeBtn.onclick = () => {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  };
+
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+}
+
+async function openUnassignedModal() {
+  const modal = document.getElementById('unassignedModal');
+  const listEl = document.getElementById('unassignedEmployeesList');
+  const closeBtn = document.getElementById('unassignedModalCloseBtn');
+
+  const unassigned = await getUnassignedEmployees();
+
+  listEl.innerHTML = '';
+  if(unassigned.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding: 20px; text-align: center; color: #999;';
+    empty.textContent = 'Wszyscy pracownicy są przypisani do kierownika!';
+    listEl.appendChild(empty);
+  } else {
+    unassigned.forEach(emp => {
+      const empDiv = document.createElement('div');
+      empDiv.className = 'unassigned-employee-item';
+      const empName = `${emp.surname || ''} ${emp.name || emp.firstname || ''}`.trim();
+      
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'unassigned-employee-info';
+      infoDiv.innerHTML = `<div class="unassigned-employee-name">${empName}</div>`;
+      empDiv.appendChild(infoDiv);
+
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'unassigned-employee-actions';
+
+      const select = document.createElement('select');
+      select.innerHTML = '<option value="">— Wybierz kierownika —</option>';
+      managers.forEach(mgr => {
+        const opt = document.createElement('option');
+        opt.value = mgr.id;
+        opt.textContent = `${mgr.surname || ''} ${mgr.name || mgr.firstname || ''}`.trim();
+        select.appendChild(opt);
+      });
+      actionsDiv.appendChild(select);
+
+      const assignBtn = document.createElement('button');
+      assignBtn.className = 'btn';
+      assignBtn.textContent = 'Przypisz';
+      assignBtn.onclick = async () => {
+        const mgrId = select.value;
+        if(!mgrId) {
+          await showAdminNotification('Wybierz kierownika', 'Błąd', '⚠️');
+          return;
+        }
+        const success = await assignEmployeeToManager(emp.id, mgrId);
+        if(success) {
+          await openUnassignedModal();
+        }
+      };
+      actionsDiv.appendChild(assignBtn);
+
+      empDiv.appendChild(actionsDiv);
+      listEl.appendChild(empDiv);
+    });
+  }
+
+  closeBtn.onclick = () => {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  };
+
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+}
+
+/* Setup managers section */
+function setupManagersSection() {
+  const addManagerBtn = document.getElementById('addManagerBtn');
+  const showUnassignedBtn = document.getElementById('showUnassignedBtn');
+  
+  if(addManagerBtn) {
+    addManagerBtn.onclick = () => openManagerFormModal(null);
+  }
+  if(showUnassignedBtn) {
+    showUnassignedBtn.onclick = openUnassignedModal;
+  }
+}
+
+function openManagerFormModal(managerId = null) {
+  const modal = document.getElementById('managerFormModal');
+  const titleEl = document.getElementById('managerFormTitle');
+  const surnameInput = document.getElementById('managerSurname');
+  const nameInput = document.getElementById('managerName');
+  const buSelect = document.getElementById('managerBU');
+  const emailInput = document.getElementById('managerEmail');
+  const phoneInput = document.getElementById('managerPhone');
+  const submitBtn = document.getElementById('managerFormSubmitBtn');
+  const cancelBtn = document.getElementById('managerFormCancelBtn');
+  const deleteBtn = document.getElementById('managerFormDeleteBtn');
+
+  currentEditingManagerId = managerId;
+
+  // Reset form
+  surnameInput.value = '';
+  nameInput.value = '';
+  buSelect.value = '';
+  emailInput.value = '';
+  phoneInput.value = '';
+
+  if(managerId) {
+    // Tryb edycji
+    const manager = managers.find(m => m.id === managerId);
+    if(!manager) return;
+
+    titleEl.textContent = 'Edycja kierownika';
+    surnameInput.value = manager.surname || '';
+    nameInput.value = manager.name || manager.firstname || '';
+    buSelect.value = manager.bu || '';
+    emailInput.value = manager.email || '';
+    phoneInput.value = manager.phone || '';
+    deleteBtn.style.display = 'block';
+  } else {
+    // Tryb dodawania
+    titleEl.textContent = 'Dodaj kierownika';
+    deleteBtn.style.display = 'none';
+  }
+
+  // Handle submit
+  submitBtn.onclick = async () => {
+    const surname = surnameInput.value.trim();
+    const name = nameInput.value.trim();
+    const bu = buSelect.value.trim();
+    const email = emailInput.value.trim();
+    const phone = phoneInput.value.trim();
+
+    if(!surname || !name) {
+      await showAdminNotification('Nazwisko i imię są wymagane!', 'Błąd', '⚠️');
+      return;
+    }
+
+    let success = false;
+    if(managerId) {
+      success = await updateManager(managerId, surname, name, bu, email, phone);
+    } else {
+      const result = await createManager(surname, name, bu, email, phone);
+      success = result !== null;
+    }
+
+    if(success) {
+      modal.style.display = 'none';
+      document.body.classList.remove('modal-open');
+      await renderManagers();
+    }
+  };
+
+  // Handle delete
+  deleteBtn.onclick = async () => {
+    const ok = await showConfirmModal('Czy na pewno usunąć tego kierownika?', 'Potwierdzenie usunięcia');
+    if(ok) {
+      const success = await deleteManager(managerId);
+      if(success) {
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        await renderManagers();
+      }
+    }
+  };
+
+  // Handle cancel
+  cancelBtn.onclick = () => {
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open');
+  };
+
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
+}
 
 });

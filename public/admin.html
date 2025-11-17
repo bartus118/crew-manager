@@ -33,6 +33,7 @@
       <ul class="nav-list">
         <li class="nav-item" data-tab="modify" id="tabModify">Modyfikacja maszyn</li>
         <li class="nav-item" data-tab="employees" id="tabEmployees">Pracownicy</li>
+        <li class="nav-item" data-tab="managers" id="tabManagers">👔 Kierownicy</li>
         <li class="nav-item disabled">Raporty</li>
         <li class="nav-item disabled">Ustawienia</li>
       </ul>
@@ -74,6 +75,9 @@
         <div id="roleMultiFilterWrapper" class="filter-multi-wrapper">
           <button id="roleMultiFilterBtn" class="filter-multi-btn">— Role —</button>
         </div>
+        <div id="managerMultiFilterWrapper" class="filter-multi-wrapper">
+          <button id="managerMultiFilterBtn" class="filter-multi-btn">— Kierownik —</button>
+        </div>
         <div id="permFilterControls" class="perm-filter-controls">
           <select id="permOptions" class="filter-select">
             <option value="">Wybierz uprawnienie</option>
@@ -84,6 +88,108 @@
 
       <div id="permChips" class="perm-chips-container"></div>
       <div id="adminEmployeesApp" class="admin-section-content"></div>
+    </section>
+
+    <section id="adminManagersSection" class="admin-section" style="display:none;">
+      <div class="admin-section-header">
+        <h2>Kierownicy i ich zespoły</h2>
+        <p class="admin-section-desc">Zarządzaj kierownikami i przypisaniem pracowników pod kierowników.</p>
+      </div>
+
+      <div class="managers-controls" style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <button id="addManagerBtn" class="btn" style="background: #28a745;">➕ Dodaj kierownika</button>
+        <button id="showUnassignedBtn" class="btn" style="background: #667eea;">📋 Pokaż nieprzypisanych</button>
+      </div>
+
+      <div id="adminManagersApp" class="admin-section-content"></div>
+
+      <!-- Modal do dodawania/edycji kierownika -->
+      <div id="managerFormModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <h2 id="managerFormTitle" style="margin-top: 0; color: #0f1724;">Dodaj kierownika</h2>
+          
+          <form id="managerForm" style="display: flex; flex-direction: column; gap: 12px;">
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">Nazwisko *</label>
+              <input id="managerSurname" type="text" placeholder="Kowalski" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">Imię *</label>
+              <input id="managerName" type="text" placeholder="Krzysztof" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">BU</label>
+              <select id="managerBU" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <option value="">— Wybierz BU —</option>
+                <option value="BU1">BU1</option>
+                <option value="BU2">BU2</option>
+                <option value="BU3">BU3</option>
+                <option value="BU4">BU4</option>
+                <option value="Inne">Inne</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">Email</label>
+              <input id="managerEmail" type="email" placeholder="kierownik@firma.pl" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">Telefon</label>
+              <input id="managerPhone" type="tel" placeholder="123456789" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+            </div>
+          </form>
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button id="managerFormDeleteBtn" class="btn" style="flex: 0.5; padding: 10px; background: #b00020; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: none;">🗑️ Usuń</button>
+            <button id="managerFormCancelBtn" class="btn" style="flex: 1; padding: 10px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✕ Anuluj</button>
+            <button id="managerFormSubmitBtn" class="btn" style="flex: 1; padding: 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✅ Zapisz</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal do edycji pracowników kierownika -->
+      <div id="managerEditModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <h2 style="margin-top: 0; color: #0f1724;">Edycja zespołu: <span id="managerEditTitle"></span></h2>
+          
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 12px 0; font-size: 13px; color: #666; font-weight: 600;">Pracownicy przypisani do tego kierownika:</p>
+            <div id="managerEmployeesList" style="max-height: 200px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px;">
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 12px 0; font-size: 13px; color: #666; font-weight: 600;">Dodaj pracownika:</p>
+            <div style="display: flex; gap: 8px;">
+              <select id="managerEmployeeSelect" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                <option value="">— Wybierz pracownika —</option>
+              </select>
+              <button id="managerAddEmployeeBtn" class="btn" style="padding: 8px 12px; font-size: 13px;">Dodaj</button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button id="managerEditCloseBtn" class="btn" style="flex: 1; padding: 10px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✕ Zamknij</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal do pokazania nieprzypisanych -->
+      <div id="unassignedModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+          <h2 style="margin-top: 0; color: #0f1724;">Pracownicy bez przypisanego kierownika</h2>
+          
+          <div id="unassignedEmployeesList" style="max-height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px;">
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button id="unassignedModalCloseBtn" class="btn" style="flex: 1; padding: 10px; background: #999; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;">✕ Zamknij</button>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 

@@ -684,7 +684,44 @@ function buildTableFor(date){
         }catch(err){ console.error('selectStatus.onchange error', err); }
       };
 
+      // Dodaj tekst statusu i select
+      const statusText = document.createElement('span');
+      statusText.className = 'status-text';
+      statusText.textContent = effectiveStatus;
+      statusText.style.fontWeight = '700';
+      statusText.style.cursor = 'pointer';
+      
+      tdStatus.appendChild(statusText);
       tdStatus.appendChild(selectStatus);
+      selectStatus.style.display = 'none'; // Ukryj select domyślnie
+      
+      // Klik na komórkę - pokaż select
+      tdStatus.addEventListener('click', () => {
+        if (!tdStatus.classList.contains('editing')) {
+          statusText.style.display = 'none';
+          selectStatus.style.display = 'block';
+          selectStatus.size = 5; // Pokaż 5 opcji jednocześnie
+          tdStatus.classList.add('editing');
+          selectStatus.focus();
+        }
+      });
+      
+      // Blur na select - pokaż tekst
+      selectStatus.addEventListener('blur', () => {
+        statusText.textContent = selectStatus.value;
+        statusText.style.display = 'inline';
+        selectStatus.style.display = 'none';
+        selectStatus.size = 1; // Resetuj rozmiar
+        tdStatus.classList.remove('editing');
+      });
+      
+      // Change - aktualizuj tekst
+      const originalOnChange = selectStatus.onchange;
+      selectStatus.onchange = async (e) => {
+        if (originalOnChange) await originalOnChange(e);
+        statusText.textContent = selectStatus.value;
+      };
+      
       tr.appendChild(tdStatus);
 
       COLUMNS.slice(2).forEach(col => {
