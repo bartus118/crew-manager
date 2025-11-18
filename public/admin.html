@@ -32,6 +32,7 @@
     <nav class="admin-nav" aria-label="Admin navigation">
       <ul class="nav-list">
         <li class="nav-item" data-tab="modify" id="tabModify">Modyfikacja maszyn</li>
+        <li class="nav-item" data-tab="load-config" id="tabLoadConfig">⚙️ Konfiguracja Obciążenia</li>
         <li class="nav-item" data-tab="employees" id="tabEmployees">Pracownicy</li>
         <li class="nav-item" data-tab="managers" id="tabManagers">👔 Kierownicy</li>
         <li class="nav-item disabled">Raporty</li>
@@ -51,6 +52,14 @@
         <p class="admin-section-desc">Tutaj możesz dodawać, usuwać i edytować kolejność maszyn.</p>
       </div>
       <div id="adminMachinesApp" class="admin-section-content"></div>
+    </section>
+
+    <section id="adminLoadConfigSection" class="admin-section" style="display:none;">
+      <div class="admin-section-header">
+        <h2>⚙️ Konfiguracja Obciążenia Stanowisk</h2>
+        <p class="admin-section-desc">Ustaw procentowe wykorzystanie każdego stanowiska dla każdej maszyny.</p>
+      </div>
+      <div id="loadConfigApp" class="admin-section-content"></div>
     </section>
 
     <section id="adminEmployeesSection" class="admin-section" style="display:none;">
@@ -96,9 +105,14 @@
         <p class="admin-section-desc">Zarządzaj kierownikami i przypisaniem pracowników pod kierowników.</p>
       </div>
 
-      <div class="managers-controls" style="margin-bottom: 20px; display: flex; gap: 10px;">
-        <button id="addManagerBtn" class="btn" style="background: #28a745;">➕ Dodaj kierownika</button>
-        <button id="showUnassignedBtn" class="btn" style="background: #667eea;">📋 Pokaż nieprzypisanych</button>
+      <div class="managers-controls" style="margin-bottom: 20px; display: flex; gap: 10px; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 10px;">
+          <button id="addManagerBtn" class="btn" style="background: #28a745;">➕ Dodaj kierownika</button>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="dragDropToggleBtn" class="btn" style="background: #ff9800;">🔄 Przesuń Pracowników</button>
+          <button id="showUnassignedBtn" class="btn" style="background: #667eea;">📋 Pokaż nieprzypisanych</button>
+        </div>
       </div>
 
       <div id="adminManagersApp" class="admin-section-content"></div>
@@ -139,6 +153,20 @@
             <div>
               <label style="display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px;">Telefon</label>
               <input id="managerPhone" type="tel" placeholder="123456789" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; box-sizing: border-box;" />
+            </div>
+
+            <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; background: #f9fafb;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; color: #333; margin: 0;">
+                <input id="managerCanDrive" type="checkbox" style="width: 16px; height: 16px; cursor: pointer; accent-color: #0b74d1;" />
+                <span>🚗 Może jeździć maszyny</span>
+              </label>
+            </div>
+
+            <div id="managerPermissionsSection" style="display: none; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; background: #fafbfc;">
+              <label style="display: block; font-size: 12px; font-weight: 600; color: #333; margin-bottom: 10px;">Uprawnienia do maszyn:</label>
+              <div id="managerPermissionsGrid" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <!-- Checkboxy będą generowane przez JS -->
+              </div>
             </div>
           </form>
 

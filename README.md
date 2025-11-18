@@ -11,11 +11,55 @@ Aplikacja do zarządzania przypisaniami pracowników na maszyny produkcyjne.
 - **Nieobecności** (`public/vacation.html`) - Zarządzanie urlopami i nieobecnościami
 
 ### ✨ Moduły
-1. **Moduł przypisań** - Dodawanie/usuwanie przypisań pracowników
-2. **Moduł RDNST** - Import i archiwizacja pracowników czasowych
-3. **Moduł nieobecności** - Zarządzanie urlopami (urlopy, L4, delegacje, szkolenia)
-4. **Eksport CSV** - Eksport danych przypisań na dzień
-5. **Synchronizacja** - Real-time aktualizacja z bazą Supabase
+
+#### 1. **Moduł przypisań** 👥
+- Dodawanie/usuwanie przypisań pracowników do maszyn
+- Widok pracowników pogrupowany po BU
+- Filtrowanie kierowników do przypisania
+- Obsługa pracowników z niewystarczającą dostępnością (0%) - ukrywanie w liście
+- System procentów stanowisk dla każdej maszyny
+- Obliczanie dostępnego procenta na dzień dla każdego pracownika
+- Detekcja konfliktów stanowisk (Mech Focke ↔ Protos, Operator Focke ↔ Protos)
+- Ostrzeżenie przy próbie przypisania pracownika z 0% dostępności
+
+#### 2. **System kierowników** 🎓
+- Zarządzanie kierownikami (CRUD)
+- Filtrowanie pracowników po kierowniku
+- Uprawnienia do jazdy (checkbox "Może jeździć")
+- Uprawnienia do poszczególnych maszyn
+- Widok kierowników jako kart z danymi
+- Sortowanie alfabetyczne
+- Drag-drop przenoszenia pracowników między kierownikami
+
+#### 3. **Konfiguracja obciążenia** ⚙️
+- Zarządzanie procentami stanowisk dla każdej maszyny
+- Edycja/Anuluj workflow zamiast auto-save
+- Przycisk "Edytuj" włącza tryb edycji
+- Przycisk "Zapisz" zapisuje wszystkie zmiany jednocześnie
+- Przycisk "Anuluj" odrzuca zmiany i wychodzi z trybu edycji
+- Przycisk "Przywróć domyślne" resetuje wartości
+- Zakresy: 0-200% dla każdej roli
+- Informacja o stanie (widok/edycja)
+
+#### 4. **Moduł RDNST** 🔄
+- Import pracowników czasowych
+- Format: `Nazwisko imie (PP)`
+- Generowanie ID: `rdnst_XXX`
+- Dostępni do 7 dni wstecz
+- Archiwizacja starych rekordów
+
+#### 5. **Moduł nieobecności** 📅
+- Zarządzanie urlopami i nieobecnościami
+- Typy: Urlopy, L4, Delegacje, Szkolenia
+- Automatyczne obliczanie liczby dni
+- Wyświetlanie z datą końca w głównej tabeli
+- Grupowanie po typach nieobecności
+
+#### 6. **Funkcje pomocnicze**
+- **Eksport CSV** - Eksport danych przypisań na wybrany dzień
+- **Synchronizacja** - Real-time aktualizacja z bazą Supabase
+- **Filtrowanie maszyn** - Sortowanie po numerze (ord), wszystkie maszyny widoczne
+- **Widok główny** - Kolumna nieobecności ze skróconymi informacjami
 
 ## 📁 Struktura projektu
 
@@ -113,7 +157,7 @@ Format: `Nazwisko imie (PP)`
 - Dostępni do 7 dni wstecz
 
 ## 👨‍💻 Autor
-Projekt Obsad - Crew Manager
+Bartłomiej Kolasa
 
 ## 📄 Licencja
 Wewnętrzne użytkowanie

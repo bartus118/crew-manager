@@ -40,6 +40,123 @@ let vacationsByDate = {}; // Nowa zmienna - urlopy na datę
 let dateInput, tbody, theadRow;
 let currentDate = null;
 
+// Logika procent stanowisk
+let roleUtilizationCache = {}; // Cache: { machineNumber -> role_utilization JSON }
+
+// Funkcje pomocnicze dla procentów
+function getRoleUtilization(machineNumber) {
+  if(!roleUtilizationCache[machineNumber]) {
+    const machine = machines.find(m => m.number === String(machineNumber));
+    if(machine && machine.role_utilization) {
+      try {
+        roleUtilizationCache[machineNumber] = typeof machine.role_utilization === 'string' 
+          ? JSON.parse(machine.role_utilization) 
+          : machine.role_utilization;
+      } catch(e) {
+        console.error('getRoleUtilization parse error:', e);
+        roleUtilizationCache[machineNumber] = {};
+      }
+    } else {
+      roleUtilizationCache[machineNumber] = {};
+    }
+  }
+  return roleUtilizationCache[machineNumber] || {};
+}
+
+// Oblicz ile procent ma pracownik zużyte na daną datę
+function getEmployeeUtilizationForDate(employeeId, date) {
+  const dateData = assignments[date] || {};
+  let totalUsed = 0;
+  
+  machines.forEach(machine => {
+    const vals = dateData[machine.number] || [];
+    const utilization = getRoleUtilization(machine.number);
+    
+    // Przeskanuj wszystkie role (kolumny) dla tej maszyny
+    for(let i = 2; i < vals.length; i++) {
+      const val = vals[i];
+      if(!val) continue;
+      
+      // Sprawdź czy to nasz pracownik
+      if(val === employeeId || val === `mgr_${employeeId}` || val === `rdnst_${employeeId}`) {
+        const colDef = COLUMNS[i];
+        if(colDef) {
+          const rolePercent = utilization[colDef.key] || 0;
+          totalUsed += rolePercent;
+        }
+      }
+    }
+  });
+  
+  return totalUsed;
+}
+
+// Oblicz dostępne procenty dla pracownika
+function getAvailableUtilization(employeeId, date) {
+  const used = getEmployeeUtilizationForDate(employeeId, date);
+  return Math.max(0, 100 - used);
+}
+
+// Sprawdź czy pracownik ma konflikt stanowisk
+function hasRoleConflict(employeeId, date, roleKey) {
+  const dateData = assignments[date] || {};
+  
+  // Grupy stanowisk (nie mogą być razem)
+  const mechGroup = ['mechanik_focke', 'mechanik_protos'];
+  const opGroup = ['operator_focke', 'operator_protos'];
+  
+  let groups = [];
+  if(mechGroup.includes(roleKey)) groups.push(mechGroup);
+  if(opGroup.includes(roleKey)) groups.push(opGroup);
+  
+  if(groups.length === 0) return false; // Role mieszane (Pracownik Pomocniczy, Filtry, Insert)
+  
+  // Sprawdź czy pracownik ma już inny role z tej samej grupy
+  for(const conflictGroup of groups) {
+    for(const machine of machines) {
+      const vals = dateData[machine.number] || [];
+      for(let i = 2; i < vals.length; i++) {
+        const val = vals[i];
+        if(!val) continue;
+        
+        if(val === employeeId || val === `mgr_${employeeId}` || val === `rdnst_${employeeId}`) {
+          const colDef = COLUMNS[i];
+          if(colDef && conflictGroup.includes(colDef.key) && colDef.key !== roleKey) {
+            return true; // Znaleziono konflikt
+          }
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
+// Sprawdź czy przypisanie byłoby dozwolone (procenty i konflikty)
+function canAssignWithUtilization(employeeId, date, roleKey, machineNumber) {
+  // Sprawdź konflikt stanowisk
+  if(hasRoleConflict(employeeId, date, roleKey)) {
+    return {
+      allowed: false,
+      reason: `Błąd: Pracownik nie może mieć dwóch stanowisk z tej samej grupy (Mechnik/Operator)!`
+    };
+  }
+  
+  // Sprawdź procenty
+  const utilization = getRoleUtilization(machineNumber);
+  const rolePercent = utilization[roleKey] || 0;
+  const available = getAvailableUtilization(employeeId, date);
+  
+  if(rolePercent > available) {
+    return {
+      allowed: false,
+      reason: `Błąd: Przypisanie przekroczyłoby limit 100%. Pracownik ma dostępnych ${available}%, a rola wymaga ${rolePercent}%.`
+    };
+  }
+  
+  return { allowed: true };
+}
+
 // helper: short display name (bez zmian w logice, ale bezpieczniejsza)
 function displayShort(emp){
   try{
@@ -58,6 +175,45 @@ function displayShort(emp){
     console.error('displayShort error', e, emp);
     return '';
   }
+}
+
+// Wyświetl przypisanie (pracownik, kierownik, lub RDNST)
+function displayAssignmentValue(val) {
+  if(!val) return '';
+  
+  // Format kierownika: "mgr_UUID"
+  if(typeof val === 'string' && val.startsWith('mgr_')) {
+    const mgrId = val.substring(4);
+    if(window.mgrsCache) {
+      const mgr = window.mgrsCache.find(m => m.id === mgrId);
+      if(mgr) return `👔 ${displayShort(mgr)}`;
+    }
+    return `👔 [nieznany kierownik]`;
+  }
+  
+  // Format RDNST: "rdnst_XXX" - szukaj w assignmentRdnstLookup
+  if(typeof val === 'string' && val.startsWith('rdnst_')) {
+    if(assignmentRdnstLookup && assignmentRdnstLookup[val]) {
+      const w = assignmentRdnstLookup[val];
+      const name = w.short_name || `${w.surname} ${w.firstname}`;
+      return `📋 ${name}`;
+    }
+    return `📋 [RDNST pracownik]`;
+  }
+  
+  // Zwykły pracownik (UUID) - szukaj w employees
+  if(employees) {
+    const emp = employees.find(e => e.id === val);
+    if(emp) return displayShort(emp);
+  }
+  
+  // Może to UUID kierownika bez prefiksu - spróbuj w cache
+  if(window.mgrsCache) {
+    const mgr = window.mgrsCache.find(m => m.id === val);
+    if(mgr) return `👔 ${displayShort(mgr)}`;
+  }
+  
+  return 'Nieznany';
 }
 
 /* -------------------- CUSTOM PERMISSION ALERT -------------------- */
@@ -455,17 +611,24 @@ async function getWorkerNameForAssignment(employeeId, dateStr){
 async function loadMachines(){
   try{
     if(!sb){ machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); return; }
-    const { data, error } = await sb.from('machines').select('*').order('ord', { ascending: true }).eq('default_view', true);
+    const { data, error } = await sb.from('machines').select('*').order('ord', { ascending: true, nullsLast: true });
     if (error) { console.error('loadMachines error', error); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
-    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja', maker: d.maker || '', paker: d.paker || '', celafoniarka: d.celafoniarka || '', pakieciarka: d.pakieciarka || '', kartoniarka: d.kartoniarka || '' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    else machines = (data && data.length) ? data.map(d=>({ number: String(d.number), ord: d.ord || 9999, status: d.status || 'Produkcja', maker: d.maker || '', paker: d.paker || '', celafoniarka: d.celafoniarka || '', pakieciarka: d.pakieciarka || '', kartoniarka: d.kartoniarka || '', role_utilization: d.role_utilization || '' })) : DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' }));
+    // Wyczyść cache procent przy nowym załadowaniu maszyn
+    roleUtilizationCache = {};
   }catch(e){ console.error('loadMachines catch', e); machines = DEFAULT_MACHINES.map((n,i)=>({ number: String(n), ord: i+1, status: 'Produkcja' })); }
 }
 
 /* -------------------- ŁADOWANIE PRZYPISAŃ DLA DANEJ DATY -------------------- */
+let assignmentRdnstLookup = {}; // Map do szukania RDNST pracowników: { "rdnst_UUID": { short_name, surname, firstname } }
+
 async function loadAssignmentsForDate(date){
   if(!date) return;
   if(!sb){ assignments[date] = {}; return; }
   try{
+    // Wyczyść cache procent dla tej daty
+    roleUtilizationCache = {};
+    
     // Załaduj urlopy dla tej daty
     const { data: vacations, error: vacError } = await sb
       .from('vacation')
@@ -490,9 +653,13 @@ async function loadAssignmentsForDate(date){
 
     // Pre-load RDNST workers for this date to resolve names
     const rdnstWorkers = await loadRdnstWorkersForDate(date);
-    const rdnstMap = new Map();
     rdnstWorkers.forEach(w => {
-      rdnstMap.set(w.id, w.short_name);
+      // Przechowaj RDNST pracownika w lookup map
+      assignmentRdnstLookup[w.id] = {
+        short_name: w.short_name,
+        surname: w.surname,
+        firstname: w.firstname
+      };
     });
 
     (data||[]).forEach(a=>{
@@ -514,21 +681,11 @@ async function loadAssignmentsForDate(date){
         for(let i=2;i<COLUMNS.length;i++) map[newMachine.number].push('');
       }
 
-      let displayName = '';
-      
-      // Check if this is an RDNST worker
-      if(String(a.employee_id).startsWith('rdnst_')){
-        displayName = rdnstMap.get(a.employee_id) || a.employee_id;
-      } else {
-        // Regular employee
-        const emp = employees.find(e=>e.id === a.employee_id);
-        if(emp) displayName = displayShort(emp);
-      }
-      
       const idx = COLUMNS.findIndex(c=>c.key === a.role);
-      if(idx > -1 && displayName){
+      if(idx > -1){
         if(!map[a.machine_number]){ const row=[a.machine_number,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[a.machine_number]=row; }
-        map[a.machine_number][idx] = displayName;
+        // Przechowuj oryginalny employee_id (może zawierać prefiks "mgr_", "rdnst_" lub być UUID)
+        map[a.machine_number][idx] = a.employee_id;
       }
     });
 
@@ -736,7 +893,7 @@ function buildTableFor(date){
         } else {
           if(!val) td.classList.add('empty-cell');
           else td.classList.add('assigned-cell');
-          td.textContent = val;
+          td.textContent = displayAssignmentValue(val); // Wyświetl imię, nie UUID
           td.style.cursor = 'pointer';
           td.addEventListener('click', () => openAssignModal(date, m, col.key));
         }
@@ -842,17 +999,46 @@ async function saveAssignment(date,machine,role,empId){
     
     console.log('saveAssignment called with:', { date, machine, machineNumber, role, empId });
     
+    // Walidacja procentów i konfliktów PRZED usunięciem starego przypisania
+    if(empId) {
+      const validation = canAssignWithUtilization(empId, date, role, machineNumber);
+      if(!validation.allowed) {
+        await showNotification(validation.reason, 'Błąd', '❌');
+        return;
+      }
+    }
+    
+    if(!empId) {
+      console.log('Clearing assignment (empId is null/empty)');
+    }
+    
     await sb.from('assignments').delete().eq('date',date).eq('machine_number',machineNumber).eq('role',role);
     
     // Obsługuj zarówno employee_id jak i rdnst workers
     if(empId) {
-      // Jeśli to RDNST pracownik (format: rdnst_XXX), przechowaj go jako special format
-      // W bazie przechowujemy jako employee_id, a na froncie sprawdzamy czy ma prefix rdnst_
+      // Format ID:
+      // - Pracownik zwykły: UUID
+      // - RDNST: "rdnst_XXX"
+      // - Kierownik: "mgr_UUID"
+      
+      let storeId = empId;
+      
+      // Jeśli to kierownik (z tabeli managers), dodaj prefiks "mgr_"
+      if(window.mgrsCache && window.mgrsCache.some(m => m.id === empId)) {
+        storeId = `mgr_${empId}`;
+        console.log('Storing manager assignment with prefix:', storeId);
+      }
+      
+      // Pobierz procent dla tego stanowiska na tej maszynie
+      const utilization = getRoleUtilization(machineNumber);
+      const utilizationPercent = utilization[role] || 0;
+      
       const payload = {
         date, 
         machine_number: machineNumber, 
         role, 
-        employee_id: empId  // To może być UUID lub "rdnst_XXX"
+        employee_id: storeId,
+        utilization_percent: utilizationPercent
       };
       console.log('INSERT payload:', payload);
       
@@ -934,6 +1120,17 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
     // Załaduj RDNST pracowników dla tej daty
     const rdnstWorkers = await loadRdnstWorkersForDate(date);
     
+    // Załaduj kierowników (dla checkbox Kierownicy)
+    let managers = [];
+    if(sb) {
+      try {
+        const { data, error } = await sb.from('managers').select('*').eq('can_drive', true);
+        if(!error && data) managers = data;
+      } catch(e) {
+        console.warn('Error loading managers for modal', e);
+      }
+    }
+    
     // Załaduj urlopy dla tej daty - synchronicznie przed filtrowaniem
     let employeesOnVacation = new Set();
     if(sb) {
@@ -953,7 +1150,7 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
       }
     }
     
-    // Przygotuj mapowanie BU -> pracownicy, filtrując pracowników na urlope
+    // Przygotuj mapowanie BU -> pracownicy, filtrując pracowników na urlope I po konfliktach stanowisk
     const buMap = new Map();
     employees.forEach(emp => {
       // Pomiń pracowników na urlopie
@@ -962,18 +1159,54 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
         return;
       }
       
+      // Sprawdź konflikt stanowisk
+      if(hasRoleConflict(emp.id, date, roleKey)) {
+        console.log('Skipping employee due to role conflict:', emp.surname, emp.firstname, roleKey);
+        return;
+      }
+      
+      // Sprawdź dostępne procenty
+      const utilization = getRoleUtilization(machineNumber);
+      const rolePercent = utilization[roleKey] || 0;
+      const available = getAvailableUtilization(emp.id, date);
+      
+      // Pomiń pracowników z 0% dostępności (już 100% przypisani)
+      if (available <= 0) {
+        return;
+      }
+      
       const bu = (emp.bu && String(emp.bu).trim()) ? String(emp.bu).trim() : 'Inne';
       if (!buMap.has(bu)) buMap.set(bu, []);
-      buMap.get(bu).push(emp);
+      buMap.get(bu).push({ ...emp, _available: available, _rolePercent: rolePercent });
     });
     
-    console.log('Standard employees grouped into BU (filtered):', Array.from(buMap.keys()));
+    console.log('Standard employees grouped into BU (filtered by vacation and role conflict):', Array.from(buMap.keys()));
     
     // RDNST pracownicy będą dodani do globalHelpers (ostatnia kolumna), nie do buMap
     let rdnstHelpers = [];
     if (rdnstWorkers && rdnstWorkers.length > 0) {
-      rdnstHelpers = rdnstWorkers;
-      console.log(`Loaded ${rdnstWorkers.length} RDNST workers for date ${date}`);
+      rdnstHelpers = rdnstWorkers.filter(w => {
+        // Sprawdź konflikt stanowisk
+        if(hasRoleConflict(w.id, date, roleKey)) {
+          return false;
+        }
+        
+        // Pomiń pracowników z 0% dostępności
+        const available = getAvailableUtilization(w.id, date);
+        if (available <= 0) {
+          return false;
+        }
+        
+        return true;
+      }).map(w => {
+        const utilization = getRoleUtilization(machineNumber);
+        const rolePercent = utilization[roleKey] || 0;
+        const available = getAvailableUtilization(w.id, date);
+        return { ...w, _available: available, _rolePercent: rolePercent };
+      });
+      console.log(`Loaded ${rdnstHelpers.length} RDNST workers for date ${date} (filtered by role conflict only)`);
+    } else {
+      console.log('No RDNST workers loaded for date', date, 'rdnstWorkers=', rdnstWorkers);
     }
 
     const roleCols = [
@@ -985,6 +1218,9 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
     ];
 
     const helperRoles = ['pracownik_pomocniczy', 'filtry', 'inserty'];
+    
+    // Flaga dla kierowników
+    let showManagersOnly = false;
 
     const topRow = document.createElement('div');
     topRow.style.display = 'flex';
@@ -1011,6 +1247,58 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
     Array.from(buMap.keys()).sort().forEach(bu => { const o = document.createElement('option'); o.value = bu; o.textContent = bu; buSelect.appendChild(o); });
     controls.appendChild(buSelect);
 
+    // Checkbox "Kierownicy" - pokaż tylko kierowników gotowych do jazdy
+    if(managers && managers.length > 0) {
+      // Filtruj kierowników - tylko tych bez konfliktu stanowisk i z dostępnością > 0
+      const availableManagers = managers.filter(mgr => {
+        // Sprawdź konflikt stanowisk
+        if(hasRoleConflict(mgr.id, date, roleKey)) {
+          return false;
+        }
+        
+        // Pomiń kierowników z 0% dostępności
+        const available = getAvailableUtilization(mgr.id, date);
+        if (available <= 0) {
+          return false;
+        }
+        
+        return true;
+      }).map(mgr => {
+        const utilization = getRoleUtilization(machineNumber);
+        const rolePercent = utilization[roleKey] || 0;
+        const available = getAvailableUtilization(mgr.id, date);
+        return { ...mgr, _available: available, _rolePercent: rolePercent };
+      });
+      
+      const managerCheckWrapper = document.createElement('label');
+      managerCheckWrapper.style.display = 'flex';
+      managerCheckWrapper.style.alignItems = 'center';
+      managerCheckWrapper.style.gap = '6px';
+      managerCheckWrapper.style.cursor = 'pointer';
+      managerCheckWrapper.style.fontSize = '13px';
+      managerCheckWrapper.style.fontWeight = '600';
+      managerCheckWrapper.style.whiteSpace = 'nowrap';
+      
+      const managerCheck = document.createElement('input');
+      managerCheck.type = 'checkbox';
+      managerCheck.checked = false;
+      managerCheck.style.cursor = 'pointer';
+      managerCheck.onchange = () => {
+        showManagersOnly = managerCheck.checked;
+        renderTable(buSelect.value); // Re-render z nową flagą
+      };
+      managerCheckWrapper.appendChild(managerCheck);
+      
+      const managerCheckLabel = document.createElement('span');
+      managerCheckLabel.textContent = `👔 Kierownicy (${availableManagers.length})`;
+      managerCheckWrapper.appendChild(managerCheckLabel);
+      
+      controls.appendChild(managerCheckWrapper);
+      
+      // Aktualizuj globalną listę kierowników z przefiltrowanymi
+      managers = availableManagers;
+    }
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn outline'; closeBtn.textContent = 'Zamknij'; closeBtn.onclick = () => { assignModal.style.display = 'none'; document.body.classList.remove('modal-open'); };
     controls.appendChild(closeBtn);
@@ -1032,6 +1320,20 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
         return;
       }
       
+      // Sprawdź konflikt stanowisk
+      if(hasRoleConflict(emp.id, date, roleKey)) {
+        return;
+      }
+      
+      // Sprawdź dostępne procenty
+      const utilization = getRoleUtilization(machineNumber);
+      const rolePercent = utilization[roleKey] || 0;
+      const available = getAvailableUtilization(emp.id, date);
+      
+      if(rolePercent > available) {
+        return;
+      }
+      
       const empRoles = (Array.isArray(emp.roles) ? emp.roles : (emp.roles ? [emp.roles] : [])).map(r => String(r));
       const fullnameLower = ((emp.surname || '') + ' ' + (emp.name || '')).toLowerCase();
       const hasHelperRole = empRoles.some(r => helperRoles.includes(r)) || helperRoles.some(hr => fullnameLower.includes(hr));
@@ -1044,7 +1346,7 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
     }
     globalHelpers = globalHelpers.sort((a,b) => (((a.surname||'') + ' ' + (a.name||'')).localeCompare(((b.surname||'') + ' ' + (b.name||'')))));
     
-    console.log('Global helpers (after filtering vacation):', globalHelpers.length);
+    console.log('Global helpers (after filtering vacation and utilization):', globalHelpers.length);
 
     function getRequiredPermsForMachine(machineNumber){
       try{
@@ -1094,7 +1396,11 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
       const thr = document.createElement('tr');
       const thBU = document.createElement('th'); thBU.textContent = 'BU'; thBU.style.width = '90px'; thBU.style.padding='8px'; thBU.style.textAlign='center'; thr.appendChild(thBU);
       roleCols.forEach(rc => { const th = document.createElement('th'); th.textContent = rc.title; th.style.padding='8px'; th.style.textAlign='center'; th.style.borderLeft = '1px solid rgba(0,0,0,0.06)'; thr.appendChild(th); });
-      const thGlobal = document.createElement('th'); thGlobal.textContent = 'Pomocniczy / Filtry / Inserty'; thGlobal.style.padding='8px'; thGlobal.style.textAlign='center'; thGlobal.style.borderLeft = '1px solid rgba(0,0,0,0.06)'; thr.appendChild(thGlobal);
+      
+      // Zmień nagłówek ostatniej kolumny gdy pokazujesz kierowników
+      const thGlobal = document.createElement('th');
+      thGlobal.textContent = showManagersOnly ? '👔 Kierownicy (Gotowi do jazdy)' : 'Pomocniczy / Filtry / Inserty';
+      thGlobal.style.padding='8px'; thGlobal.style.textAlign='center'; thGlobal.style.borderLeft = '1px solid rgba(0,0,0,0.06)'; thr.appendChild(thGlobal);
       thead.appendChild(thr); table.appendChild(thead);
 
       const tbodyTable = document.createElement('tbody');
@@ -1139,8 +1445,10 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
             const capturedRoleKey = rc.key;
             names.forEach(emp=>{ 
               const div = document.createElement('div'); 
-              div.className='emp-name'; 
-              div.textContent = displayShort(emp);
+              div.className='emp-name';
+              const available = getAvailableUtilization(emp.id, date);
+              div.textContent = `${displayShort(emp)} (${available}%)`;
+              div.title = `Dostępne: ${available}% do wykorzystania`;
               div.onclick = async ()=>{
                 try{
                   // WAŻNE: Sprawdzaj uprawnienia dla ORYGINALNEJ roli (roleKey), nie kolumny w modalu!
@@ -1161,10 +1469,29 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
 
         if(i === 0){
           const tdGlobal = document.createElement('td'); tdGlobal.style.padding='8px'; tdGlobal.style.verticalAlign='top'; tdGlobal.style.borderLeft='1px solid rgba(0,0,0,0.06)'; tdGlobal.setAttribute('rowspan', String(visibleBU.length || 1)); tdGlobal.className = 'td-global-helpers';
-          if(globalHelpers.length === 0){ const m = document.createElement('div'); m.className='muted'; m.textContent='—'; tdGlobal.appendChild(m); }
-          else{ globalHelpers.forEach(emp=>{ const d = document.createElement('div'); d.className='emp-name'; 
-            d.textContent = displayShort(emp);
-            d.onclick = async ()=>{
+          
+          // Przygotuj listę do wyświetlenia
+          let itemsToShow = [];
+          if(showManagersOnly) {
+            // Pokaż kierowników + zawsze RDNST
+            itemsToShow = [...managers];
+            if(rdnstHelpers && rdnstHelpers.length > 0) {
+              itemsToShow = itemsToShow.concat(rdnstHelpers);
+            }
+          } else {
+            // Pokaż helperów (jak zwykle)
+            itemsToShow = globalHelpers;
+          }
+          
+          if(itemsToShow.length === 0){
+            const m = document.createElement('div'); m.className='muted'; m.textContent='—'; tdGlobal.appendChild(m);
+          } else {
+            itemsToShow.forEach(emp => {
+              const d = document.createElement('div'); d.className='emp-name';
+              const available = getAvailableUtilization(emp.id, date);
+              d.textContent = `${displayShort(emp)} (${available}%)`;
+              d.title = `Dostępne: ${available}% do wykorzystania`;
+              d.onclick = async ()=>{
                 try{
                   const missing = missingPermsForEmp(emp, machineObj, roleKey);
                   if(missing && missing.length){
@@ -1174,7 +1501,9 @@ async function renderAssignModalContent(date, machine, roleKey, machineObj, mach
                   await saveAssignment(date, machineNumber, roleKey, emp.id);
                   assignModal.style.display='none'; document.body.classList.remove('modal-open');
                 }catch(e){ console.error('assign global click error', e, { emp }); }
-              }; tdGlobal.appendChild(d); }); }
+              }; tdGlobal.appendChild(d);
+            });
+          }
           tr.appendChild(tdGlobal);
         }
 
@@ -1287,6 +1616,19 @@ async function bootstrap(){
     await initSupabase();
     await loadEmployees();
     await loadMachines();
+    
+    // Załaduj kierowników dla cache'a
+    try {
+      if(sb) {
+        const { data: managers, error } = await sb.from('managers').select('*');
+        if(!error && managers) {
+          window.mgrsCache = managers;
+          console.log('Loaded managers cache:', managers.length);
+        }
+      }
+    } catch(e) {
+      console.warn('Error loading managers cache:', e);
+    }
 
     currentDate = dateInput ? dateInput.value : (new Date().toISOString().slice(0,10));
     await loadAssignmentsForDate(currentDate);

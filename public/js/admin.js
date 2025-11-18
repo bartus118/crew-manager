@@ -492,9 +492,13 @@ const AdminMachines = (function(){
     if(!sb){ wrapEl.innerHTML=''; wrapEl.appendChild(makeMuted('Brak połączenia z serwerem (offline).')); return; }
 
     try{
-      const { data, error } = await sb.from('machines').select('*').order('ord', { ascending:true });
+      const { data, error } = await sb.from('machines').select('*').order('ord', { ascending:true, nullsLast: true });
       if(error) throw error;
-      machinesCache = data || [];
+      machinesCache = (data || []).sort((a, b) => {
+        const ordA = a.ord || 9999;
+        const ordB = b.ord || 9999;
+        return ordA - ordB;
+      });
 
       const topRow = document.createElement('div');
       topRow.style.display = 'flex';
@@ -2569,19 +2573,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabModify = document.getElementById('tabModify');
     const tabEmployees = document.getElementById('tabEmployees');
     const machinesSection = document.getElementById('adminMachinesSection');
+    const loadConfigSection = document.getElementById('adminLoadConfigSection');
     const employeesSection = document.getElementById('adminEmployeesSection');
     const managersSection = document.getElementById('adminManagersSection');
 
     async function showModify(){
       if(machinesSection) machinesSection.style.display = '';
+      if(loadConfigSection) loadConfigSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
       if(tabModify) tabModify.classList.add('active');
       try { await AdminMachines.renderList(); } catch(e){ console.warn('showModify renderList error', e); }
     }
 
+    async function showLoadConfig(){
+      if(machinesSection) machinesSection.style.display = 'none';
+      if(loadConfigSection) loadConfigSection.style.display = '';
+      if(employeesSection) employeesSection.style.display = 'none';
+      if(managersSection) managersSection.style.display = 'none';
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      const tabLoadConfig = document.getElementById('tabLoadConfig');
+      if(tabLoadConfig) tabLoadConfig.classList.add('active');
+      try { await renderLoadConfiguration(); } catch(e){ console.warn('showLoadConfig error', e); }
+    }
+
     async function showEmployees(){
       if(machinesSection) machinesSection.style.display = 'none';
+      if(loadConfigSection) loadConfigSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = '';
       if(managersSection) managersSection.style.display = 'none';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -2591,6 +2609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function showManagers(){
       if(machinesSection) machinesSection.style.display = 'none';
+      if(loadConfigSection) loadConfigSection.style.display = 'none';
       if(employeesSection) employeesSection.style.display = 'none';
       if(managersSection) managersSection.style.display = '';
       document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -2600,6 +2619,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if(tabModify) tabModify.addEventListener('click', () => showModify());
+    const tabLoadConfig = document.getElementById('tabLoadConfig');
+    if(tabLoadConfig) tabLoadConfig.addEventListener('click', () => showLoadConfig());
     if(tabEmployees) tabEmployees.addEventListener('click', () => showEmployees());
     const tabManagers = document.getElementById('tabManagers');
     if(tabManagers) tabManagers.addEventListener('click', () => showManagers());
@@ -2690,6 +2711,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 let managers = [];
 let allEmployees = [];
 let currentEditingManagerId = null;
+let dragDropMode = false; // Czy aktywny mode przesuwania pracowników
+let draggedEmployee = null; // Przeciągany pracownik
+let draggedFromManager = null; // Kierownik źródłowy
 
 async function loadManagers() {
   if(!sb) return;
@@ -2708,7 +2732,7 @@ async function loadManagers() {
   }
 }
 
-async function createManager(surname, name, bu, email, phone) {
+async function createManager(surname, name, bu, email, phone, canDrive = false, permissions = '') {
   if(!sb) return null;
   try {
     const { data, error } = await sb.from('managers').insert([{
@@ -2716,7 +2740,9 @@ async function createManager(surname, name, bu, email, phone) {
       name: name.trim(),
       bu: bu.trim() || null,
       email: email.trim() || null,
-      phone: phone.trim() || null
+      phone: phone.trim() || null,
+      can_drive: canDrive,
+      permissions: permissions || null
     }]).select();
     
     if(error) {
@@ -2734,7 +2760,7 @@ async function createManager(surname, name, bu, email, phone) {
   }
 }
 
-async function updateManager(id, surname, name, bu, email, phone) {
+async function updateManager(id, surname, name, bu, email, phone, canDrive = false, permissions = '') {
   if(!sb) return false;
   try {
     const { error } = await sb.from('managers').update({
@@ -2742,7 +2768,9 @@ async function updateManager(id, surname, name, bu, email, phone) {
       name: name.trim(),
       bu: bu.trim() || null,
       email: email.trim() || null,
-      phone: phone.trim() || null
+      phone: phone.trim() || null,
+      can_drive: canDrive,
+      permissions: permissions || null
     }).eq('id', id);
     
     if(error) {
@@ -2876,10 +2904,23 @@ async function renderManagers() {
       return;
     }
 
+    // Sortuj kierowników alfabetycznie po nazwisku, potem po imeniu
+    const sortedManagers = [...managers].sort((a, b) => {
+      const surnameA = (a.surname || '').toLowerCase();
+      const surnameB = (b.surname || '').toLowerCase();
+      const surnameCompare = surnameA.localeCompare(surnameB);
+      if(surnameCompare !== 0) return surnameCompare; // Jeśli nazwiska różne, sortuj po nich
+      
+      // Nazwiska takie same, sortuj po imeniu
+      const nameA = (a.name || a.firstname || '').toLowerCase();
+      const nameB = (b.name || b.firstname || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
     const grid = document.createElement('div');
     grid.className = 'managers-grid';
 
-    for(const manager of managers) {
+    for(const manager of sortedManagers) {
       const employees = await getEmployeesByManager(manager.id);
       const card = createManagerCard(manager, employees);
       grid.appendChild(card);
@@ -2895,6 +2936,7 @@ async function renderManagers() {
 function createManagerCard(manager, employees) {
   const card = document.createElement('div');
   card.className = 'manager-card';
+  card.dataset.managerId = manager.id; // Dla drag-drop
 
   const headerDiv = document.createElement('div');
   headerDiv.className = 'manager-card-header';
@@ -2925,6 +2967,24 @@ function createManagerCard(manager, employees) {
   headerDiv.appendChild(actionsDiv);
   card.appendChild(headerDiv);
 
+  // Sekcja uprawnień
+  if(manager.can_drive) {
+    const drivingDiv = document.createElement('div');
+    drivingDiv.style.cssText = 'padding: 8px; background: #e8f5e9; border-radius: 4px; margin-bottom: 12px; font-size: 12px; color: #2e7d32; font-weight: 600;';
+    drivingDiv.innerHTML = '🚗 Może jeździć';
+    card.appendChild(drivingDiv);
+
+    if(manager.permissions) {
+      const permsArray = String(manager.permissions).split(',').map(s => s.trim()).filter(Boolean);
+      if(permsArray.length > 0) {
+        const permsDiv = document.createElement('div');
+        permsDiv.style.cssText = 'padding: 6px 8px; background: #e3f2fd; border-radius: 4px; margin-bottom: 12px; font-size: 11px; color: #1565c0;';
+        permsDiv.innerHTML = `<strong>Uprawnienia:</strong> ${permsArray.join(', ')}`;
+        card.appendChild(permsDiv);
+      }
+    }
+  }
+
   const employeesDiv = document.createElement('div');
   employeesDiv.className = 'manager-employees-list';
 
@@ -2942,6 +3002,7 @@ function createManagerCard(manager, employees) {
     employees.forEach(emp => {
       const empItem = document.createElement('div');
       empItem.className = 'manager-employee-item';
+      empItem.dataset.employeeId = emp.id; // Dla drag-drop
       const empName = `${emp.surname || ''} ${emp.name || emp.firstname || ''}`.trim();
       empItem.innerHTML = `
         <div class="manager-employee-name">${empName}</div>
@@ -3101,12 +3162,16 @@ async function openUnassignedModal() {
 function setupManagersSection() {
   const addManagerBtn = document.getElementById('addManagerBtn');
   const showUnassignedBtn = document.getElementById('showUnassignedBtn');
+  const dragDropToggleBtn = document.getElementById('dragDropToggleBtn');
   
   if(addManagerBtn) {
     addManagerBtn.onclick = () => openManagerFormModal(null);
   }
   if(showUnassignedBtn) {
     showUnassignedBtn.onclick = openUnassignedModal;
+  }
+  if(dragDropToggleBtn) {
+    dragDropToggleBtn.onclick = () => toggleDragDropMode(dragDropToggleBtn);
   }
 }
 
@@ -3118,6 +3183,9 @@ function openManagerFormModal(managerId = null) {
   const buSelect = document.getElementById('managerBU');
   const emailInput = document.getElementById('managerEmail');
   const phoneInput = document.getElementById('managerPhone');
+  const canDriveCheckbox = document.getElementById('managerCanDrive');
+  const permissionsSection = document.getElementById('managerPermissionsSection');
+  const permissionsGrid = document.getElementById('managerPermissionsGrid');
   const submitBtn = document.getElementById('managerFormSubmitBtn');
   const cancelBtn = document.getElementById('managerFormCancelBtn');
   const deleteBtn = document.getElementById('managerFormDeleteBtn');
@@ -3130,6 +3198,36 @@ function openManagerFormModal(managerId = null) {
   buSelect.value = '';
   emailInput.value = '';
   phoneInput.value = '';
+  canDriveCheckbox.checked = false;
+  permissionsSection.style.display = 'none';
+  permissionsGrid.innerHTML = ''; // Wyczyść aby generować nowe
+
+  // Generate permission checkboxes dynamically like for employees
+  const permissionOptions = (window.CONFIG && window.CONFIG.admin && window.CONFIG.admin.permissions) ? window.CONFIG.admin.permissions : [];
+  permissionOptions.forEach(code => {
+    const cbWrap = document.createElement('label');
+    cbWrap.style.cssText = 'display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; user-select: none; background: white; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; white-space: nowrap; transition: all 0.15s;';
+    
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = code;
+    cb.style.cssText = 'width: 16px; height: 16px; cursor: pointer; accent-color: #0b74d1; margin: 0; padding: 0; flex-shrink: 0;';
+    
+    const span = document.createElement('span');
+    span.textContent = code;
+    
+    // Onclick handler zamiast change event
+    cb.onclick = function(event) {
+      event.stopPropagation();
+      console.log(`Manager perm ${code} clicked, now:`, this.checked);
+    };
+    
+    cbWrap.appendChild(cb);
+    cbWrap.appendChild(span);
+    permissionsGrid.appendChild(cbWrap);
+  });
+
+  console.log('Generated manager permission checkboxes:', permissionsGrid.children.length);
 
   if(managerId) {
     // Tryb edycji
@@ -3142,12 +3240,38 @@ function openManagerFormModal(managerId = null) {
     buSelect.value = manager.bu || '';
     emailInput.value = manager.email || '';
     phoneInput.value = manager.phone || '';
+    canDriveCheckbox.checked = manager.can_drive || false;
     deleteBtn.style.display = 'block';
+
+    // Załaduj uprawnienia
+    if(manager.can_drive && manager.permissions) {
+      const perms = String(manager.permissions).split(',').map(s => s.trim()).filter(Boolean);
+      const checkboxes = permissionsGrid.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = perms.includes(cb.value);
+      });
+    }
+
+    if(manager.can_drive) {
+      permissionsSection.style.display = 'block';
+    }
   } else {
     // Tryb dodawania
     titleEl.textContent = 'Dodaj kierownika';
     deleteBtn.style.display = 'none';
   }
+
+  // Toggle permissions section
+  canDriveCheckbox.onchange = () => {
+    if(canDriveCheckbox.checked) {
+      permissionsSection.style.display = 'block';
+    } else {
+      permissionsSection.style.display = 'none';
+      // Odznacz wszystkie uprawnienia
+      const checkboxes = permissionsGrid.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = false);
+    }
+  };
 
   // Handle submit
   submitBtn.onclick = async () => {
@@ -3156,17 +3280,26 @@ function openManagerFormModal(managerId = null) {
     const bu = buSelect.value.trim();
     const email = emailInput.value.trim();
     const phone = phoneInput.value.trim();
+    const canDrive = canDriveCheckbox.checked;
 
     if(!surname || !name) {
       await showAdminNotification('Nazwisko i imię są wymagane!', 'Błąd', '⚠️');
       return;
     }
 
+    // Zbierz wybrane uprawnienia
+    let permissions = '';
+    if(canDrive) {
+      const checkboxes = permissionsGrid.querySelectorAll('input[type="checkbox"]:checked');
+      const selectedPerms = Array.from(checkboxes).map(cb => cb.value);
+      permissions = selectedPerms.join(',');
+    }
+
     let success = false;
     if(managerId) {
-      success = await updateManager(managerId, surname, name, bu, email, phone);
+      success = await updateManager(managerId, surname, name, bu, email, phone, canDrive, permissions);
     } else {
-      const result = await createManager(surname, name, bu, email, phone);
+      const result = await createManager(surname, name, bu, email, phone, canDrive, permissions);
       success = result !== null;
     }
 
@@ -3198,6 +3331,426 @@ function openManagerFormModal(managerId = null) {
 
   modal.style.display = 'flex';
   document.body.classList.add('modal-open');
+}
+
+// ========== DRAG-DROP MODE ==========
+function toggleDragDropMode(btn) {
+  dragDropMode = !dragDropMode;
+  
+  if(dragDropMode) {
+    btn.style.background = '#ff5722'; // Zmień kolor na aktywny
+    btn.textContent = '⏹️ Zakończ Przesuwanie';
+    addDragDropListeners();
+    showAdminNotification('Tryb przesuwania AKTYWNY - przeciągaj pracowników!', 'Info', 'ℹ️');
+  } else {
+    btn.style.background = '#ff9800'; // Przywróć kolor
+    btn.textContent = '🔄 Przesuń Pracowników';
+    removeDragDropListeners();
+    showAdminNotification('Tryb przesuwania wyłączony', 'Info', 'ℹ️');
+  }
+}
+
+function addDragDropListeners() {
+  const container = document.getElementById('adminManagersApp');
+  if(!container) return;
+  
+  // Dodaj event listenery na wszystkie karty kierowników i pracowników
+  setTimeout(() => {
+    attachDragDropToCards();
+  }, 100);
+}
+
+function attachDragDropToCards() {
+  const container = document.getElementById('adminManagersApp');
+  if(!container) return;
+  
+  // Znajdź wszystkie karty kierowników
+  const managerCards = container.querySelectorAll('.manager-card');
+  
+  managerCards.forEach(card => {
+    const managerId = card.dataset.managerId;
+    if(!managerId) return;
+    
+    // Dodaj drop zone na karcie kierownika
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', (e) => handleDrop(e, managerId));
+    card.addEventListener('dragleave', handleDragLeave);
+    
+    // Znajdź pracowników w karcie i dodaj drag
+    const empItems = card.querySelectorAll('[data-employee-id]');
+    empItems.forEach(item => {
+      item.draggable = true;
+      item.style.cursor = 'grab';
+      item.addEventListener('dragstart', (e) => handleDragStart(e, managerId));
+      item.addEventListener('dragend', handleDragEnd);
+    });
+  });
+}
+
+function handleDragStart(e, managerId) {
+  const empId = e.target.closest('[data-employee-id]').dataset.employeeId;
+  draggedEmployee = empId;
+  draggedFromManager = managerId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.closest('[data-employee-id]').style.opacity = '0.5';
+  console.log(`Dragging employee ${empId} from manager ${managerId}`);
+}
+
+function handleDragEnd(e) {
+  const item = e.target.closest('[data-employee-id]');
+  if(item) item.style.opacity = '1';
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const card = e.target.closest('.manager-card');
+  if(card) card.style.background = '#f0f8ff';
+}
+
+function handleDragLeave(e) {
+  const card = e.target.closest('.manager-card');
+  if(card) card.style.background = 'white';
+}
+
+async function handleDrop(e, targetManagerId) {
+  e.preventDefault();
+  const card = e.target.closest('.manager-card');
+  if(card) card.style.background = 'white';
+  
+  if(!draggedEmployee || !draggedFromManager) return;
+  if(draggedFromManager === targetManagerId) {
+    draggedEmployee = null;
+    draggedFromManager = null;
+    return; // Taki sam kierownik
+  }
+  
+  try {
+    // Update employee manager_id in database
+    const { error } = await sb.from('employees').update({ manager_id: targetManagerId }).eq('id', draggedEmployee);
+    
+    if(error) {
+      await showAdminNotification(`Błąd przesunięcia: ${error.message}`, 'Błąd', '❌');
+    } else {
+      await showAdminNotification('Pracownik przesunięty!', 'Sukces', '✅');
+      await renderManagers();
+      
+      // Re-attach drag-drop listeners po re-render
+      if(dragDropMode) {
+        setTimeout(() => {
+          attachDragDropToCards();
+        }, 100);
+      }
+    }
+  } catch(e) {
+    console.error('Drop error:', e);
+    await showAdminNotification(`Błąd: ${e.message}`, 'Błąd', '❌');
+  }
+  
+  draggedEmployee = null;
+  draggedFromManager = null;
+}
+
+function removeDragDropListeners() {
+  const container = document.getElementById('adminManagersApp');
+  if(!container) return;
+  
+  const managerCards = container.querySelectorAll('.manager-card');
+  managerCards.forEach(card => {
+    card.removeEventListener('dragover', handleDragOver);
+    card.removeEventListener('dragleave', handleDragLeave);
+    
+    const empItems = card.querySelectorAll('[data-employee-id]');
+    empItems.forEach(item => {
+      item.draggable = false;
+      item.style.cursor = 'default';
+      item.removeEventListener('dragstart', handleDragStart);
+      item.removeEventListener('dragend', handleDragEnd);
+    });
+  });
+}
+
+// ===========================
+// LOAD CONFIGURATION FUNCTIONS
+// ===========================
+
+const DEFAULT_UTILIZATION = {
+  mechanik_focke: 50,
+  mechanik_protos: 50,
+  operator_focke: 100,
+  operator_protos: 100,
+  pracownik_pomocniczy: 50,
+  filtry: 25,
+  inserty: 25
+};
+
+const UTILIZATION_LABELS = {
+  mechanik_focke: 'Mech Focke',
+  mechanik_protos: 'Mech Protos',
+  operator_focke: 'Operator Focke',
+  operator_protos: 'Operator Protos',
+  pracownik_pomocniczy: 'Prac Pom',
+  filtry: 'Filtry',
+  inserty: 'Inserty'
+};
+
+const UTILIZATION_ORDER = [
+  'mechanik_focke',
+  'mechanik_protos',
+  'operator_focke',
+  'operator_protos',
+  'pracownik_pomocniczy',
+  'filtry',
+  'inserty'
+];
+
+// Global state for edit mode
+let loadConfigEditMode = false;
+let loadConfigChanges = {}; // { machineNumber: { roleKey: value } }
+
+async function renderLoadConfiguration() {
+  const app = document.getElementById('loadConfigApp');
+  if (!app) return;
+  
+  if (!sb) {
+    app.innerHTML = '<p style="padding: 20px; color: #d9534f;">Błąd: Supabase nie jest dostępny. Zaloguj się najpierw.</p>';
+    return;
+  }
+  
+  try {
+    const { data: machines, error } = await sb
+      .from('machines')
+      .select('*')
+      .order('number', { ascending: true });
+    
+    if (error) throw error;
+    if (!machines || machines.length === 0) {
+      app.innerHTML = '<p style="padding: 20px; color: #666;">Brak maszyn w systemie</p>';
+      return;
+    }
+    
+    let html = `
+      <div style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <div>
+            <h3 style="margin: 0 0 8px 0; color: #333;">Konfiguracja Obciążenia Stanowisk</h3>
+            <p style="margin: 0; color: #666; font-size: 14px;">
+              Ustaw procentowe obciążenie dla każdego stanowiska na danej maszynie. 
+              Każdy pracownik ma pulę 100% zdolności roboczej na dzień.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+    `;
+    
+    if (!loadConfigEditMode) {
+      html += `<button id="btnEditConfig" style="padding: 8px 16px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">✏️ Edytuj</button>`;
+    } else {
+      html += `
+        <button id="btnSaveConfig" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Zapisz</button>
+        <button id="btnCancelEdit" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">✕ Anuluj</button>
+      `;
+    }
+    
+    html += `
+          </div>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; background: white;">
+          <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 12px; text-align: left; border-right: 1px solid #dee2e6; font-weight: 600; width: 120px;">Maszyna</th>
+    `;
+    
+    // Add headers
+    UTILIZATION_ORDER.forEach(key => {
+      html += `<th style="padding: 12px; text-align: center; border-right: 1px solid #dee2e6; font-weight: 600; width: 100px;">${UTILIZATION_LABELS[key]}</th>`;
+    });
+    
+    html += `
+              <th style="padding: 12px; text-align: center; font-weight: 600; width: 140px;">Akcje</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+    
+    // Add rows
+    machines.forEach(machine => {
+      const utilization = machine.role_utilization || {};
+      const machineNumber = machine.number || '';
+      
+      html += `
+        <tr style="border-bottom: 1px solid #dee2e6;" data-machine-number="${machine.number}">
+          <td style="padding: 12px; border-right: 1px solid #dee2e6; font-weight: 600; color: #333;">${machineNumber}</td>
+      `;
+      
+      // Add input cells
+      UTILIZATION_ORDER.forEach(key => {
+        const value = utilization[key] !== undefined ? utilization[key] : DEFAULT_UTILIZATION[key];
+        html += `
+          <td style="padding: 12px; border-right: 1px solid #dee2e6; text-align: center;">
+            <input type="number" min="0" max="200" value="${value}" 
+              class="utilization-input" 
+              data-machine-number="${machine.number}" 
+              data-role-key="${key}"
+              ${!loadConfigEditMode ? 'disabled' : ''}
+              style="width: 60px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 14px; ${!loadConfigEditMode ? 'background: #f5f5f5; cursor: default;' : 'background: white; cursor: text;'}">
+          </td>
+        `;
+      });
+      
+      html += `
+          <td style="padding: 12px; text-align: center;">
+            <button class="btn-reset-defaults" data-machine-number="${machine.number}" 
+              ${!loadConfigEditMode ? 'disabled' : ''}
+              style="padding: 6px 12px; background: ${loadConfigEditMode ? '#6c757d' : '#ccc'}; color: white; border: none; border-radius: 4px; cursor: ${loadConfigEditMode ? 'pointer' : 'default'}; font-size: 13px; ${!loadConfigEditMode ? 'opacity: 0.6;' : ''}">
+              🔄 Reset
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+    
+    html += `
+          </tbody>
+        </table>
+        <div style="margin-top: 20px; padding: 15px; background: ${loadConfigEditMode ? '#fff3cd' : '#e7f3ff'}; border-radius: 4px; color: ${loadConfigEditMode ? '#856404' : '#0066cc'}; font-size: 13px;">
+          ${loadConfigEditMode ? '⚠️ Tryb edycji aktywny. Kliknij "Zapisz" aby zatwierdzić zmiany lub "Anuluj" aby wyjść bez zapisania.' : 'ℹ️ Kliknij "Edytuj" aby zmienić procentowe obciążenie stanowisk.'}
+        </div>
+      </div>
+    `;
+    
+    app.innerHTML = html;
+    
+    // Attach event listeners
+    const editBtn = app.querySelector('#btnEditConfig');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        loadConfigEditMode = true;
+        loadConfigChanges = {};
+        renderLoadConfiguration();
+      });
+    }
+    
+    const saveBtn = app.querySelector('#btnSaveConfig');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async () => {
+        await saveLoadConfigChanges();
+      });
+    }
+    
+    const cancelBtn = app.querySelector('#btnCancelEdit');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        loadConfigEditMode = false;
+        loadConfigChanges = {};
+        renderLoadConfiguration();
+      });
+    }
+    
+    // Attach input listeners (only track changes, don't save)
+    const inputs = app.querySelectorAll('.utilization-input');
+    inputs.forEach(input => {
+      input.addEventListener('change', (e) => trackUtilizationChange(e));
+      input.addEventListener('input', (e) => {
+        if (loadConfigEditMode) {
+          e.target.style.borderColor = '#ffc107';
+        }
+      });
+    });
+    
+    const resetButtons = app.querySelectorAll('.btn-reset-defaults');
+    resetButtons.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!loadConfigEditMode) return;
+        const machineNumber = btn.dataset.machineNumber;
+        if (confirm('Przywrócić domyślne wartości procentów dla tej maszyny?')) {
+          if (!loadConfigChanges[machineNumber]) {
+            loadConfigChanges[machineNumber] = {};
+          }
+          UTILIZATION_ORDER.forEach(key => {
+            loadConfigChanges[machineNumber][key] = DEFAULT_UTILIZATION[key];
+          });
+          await renderLoadConfiguration();
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error rendering load configuration:', error);
+    app.innerHTML = `<p style="padding: 20px; color: #d9534f;">Błąd: ${error.message}</p>`;
+  }
+}
+
+function trackUtilizationChange(event) {
+  const input = event.target;
+  const machineNumber = input.dataset.machineNumber;
+  const roleKey = input.dataset.roleKey;
+  let value = parseInt(input.value) || 0;
+  
+  // Validate range
+  if (value < 0) value = 0;
+  if (value > 200) value = 200;
+  
+  input.value = value;
+  
+  // Track the change locally (don't save yet)
+  if (!loadConfigChanges[machineNumber]) {
+    loadConfigChanges[machineNumber] = {};
+  }
+  loadConfigChanges[machineNumber][roleKey] = value;
+  
+  // Visual feedback
+  input.style.borderColor = '#ffc107';
+}
+
+async function saveLoadConfigChanges() {
+  try {
+    // Save all changes to Supabase
+    let hasChanges = false;
+    
+    for (const [machineNumber, changes] of Object.entries(loadConfigChanges)) {
+      if (Object.keys(changes).length === 0) continue;
+      hasChanges = true;
+      
+      // Fetch current machine data
+      const { data: machine, error: fetchError } = await sb
+        .from('machines')
+        .select('role_utilization')
+        .eq('number', machineNumber)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      const utilization = machine.role_utilization || {};
+      
+      // Merge changes
+      Object.assign(utilization, changes);
+      
+      // Save to database
+      const { error: updateError } = await sb
+        .from('machines')
+        .update({ role_utilization: utilization })
+        .eq('number', machineNumber);
+      
+      if (updateError) throw updateError;
+    }
+    
+    if (!hasChanges) {
+      await showAdminNotification('Brak zmian do zapisania.', 'Informacja', 'ℹ️');
+    } else {
+      await showAdminNotification('Zmiany zapisane!', 'Sukces', '✅');
+    }
+    
+    // Exit edit mode and refresh
+    loadConfigEditMode = false;
+    loadConfigChanges = {};
+    await renderLoadConfiguration();
+    
+  } catch (error) {
+    console.error('Error saving utilization changes:', error);
+    await showAdminNotification(`Błąd: ${error.message}`, 'Błąd', '❌');
+  }
 }
 
 });

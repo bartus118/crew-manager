@@ -578,3 +578,155 @@
 .unassigned-employee-actions .btn:hover {
   background: #1e7634;
 }
+
+/* Manager permissions checkboxes */
+#managerPermissionsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#managerPermissionsGrid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#managerPermissionsGrid label:hover {
+  background: #f5f6f8;
+  border-color: #c5d3ed;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+#managerPermissionsGrid input[type="checkbox"],
+.manager-perm-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #0b74d1;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#managerPermissionsGrid label input:checked {
+  accent-color: #054a91;
+}
+
+/* Drag-drop styling */
+.manager-employee-item {
+  transition: all 0.2s ease;
+}
+
+.manager-employee-item[draggable="true"] {
+  cursor: grab;
+}
+
+.manager-employee-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.manager-employee-item.dragging {
+  opacity: 0.5;
+  background: #f0f0f0;
+}
+
+.manager-card[data-manager-id] {
+  transition: background-color 0.2s ease;
+}
+
+.manager-card.drop-target {
+  background: #f0f8ff;
+  border: 2px dashed #667eea;
+}
+
+/* ========== LOAD CONFIGURATION TABLE ========== */
+#loadConfigApp table {
+  width: 100%;
+  background: white;
+  font-size: 14px;
+  border-collapse: collapse;
+}
+
+#loadConfigApp table thead {
+  background: #f8f9fa;
+}
+
+#loadConfigApp table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-right: 1px solid #dee2e6;
+  border-bottom: 2px solid #dee2e6;
+}
+
+#loadConfigApp table th:last-child {
+  border-right: none;
+}
+
+#loadConfigApp table td {
+  padding: 12px;
+  border-right: 1px solid #dee2e6;
+  border-bottom: 1px solid #dee2e6;
+  text-align: center;
+}
+
+#loadConfigApp table td:last-child {
+  border-right: none;
+}
+
+#loadConfigApp table tbody tr:last-child td {
+  border-bottom: 1px solid #dee2e6;
+}
+
+#loadConfigApp table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.utilization-input {
+  width: 60px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  font-family: "Segoe UI", Arial, sans-serif;
+  transition: border-color 0.2s ease;
+}
+
+.utilization-input:focus {
+  outline: none;
+  border-color: #0b74d1;
+  box-shadow: 0 0 0 2px rgba(11,116,209,0.1);
+}
+
+.btn-reset-defaults {
+  padding: 6px 12px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.btn-reset-defaults:hover {
+  background: #5a6268;
+}
+
+.btn-reset-defaults:active {
+  background: #4e555b;
+}
