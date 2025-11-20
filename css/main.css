@@ -30,6 +30,16 @@ tbody tr {
   transition: transform .12s ease, box-shadow .12s ease;
   box-shadow: 0 2px 6px rgba(0,0,0,0.04);
 }
+
+/* Dla wierszy maszyn (od 2. w górę w grupie z rowspan) - usuwamy białe tło, żeby kolumna urlopy miała spójne tło */
+tbody tr:not(:first-of-type) td:not(.absence-column):not(.empty-cell):not(.disabled):not(.status-prod):not(.status-konserwacja):not(.status-rozruch):not(.status-stop):not(.status-bufor) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+tbody tr:not(:first-of-type) {
+  box-shadow: none !important;
+}
 tbody tr:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0,0,0,0.08);
@@ -51,7 +61,7 @@ th:nth-child(7), td:nth-child(7) {
 }
 
 /* Kolory i stany komórek (role) */
-td.disabled { background: #333 !important; color: #fff !important; border-radius: 4px; padding: 5px 8px; }
+td.disabled { background: #e8ecf1 !important; color: #6b7280 !important; border-radius: 4px; padding: 5px 8px; }
 td.empty-cell { background: #fff7a1; border-radius: 4px; padding: 5px 8px; color: #3a2f00; }
 td.assigned-cell { background: transparent; color: inherit; padding: 5px 8px; }
 
@@ -397,10 +407,50 @@ td.absence-column {
   overflow-y: auto;
   max-height: 300px;
   border-radius: 0 6px 6px 0 !important;
-  padding: 8px 10px !important;
+  padding: 0 !important;
   text-align: left;
   line-height: 1.3;
   font-size: 12px;
+}
+
+/* Spójne tło dla całej zawartości kolumny */
+td.absence-column > div {
+  background: #f0f4f8;
+  padding: 8px 10px;
+  margin: 0;
+  height: 100%;
+}
+
+/* Grupy w kolumnie urlopy bez dodatkowych odstępów */
+td.absence-column .absence-group {
+  margin-bottom: 10px;
+  background: transparent;
+}
+
+td.absence-column .absence-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Nagłówek grupy */
+td.absence-column .absence-group-header {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #234a75;
+  padding: 0;
+}
+
+/* Elementy w grupie */
+td.absence-column .absence-item {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 3px;
+  padding: 0;
+}
+
+td.absence-column .absence-item.empty {
+  color: #999;
 }
 
 td.absence-column::-webkit-scrollbar {
