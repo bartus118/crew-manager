@@ -910,8 +910,6 @@ function buildTableFor(date){
         // Renderuj nieobecności
         const absences = vacationsByDate[date] || [];
         const container = document.createElement('div');
-        container.style.padding = '8px';
-        container.style.fontSize = '13px';
         
         // Grupy z polskimi nazwami
         const groups = {
@@ -949,32 +947,24 @@ function buildTableFor(date){
         // Renderuj wszystkie grupy (nawet puste)
         Object.values(groups).forEach(group => {
           const groupDiv = document.createElement('div');
-          groupDiv.style.marginBottom = '10px';
+          groupDiv.className = 'absence-group';
           
           const headerDiv = document.createElement('div');
-          headerDiv.style.fontWeight = 'bold';
-          headerDiv.style.fontSize = '13px';
-          headerDiv.style.marginBottom = '6px';
-          headerDiv.style.color = '#234a75';
+          headerDiv.className = 'absence-group-header';
           headerDiv.textContent = group.label + ' (suma: ' + group.items.length + '):';
           groupDiv.appendChild(headerDiv);
           
           if(group.items.length > 0){
             group.items.forEach(abs => {
               const absItem = document.createElement('div');
-              absItem.style.marginLeft = '8px';
-              absItem.style.fontSize = '12px';
-              absItem.style.color = '#555';
-              absItem.style.marginBottom = '3px';
+              absItem.className = 'absence-item';
               const endDateStr = new Date(abs.end_date + 'T00:00:00').toLocaleDateString('pl-PL');
               absItem.textContent = '• ' + (abs.employeeName || abs.employee_id) + ' (do ' + endDateStr + ')';
               groupDiv.appendChild(absItem);
             });
           } else {
             const emptyItem = document.createElement('div');
-            emptyItem.style.marginLeft = '8px';
-            emptyItem.style.fontSize = '12px';
-            emptyItem.style.color = '#999';
+            emptyItem.className = 'absence-item empty';
             emptyItem.textContent = '—';
             groupDiv.appendChild(emptyItem);
           }
