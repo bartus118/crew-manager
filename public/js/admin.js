@@ -15,6 +15,8 @@
 const ROLE_DISPLAY_NAMES = {
   'mechanik_focke': 'Mechanik Focke',
   'mechanik_protos': 'Mechanik Protos',
+  'senior_focke': 'Senior Focke',
+  'senior_protos': 'Senior Protos',
   'operator_focke': 'Operator Focke',
   'operator_krosowy': 'Operator Krosowy',
   'operator_protos': 'Operator Protos'
@@ -53,8 +55,15 @@ const waitForSupabaseGlobalAdmin = window.CONFIG.waitForSupabase;
     const roles = Array.isArray(employee.roles) ? employee.roles : (employee.roles ? String(employee.roles).split(',').map(s=>s.trim()) : []);
     // Pobierz uprawnienia operatorskie
     const permissions = Array.isArray(employee.permissions) ? employee.permissions : (employee.permissions ? String(employee.permissions).split(',').map(s=>s.trim()) : []);
-    // Pobierz uprawnienia mechaniczne
-    const mechanical_permissions = employee.mechanical_permissions ? String(employee.mechanical_permissions).split(',').map(s=>s.trim()) : [];
+    // Pobierz uprawnienia mechaniczne (obsługuje string i JSON array)
+    let mechanical_permissions = [];
+    if(employee.mechanical_permissions) {
+      if(Array.isArray(employee.mechanical_permissions)) {
+        mechanical_permissions = employee.mechanical_permissions.map(s => String(s).trim());
+      } else {
+        mechanical_permissions = String(employee.mechanical_permissions).split(',').map(s=>s.trim());
+      }
+    }
 
     // Mechanik Focke
     if (roles.includes('mechanik_focke') && isFocke) {
@@ -87,7 +96,15 @@ const waitForSupabaseGlobalAdmin = window.CONFIG.waitForSupabase;
     const isFocke = !isProtos;
     const roles = Array.isArray(employee.roles) ? employee.roles : (employee.roles ? String(employee.roles).split(',').map(s=>s.trim()) : []);
     const permissions = Array.isArray(employee.permissions) ? employee.permissions : (employee.permissions ? String(employee.permissions).split(',').map(s=>s.trim()) : []);
-    const mechanical_permissions = employee.mechanical_permissions ? String(employee.mechanical_permissions).split(',').map(s=>s.trim()) : [];
+    // Parsuj uprawnienia mechaniczne (obsługuje string i JSON array)
+    let mechanical_permissions = [];
+    if(employee.mechanical_permissions) {
+      if(Array.isArray(employee.mechanical_permissions)) {
+        mechanical_permissions = employee.mechanical_permissions.map(s => String(s).trim());
+      } else {
+        mechanical_permissions = String(employee.mechanical_permissions).split(',').map(s=>s.trim());
+      }
+    }
 
     // Mechanik Focke
     if (roles.includes('mechanik_focke') && isFocke) {
@@ -1239,7 +1256,7 @@ const AdminEmployees = (function(){
     box.appendChild(permGrid);
 
     // ========== SEKCJA UPRAWNIEŃ MECHANICZNYCH ==========
-    const isMechanic = existingRoles.includes('mechanik_focke') || existingRoles.includes('mechanik_protos');
+    const isMechanic = existingRoles.includes('mechanik_focke') || existingRoles.includes('mechanik_protos') || existingRoles.includes('senior_focke') || existingRoles.includes('senior_protos') || existingRoles.includes('operator_focke') || existingRoles.includes('operator_protos');
 
     const mechanicalSection = document.createElement('div');
     mechanicalSection.id = 'mechanicalSection';
@@ -1291,7 +1308,7 @@ const AdminEmployees = (function(){
     // obsługa zmian roli — pokaż/ukryj sekcję mechaniczną
     selRoles.addEventListener('change', () => {
       const selectedRoles = Array.from(selRoles.selectedOptions).map(o => o.value);
-      const isMech = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos');
+      const isMech = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos') || selectedRoles.includes('senior_focke') || selectedRoles.includes('senior_protos') || selectedRoles.includes('operator_focke') || selectedRoles.includes('operator_protos');
       mechanicalSection.style.display = isMech ? 'block' : 'none';
     });
 
@@ -1397,7 +1414,9 @@ const AdminEmployees = (function(){
           bu: updates.bu,
           roles: updates.roles, // as array/text[] type
           permissions: updates.permissions,
-          mechanical_permissions: updates.mechanical_permissions || ''
+          mechanical_permissions: (updates.mechanical_permissions && Array.isArray(updates.mechanical_permissions)) 
+            ? updates.mechanical_permissions.join(',')  // Konwertuj tablicę na string
+            : (updates.mechanical_permissions || '')
         };
         const { error } = await sb.from('employees').update(payload).eq('id', empId);
         if(error){ await showAdminNotification('Błąd zapisu: ' + (error.message || error), 'Błąd', '❌'); console.error(error); return; }
@@ -1603,7 +1622,7 @@ const AdminEmployees = (function(){
     // obsługa zmian roli — pokaż/ukryj sekcję mechaniczną
     selRoles.addEventListener('change', () => {
       const selectedRoles = Array.from(selRoles.selectedOptions).map(o => o.value);
-      const isMechanic = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos');
+      const isMechanic = selectedRoles.includes('mechanik_focke') || selectedRoles.includes('mechanik_protos') || selectedRoles.includes('senior_focke') || selectedRoles.includes('senior_protos') || selectedRoles.includes('operator_focke') || selectedRoles.includes('operator_protos');
       mechanicalSection.style.display = isMechanic ? 'block' : 'none';
     });
 
@@ -3477,6 +3496,8 @@ function removeDragDropListeners() {
 const DEFAULT_UTILIZATION = {
   mechanik_focke: 50,
   mechanik_protos: 50,
+  senior_focke: 100,
+  senior_protos: 100,
   operator_focke: 100,
   operator_protos: 100,
   pracownik_pomocniczy: 50,
@@ -3487,6 +3508,8 @@ const DEFAULT_UTILIZATION = {
 const UTILIZATION_LABELS = {
   mechanik_focke: 'Mech Focke',
   mechanik_protos: 'Mech Protos',
+  senior_focke: 'Senior Focke',
+  senior_protos: 'Senior Protos',
   operator_focke: 'Operator Focke',
   operator_protos: 'Operator Protos',
   pracownik_pomocniczy: 'Prac Pom',
@@ -3497,6 +3520,8 @@ const UTILIZATION_LABELS = {
 const UTILIZATION_ORDER = [
   'mechanik_focke',
   'mechanik_protos',
+  'senior_focke',
+  'senior_protos',
   'operator_focke',
   'operator_protos',
   'pracownik_pomocniczy',

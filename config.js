@@ -22,7 +22,7 @@ window.CONFIG = {
   admin: {
     permissions: ['P100', 'P70', 'F350', 'F550', 'GD', 'GDX', '751', '401', '411', '407', '408', '409', '707', '487', '489'],
     bus: ['', 'BU1', 'BU2', 'BU3', 'BU4'],
-    roles: ['mechanik_focke', 'mechanik_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'operator_krosowy']
+    roles: ['mechanik_focke', 'mechanik_protos', 'senior_focke', 'senior_protos', 'operator_focke', 'operator_protos', 'pracownik_pomocniczy', 'operator_krosowy']
   },
 
   // Helper function to wait for Supabase SDK
