@@ -311,6 +311,266 @@ function ensureAuthThen(cb) {
   }
 }
 
+/* ============ MODAL DO USTAWIANIA STATUSÓW MASZYN ============ */
+async function showMachineStatusScheduleModal() {
+  const modal = document.createElement('div');
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.background = 'rgba(0,0,0,0.4)';
+  modal.style.zIndex = '30000';
+  
+  const box = document.createElement('div');
+  box.style.width = '600px';
+  box.style.maxWidth = '90%';
+  box.style.maxHeight = '85vh';
+  box.style.background = '#fff';
+  box.style.borderRadius = '10px';
+  box.style.padding = '24px';
+  box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+  box.style.display = 'flex';
+  box.style.flexDirection = 'column';
+  box.style.gap = '16px';
+  box.style.overflowY = 'auto';
+  
+  const title = document.createElement('h3');
+  title.textContent = '🔧 Ustaw statusy maszyn';
+  title.style.marginTop = '0';
+  title.style.marginBottom = '0';
+  box.appendChild(title);
+  
+  const dateLabel = document.createElement('label');
+  dateLabel.style.display = 'block';
+  dateLabel.style.fontSize = '14px';
+  dateLabel.style.fontWeight = 'bold';
+  dateLabel.style.marginBottom = '6px';
+  dateLabel.textContent = 'Wybierz datę:';
+  box.appendChild(dateLabel);
+  
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.style.width = '100%';
+  dateInput.style.padding = '8px';
+  dateInput.style.marginBottom = '16px';
+  dateInput.style.border = '1px solid #ccc';
+  dateInput.style.borderRadius = '4px';
+  dateInput.style.fontSize = '14px';
+  dateInput.style.boxSizing = 'border-box';
+  dateInput.value = new Date().toISOString().split('T')[0];
+  box.appendChild(dateInput);
+  
+  const machinesListLabel = document.createElement('label');
+  machinesListLabel.style.display = 'block';
+  machinesListLabel.style.fontSize = '14px';
+  machinesListLabel.style.fontWeight = 'bold';
+  machinesListLabel.style.marginBottom = '8px';
+  machinesListLabel.textContent = 'Statusy maszyn:';
+  box.appendChild(machinesListLabel);
+  
+  const machinesList = document.createElement('div');
+  machinesList.style.display = 'flex';
+  machinesList.style.flexDirection = 'column';
+  machinesList.style.gap = '12px';
+  machinesList.style.maxHeight = '350px';
+  machinesList.style.overflowY = 'auto';
+  machinesList.style.marginBottom = '12px';
+  machinesList.style.paddingRight = '8px';
+  
+  // Wczytaj maszyny i statusy
+  if (!machines || machines.length === 0) {
+    const noMachines = document.createElement('div');
+    noMachines.textContent = 'Brak maszyn do wyświetlenia';
+    noMachines.style.color = '#999';
+    machinesList.appendChild(noMachines);
+  } else {
+    const statusMap = {};
+    
+    // Załaduj istniejące statusy dla wybranej daty
+    const loadStatusesForDate = async (date) => {
+      if (!sb) return;
+      try {
+        const { data } = await sb
+          .from('machine_status_schedule')
+          .select('machine_number, status')
+          .eq('date', date);
+        
+        statusMap = {};
+        (data || []).forEach(row => {
+          statusMap[row.machine_number] = row.status;
+        });
+        
+        // Odśwież radio buttons
+        machines.forEach(machine => {
+          const machineRow = machinesList.querySelector(`[data-machine="${machine.number}"]`);
+          if (machineRow) {
+            const selected = statusMap[machine.number] || machine.status || 'Production';
+            const radios = machineRow.querySelectorAll('input[type="radio"]');
+            radios.forEach(r => r.checked = r.value === selected);
+          }
+        });
+      } catch(e) {
+        console.error('loadStatusesForDate error', e);
+      }
+    };
+    
+    // Wczytaj statusy przy starcie
+    await loadStatusesForDate(dateInput.value);
+    
+    // Słuchaj zmiany daty
+    dateInput.addEventListener('change', async () => {
+      await loadStatusesForDate(dateInput.value);
+    });
+    
+    // Stwórz wiersze dla każdej maszyny
+    machines.forEach(machine => {
+      const machineRow = document.createElement('div');
+      machineRow.setAttribute('data-machine', machine.number);
+      machineRow.style.display = 'flex';
+      machineRow.style.alignItems = 'center';
+      machineRow.style.gap = '12px';
+      machineRow.style.padding = '12px';
+      machineRow.style.background = '#f9f9f9';
+      machineRow.style.borderRadius = '6px';
+      machineRow.style.border = '1px solid #e0e0e0';
+      
+      const machineLabel = document.createElement('label');
+      machineLabel.style.fontWeight = '600';
+      machineLabel.style.minWidth = '80px';
+      machineLabel.style.fontSize = '14px';
+      machineLabel.textContent = `M${machine.number}`;
+      machineRow.appendChild(machineLabel);
+      
+      const statusesDiv = document.createElement('div');
+      statusesDiv.style.display = 'flex';
+      statusesDiv.style.gap = '16px';
+      statusesDiv.style.flex = '1';
+      
+      const statuses = ['Production', 'Stop', 'Maintenance'];
+      const currentStatus = statusMap[machine.number] || machine.status || 'Production';
+      
+      statuses.forEach(status => {
+        const labelWrapper = document.createElement('label');
+        labelWrapper.style.display = 'flex';
+        labelWrapper.style.alignItems = 'center';
+        labelWrapper.style.gap = '6px';
+        labelWrapper.style.cursor = 'pointer';
+        labelWrapper.style.fontSize = '13px';
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `machine-${machine.number}`;
+        radio.value = status;
+        radio.checked = currentStatus === status;
+        radio.style.cursor = 'pointer';
+        
+        const statusLabel = document.createElement('span');
+        statusLabel.textContent = status;
+        
+        labelWrapper.appendChild(radio);
+        labelWrapper.appendChild(statusLabel);
+        statusesDiv.appendChild(labelWrapper);
+      });
+      
+      machineRow.appendChild(statusesDiv);
+      machinesList.appendChild(machineRow);
+    });
+  }
+  
+  box.appendChild(machinesList);
+  
+  // Przyciski akcji
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+  actions.style.justifyContent = 'flex-end';
+  actions.style.marginTop = '12px';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Anuluj';
+  cancelBtn.style.padding = '10px 16px';
+  cancelBtn.style.background = '#f0f0f0';
+  cancelBtn.style.border = '1px solid #ccc';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.cursor = 'pointer';
+  cancelBtn.style.fontSize = '14px';
+  cancelBtn.onclick = () => modal.remove();
+  actions.appendChild(cancelBtn);
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Zapisz';
+  saveBtn.style.padding = '10px 16px';
+  saveBtn.style.background = '#ff9800';
+  saveBtn.style.color = '#fff';
+  saveBtn.style.border = 'none';
+  saveBtn.style.borderRadius = '4px';
+  saveBtn.style.cursor = 'pointer';
+  saveBtn.style.fontSize = '14px';
+  saveBtn.onclick = async () => {
+    const selectedDate = dateInput.value;
+    if (!selectedDate) {
+      alert('Wybierz datę');
+      return;
+    }
+    
+    if (!sb) {
+      alert('Brak połączenia z serwerem');
+      return;
+    }
+    
+    try {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Zapisuję...';
+      
+      // Zbierz statusy
+      const updates = [];
+      machines.forEach(machine => {
+        const machineRow = machinesList.querySelector(`[data-machine="${machine.number}"]`);
+        if (machineRow) {
+          const checked = machineRow.querySelector('input[type="radio"]:checked');
+          if (checked) {
+            updates.push({
+              machine_number: machine.number,
+              date: selectedDate,
+              status: checked.value
+            });
+          }
+        }
+      });
+      
+      // Najpierw usuń stare statusy dla tej daty
+      await sb.from('machine_status_schedule')
+        .delete()
+        .eq('date', selectedDate);
+      
+      // Potem wstaw nowe
+      if (updates.length > 0) {
+        const { error } = await sb.from('machine_status_schedule')
+          .insert(updates);
+        
+        if (error) {
+          throw error;
+        }
+      }
+      
+      alert('✅ Statusy zapisane dla daty ' + selectedDate);
+      modal.remove();
+    } catch(e) {
+      console.error('Save machine status schedule error', e);
+      alert('❌ Błąd: ' + e.message);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Zapisz';
+    }
+  };
+  actions.appendChild(saveBtn);
+  
+  box.appendChild(actions);
+  modal.appendChild(box);
+  modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
 /* -------------------- AdminMachines (bez większych zmian) -------------------- */
 const AdminMachines = (function(){
   let wrapEl = null;

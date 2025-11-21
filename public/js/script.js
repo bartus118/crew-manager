@@ -42,6 +42,7 @@ let assignments = {}; // Nowa zmienna - urlopy na datę
 let vacationsByDate = {}; // Nowa zmienna - urlopy na datę
 let globalAssignments = {}; // Nowa zmienna - przypisania globalne (senior_focke, senior_protos, kartony)
 let stanowistaKartony = {}; // Stanowiska kartony na datę { date: [{ id, employee_id, type, machine_number }, ...] }
+let machineStatusSchedule = {}; // Statusy maszyn per dzień { date: { machineNumber: 'Production' | 'Stop' | 'Maintenance' } }
 let dateInput, tbody, theadRow;
 let currentDate = null;
 
@@ -857,7 +858,52 @@ async function loadVacationsForDate(date) {
   }
 }
 
+/* ============ LOAD MACHINE STATUS SCHEDULE FOR DATE ============ */
+async function loadMachineStatusScheduleForDate(date) {
+  if (!sb || !date) {
+    machineStatusSchedule[date] = {};
+    return;
+  }
+  
+  try {
+    const { data, error } = await sb
+      .from('machine_status_schedule')
+      .select('machine_number, status')
+      .eq('date', date);
+    
+    if (error) {
+      console.error('loadMachineStatusScheduleForDate error', error);
+      machineStatusSchedule[date] = {};
+      return;
+    }
+    
+    // Zamień na object dla szybkiego dostępu: { M26: 'Production', M38: 'Stop' }
+    const statusMap = {};
+    (data || []).forEach(row => {
+      statusMap[row.machine_number] = row.status;
+    });
+    
+    machineStatusSchedule[date] = statusMap;
+    console.log('Loaded machine status schedule for', date, ':', statusMap);
+  } catch(e) {
+    console.error('loadMachineStatusScheduleForDate catch', e);
+    machineStatusSchedule[date] = {};
+  }
+}
+
 /* -------------------- NARZĘDZIA UI -------------------- */
+/* NARZĘDZIA STATUSU */
+function getMachineStatusForDate(machineNumber, date) {
+  // Jeśli jest status dla konkretnego dnia - użyj tego
+  if (machineStatusSchedule[date] && machineStatusSchedule[date][machineNumber]) {
+    return machineStatusSchedule[date][machineNumber];
+  }
+  
+  // Fallback do globalnego statusu maszyny
+  const machine = machines.find(m => m.number === String(machineNumber));
+  return machine ? (machine.status || 'Produkcja') : 'Produkcja';
+}
+
 function statusClassFor(status){
   if(!status) return '';
   const s = String(status).toLowerCase();
@@ -891,7 +937,7 @@ function buildTableFor(date){
       const tr = document.createElement('tr');
       tr.dataset.machine = m.number;
 
-      const effectiveStatus = m.status || vals[1] || 'Produkcja';
+      const effectiveStatus = getMachineStatusForDate(m.number, date);
       const statusCls = statusClassFor(effectiveStatus);
       if(statusCls) tr.classList.add(statusCls);
 
@@ -906,14 +952,14 @@ function buildTableFor(date){
       MACHINE_STATUSES.forEach(st=>{
         const opt = document.createElement('option');
         opt.value = st; opt.textContent = st;
-        if((m.status || effectiveStatus) === st) opt.selected = true;
+        if(effectiveStatus === st) opt.selected = true;
         selectStatus.appendChild(opt);
       });
 
       selectStatus.onchange = async (e) => {
         try{
           const newStatus = e.target.value;
-          const prevStatus = m.status || effectiveStatus || 'Produkcja';
+          const prevStatus = effectiveStatus || 'Produkcja';
           const prevRoles = (STATUS_ACTIVE_ROLES[prevStatus] || []);
           const nextRoles = (STATUS_ACTIVE_ROLES[newStatus] || []);
           const rolesToRemove = prevRoles.filter(r => !nextRoles.includes(r));
@@ -950,8 +996,6 @@ function buildTableFor(date){
             }
           }
 
-          m.status = newStatus;
-
           if(!sb){
             await showNotification('Brak połączenia z serwerem — zmiana statusu jest zablokowana.', 'Błąd', '❌');
             await loadMachines();
@@ -961,9 +1005,24 @@ function buildTableFor(date){
           }
 
           try{
-            const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-            if(error) console.error('update machine status error', error);
-          }catch(err){ console.error('update machine status catch', err); }
+            // Usuń stary status dla tej daty i maszyny (jeśli istnieje)
+            await sb.from('machine_status_schedule').delete()
+              .eq('machine_number', m.number)
+              .eq('date', date);
+            
+            // Wstaw nowy status dla tej daty i maszyny
+            const { error } = await sb.from('machine_status_schedule').insert({
+              machine_number: m.number,
+              date: date,
+              status: newStatus
+            });
+            
+            if(error) console.error('update machine status schedule error', error);
+            
+            // Zaktualizuj cache globalny
+            if(!machineStatusSchedule[date]) machineStatusSchedule[date] = {};
+            machineStatusSchedule[date][m.number] = newStatus;
+          }catch(err){ console.error('update machine status schedule catch', err); }
 
           await loadAssignmentsForDate(date);
           buildTableFor(date);
@@ -1702,6 +1761,99 @@ async function showStanowisoTypeModal(date, machine) {
   modal.appendChild(box);
   modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
   document.body.appendChild(modal);
+}
+
+/* ============ MODAL WYBORU DATY PODMIANY ============ */
+async function showLoadAssignmentDateModal() {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = '30000';
+    
+    const box = document.createElement('div');
+    box.style.width = '400px';
+    box.style.maxWidth = '90%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '25px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Załaduj podmiany z dnia...';
+    title.style.marginTop = '0';
+    title.style.marginBottom = '15px';
+    title.style.fontSize = '18px';
+    box.appendChild(title);
+    
+    const label = document.createElement('label');
+    label.textContent = 'Wybierz datę:';
+    label.style.display = 'block';
+    label.style.marginBottom = '8px';
+    label.style.fontSize = '14px';
+    label.style.fontWeight = 'bold';
+    box.appendChild(label);
+    
+    const datePickerInput = document.createElement('input');
+    datePickerInput.type = 'date';
+    datePickerInput.style.width = '100%';
+    datePickerInput.style.padding = '10px';
+    datePickerInput.style.marginBottom = '15px';
+    datePickerInput.style.border = '1px solid #ccc';
+    datePickerInput.style.borderRadius = '4px';
+    datePickerInput.style.fontSize = '14px';
+    datePickerInput.style.boxSizing = 'border-box';
+    datePickerInput.value = currentDate || dateInput.value || new Date().toISOString().split('T')[0];
+    box.appendChild(datePickerInput);
+    
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.justifyContent = 'flex-end';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Anuluj';
+    cancelBtn.style.padding = '10px 16px';
+    cancelBtn.style.background = '#f0f0f0';
+    cancelBtn.style.border = '1px solid #ccc';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
+    cancelBtn.onclick = () => {
+      modal.remove();
+      resolve(null);
+    };
+    actions.appendChild(cancelBtn);
+    
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Załaduj';
+    okBtn.style.padding = '10px 16px';
+    okBtn.style.background = '#1976d2';
+    okBtn.style.color = '#fff';
+    okBtn.style.border = 'none';
+    okBtn.style.borderRadius = '4px';
+    okBtn.style.cursor = 'pointer';
+    okBtn.style.fontSize = '14px';
+    okBtn.onclick = () => {
+      const selectedDate = datePickerInput.value;
+      if(!selectedDate) {
+        alert('Wybierz datę');
+        return;
+      }
+      modal.remove();
+      resolve(selectedDate);
+    };
+    actions.appendChild(okBtn);
+    
+    box.appendChild(actions);
+    modal.appendChild(box);
+    modal.onclick = (e) => { if(e.target === modal) { modal.remove(); resolve(null); } };
+    document.body.appendChild(modal);
+  });
 }
 
 /* ============ MODAL WYBORU MASZYN ============ */
@@ -2559,6 +2711,7 @@ async function bootstrap(){
     await loadVacationsForDate(currentDate);
     await loadGlobalAssignmentsForDate(currentDate);
     await loadStanowistaForDate(currentDate);
+    await loadMachineStatusScheduleForDate(currentDate);
     buildTableFor(currentDate);
 
     enforceOnlineMode();
@@ -2571,18 +2724,24 @@ async function bootstrap(){
         await loadVacationsForDate(currentDate);
         await loadGlobalAssignmentsForDate(currentDate);
         await loadStanowistaForDate(currentDate);
+        await loadMachineStatusScheduleForDate(currentDate);
         buildTableFor(currentDate);
       });
     }
 
     const loadBtn = document.getElementById('loadDay');
     if(loadBtn) loadBtn.onclick = async ()=>{
-      currentDate = dateInput.value;
-      await loadAssignmentsForDate(currentDate);
-      await loadVacationsForDate(currentDate);
-      await loadGlobalAssignmentsForDate(currentDate);
-      await loadStanowistaForDate(currentDate);
-      buildTableFor(currentDate);
+      const selectedDate = await showLoadAssignmentDateModal();
+      if(selectedDate) {
+        currentDate = selectedDate;
+        dateInput.value = selectedDate;
+        await loadAssignmentsForDate(currentDate);
+        await loadVacationsForDate(currentDate);
+        await loadGlobalAssignmentsForDate(currentDate);
+        await loadStanowistaForDate(currentDate);
+        await loadMachineStatusScheduleForDate(currentDate);
+        buildTableFor(currentDate);
+      }
     };
 
     const exportBtn = document.getElementById('exportDayBtn');
