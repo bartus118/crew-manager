@@ -10,6 +10,7 @@ table.main-table, table {
   margin-top: 10px;
   background: transparent;
   font-size: 13px;
+  min-width: 800px; /* Na mobile wymusi horizontal scroll */
 }
 thead th {
   background: #234a75;
@@ -658,6 +659,277 @@ td.combined-column::-webkit-scrollbar-thumb:hover {
 /* Zaokrąglenie dla kolumny na ostatnim wierszu */
 tbody tr:last-child td.combined-column {
   border-radius: 0 6px 6px 0 !important;
+}
+
+/* ================== MOBILE RESPONSIVE ================== */
+@media (max-width:768px) {
+  /* numer maszyny */
+  td:first-child {
+    width: 40px;
+    max-width: 40px;
+    font-size: 11px;
+  }
+  
+  /* Status */
+  td:nth-child(2) {
+    width: 80px;
+    max-width: 80px;
+  }
+  
+  /* Kolumny roli */
+  td:nth-child(3),  /* Mechanik Focke */
+  td:nth-child(4),  /* Operator Focke */
+  td:nth-child(5),  /* Mechanik Protos */
+  td:nth-child(6),  /* Operator Protos */
+  td:nth-child(7),  /* Pracownik pomocniczy */
+  td:nth-child(8) { /* Inserty */
+    width: 90px;
+    max-width: 90px;
+    font-size: 10px;
+  }
+  
+  /* Kolumna combined (Urlopy + Seniorzy + Stanowiska) */
+  td.combined-column {
+    width: 280px !important;
+    max-width: 280px !important;
+  }
+  
+  /* Select w statusie */
+  td select {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  
+  /* Assign modal */
+  #assignModal .modal-content {
+    width: 95%;
+    max-width: 100%;
+    height: auto;
+  }
+  
+  .assign-big-table-wrap {
+    max-height: 50vh;
+  }
+  
+  .assign-big-table {
+    font-size: 11px;
+  }
+  
+  .assign-big-table thead th {
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+  
+  .assign-big-table td {
+    padding: 4px 3px;
+    font-size: 10px;
+  }
+  
+  .assign-grid {
+    grid-template-columns: 60px repeat(3, 1fr) 150px;
+    gap: 4px;
+    font-size: 11px;
+  }
+  
+  /* Permission alert */
+  .permission-alert-box {
+    padding: 20px 16px;
+  }
+  
+  .permission-alert-icon {
+    font-size: 40px;
+  }
+  
+  .permission-alert-title {
+    font-size: 16px;
+  }
+  
+  .permission-alert-message {
+    font-size: 13px;
+  }
+  
+  /* Admin login */
+  .admin-login-box {
+    padding: 20px 16px;
+  }
+  
+  .admin-login-title {
+    font-size: 18px;
+  }
+  
+  /* Notification */
+  .notification-box {
+    padding: 20px 16px;
+  }
+  
+  .notification-icon {
+    font-size: 40px;
+  }
+  
+  .notification-title {
+    font-size: 16px;
+  }
+  
+  /* Absence/Senior sections */
+  .absence-section {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  
+  .senior-section {
+    padding: 4px 6px;
+  }
+  
+  .senior-role-label {
+    font-size: 11px;
+  }
+  
+  .senior-assign-field {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  
+  .senior-select {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  
+  .stanowiska-section {
+    padding: 4px 6px;
+  }
+  
+  .stanowiska-role-label {
+    font-size: 11px;
+  }
+  
+  .kartony-section {
+    padding: 4px 6px;
+  }
+  
+  .kartony-role-label {
+    font-size: 11px;
+  }
+  
+  /* Buttons in modals */
+  .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .btn.small {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width:480px) {
+  /* numer maszyny - bardzo mały */
+  td:first-child {
+    width: 35px;
+    max-width: 35px;
+    font-size: 10px;
+  }
+  
+  /* Status */
+  td:nth-child(2) {
+    width: 70px;
+    max-width: 70px;
+    font-size: 10px;
+  }
+  
+  /* Kolumny roli - minimal */
+  td:nth-child(3),
+  td:nth-child(4),
+  td:nth-child(5),
+  td:nth-child(6),
+  td:nth-child(7),
+  td:nth-child(8) {
+    width: 70px;
+    max-width: 70px;
+    font-size: 9px;
+    padding: 3px 2px;
+  }
+  
+  /* Kolumna combined - scroll */
+  td.combined-column {
+    width: 250px !important;
+    max-width: 250px !important;
+    font-size: 10px;
+  }
+  
+  /* Select w statusie */
+  td select {
+    padding: 2px 3px;
+    font-size: 9px;
+  }
+  
+  /* Assign modal */
+  #assignModal .modal-content {
+    width: 98%;
+    max-width: 100%;
+    height: auto;
+    padding: 12px;
+  }
+  
+  .assign-big-table-wrap {
+    max-height: 40vh;
+  }
+  
+  .assign-big-table {
+    font-size: 10px;
+  }
+  
+  .assign-big-table thead th {
+    padding: 4px 2px;
+    font-size: 9px;
+  }
+  
+  .assign-big-table td {
+    padding: 3px 2px;
+    font-size: 9px;
+  }
+  
+  .assign-grid {
+    grid-template-columns: 50px repeat(3, 1fr) 100px;
+    gap: 3px;
+    font-size: 10px;
+  }
+  
+  .absence-section {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+  
+  .senior-section {
+    padding: 3px 4px;
+  }
+  
+  .senior-role-label {
+    font-size: 10px;
+  }
+  
+  .senior-assign-field {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  
+  .senior-select {
+    padding: 2px 3px;
+    font-size: 9px;
+  }
+  
+  .stanowiska-section {
+    padding: 3px 4px;
+  }
+  
+  .kartony-section {
+    padding: 3px 4px;
+  }
+  
+  .btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
 }
 
 /* ========== CLICKABLE SENIOR ASSIGN FIELDS ========== */

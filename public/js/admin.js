@@ -2588,6 +2588,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   const backToMainBtn = document.getElementById('backToMainBtn');
   if(backToMainBtn) backToMainBtn.addEventListener('click', () => { window.location.href = './index.html'; });
 
+  // ========== HAMBURGER MENU (Mobile) ==========
+  const adminNavToggle = document.getElementById('adminNavToggle');
+  const adminNav = document.getElementById('adminNav');
+  
+  if(adminNavToggle && adminNav) {
+    // Otwórz/zamknij menu po kliknieciu hamburger
+    adminNavToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      adminNav.classList.toggle('active');
+    });
+    
+    // Zamknij menu gdy klikniesz na jakiś nav-item
+    adminNav.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
+      item.addEventListener('click', () => {
+        adminNav.classList.remove('active');
+      });
+    });
+    
+    // Zamknij menu gdy klikniesz poza nim
+    document.addEventListener('click', (e) => {
+      if(!adminNav.contains(e.target) && !adminNavToggle.contains(e.target)) {
+        adminNav.classList.remove('active');
+      }
+    });
+  }
+
   ensureAuthThen(() => {
     const tabModify = document.getElementById('tabModify');
     const tabEmployees = document.getElementById('tabEmployees');

@@ -159,6 +159,117 @@ table { border-collapse: collapse; width: 100%; }
   .filter-input { min-width:140px; flex:1 1 120px; }
 }
 
+/* ================== MOBILE RESPONSIVE ================== */
+@media (max-width:768px){
+  body {
+    background: #f4f6f8;
+  }
+  
+  /* Top bar - horizontal scroll na mobile */
+  .top-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  
+  .top-bar .brand {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  
+  .top-bar .controls {
+    width: 100%;
+    margin-left: 0;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  
+  .top-bar .btn {
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  
+  /* Input date */
+  .date-input {
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  
+  /* Modal content */
+  .modal .modal-content {
+    width: 95%;
+    max-height: 90vh;
+    padding: 16px 20px;
+  }
+  
+  /* Tabela z horizontal scroll */
+  .table-card {
+    padding: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table-card table {
+    font-size: 12px;
+  }
+  
+  .table-card thead th {
+    padding: 8px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  
+  .table-card tbody td {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width:480px){
+  .top-bar {
+    padding: 8px 8px;
+  }
+  
+  .top-bar .brand {
+    font-size: 13px;
+  }
+  
+  .top-bar .controls {
+    gap: 3px;
+  }
+  
+  .top-bar .btn {
+    padding: 5px 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  
+  .modal .modal-content {
+    width: 98%;
+    padding: 12px 16px;
+  }
+  
+  .table-card {
+    padding: 6px;
+  }
+  
+  .table-card table {
+    font-size: 10px;
+  }
+  
+  .table-card thead th {
+    padding: 6px 3px;
+    font-size: 10px;
+  }
+  
+  .table-card tbody td {
+    padding: 4px 2px;
+    font-size: 10px;
+  }
+}
+
 /* --- table card wrapper (shared) --- */
 .table-card {
   background: var(--card-bg);
@@ -167,7 +278,8 @@ table { border-collapse: collapse; width: 100%; }
   box-shadow: 0 10px 30px rgba(9,30,66,0.04);
   border: 1px solid rgba(15,23,42,0.04);
   margin-top: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* spójne nagłówki tabel (shared baseline) */

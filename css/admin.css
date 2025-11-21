@@ -11,7 +11,7 @@
 .admin-section-content { margin-top: 16px; }
 
 /* admin nav */
-.admin-nav { margin-left: 18px; display:flex; align-items:center; }
+.admin-nav { margin-left: 18px; display:flex; align-items:center; position: relative; }
 .admin-nav .nav-list { display:flex; gap:8px; list-style:none; margin:0; padding:0; align-items:center; }
 .admin-nav .nav-item {
   padding: 8px 12px;
@@ -22,10 +22,25 @@
   cursor: pointer;
   transition: background .12s ease, transform .06s ease;
   border: 1px solid transparent;
+  white-space: nowrap;
 }
 .admin-nav .nav-item:hover { transform: translateY(-2px); background: rgba(255,255,255,0.12); }
 .admin-nav .nav-item.active { background: #ffffff; color:#0b4f88; border-color: rgba(0,0,0,0.06); box-shadow: 0 6px 18px rgba(11,74,136,0.12); }
 .admin-nav .nav-item.disabled { opacity:0.5; cursor:not-allowed; background:transparent; color:rgba(255,255,255,0.75); }
+
+/* Hamburger menu toggle */
+.admin-nav-toggle {
+  display: none;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.95);
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  margin-left: 12px;
+}
 
 /* wyróżniony przycisk powrotu - admin specific */
 .back-cta {
@@ -132,10 +147,203 @@
 .btn.small { padding:6px 8px; font-size:13px; border-radius:7px; }
 
 /* small responsive admin tweaks */
+@media (max-width: 1000px) {
+  .admin-nav .nav-item {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 860px) {
-  .admin-nav { display:none; }
   .top-bar .brand { font-size: 15px; }
   .back-cta { padding: 6px 8px; font-size:14px; }
+  
+  /* Pokaż hamburger menu */
+  .admin-nav-toggle { display: inline-block; }
+  
+  /* Zmień nav na dropdown menu */
+  .admin-nav {
+    position: absolute;
+    top: 50px;
+    left: 0;
+    right: 0;
+    background: #1f6feb;
+    margin: 0;
+    padding: 8px 12px;
+    flex-direction: column;
+    gap: 4px;
+    display: none;
+    z-index: 1000;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .admin-nav.active { display: flex; }
+  
+  .admin-nav .nav-list {
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+  
+  .admin-nav .nav-item {
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-main {
+    padding: 12px;
+  }
+  
+  .admin-section {
+    padding: 16px;
+  }
+  
+  /* Filters na tablet */
+  .emp-filters {
+    gap: 8px;
+  }
+  
+  .filter-input, .filter-select {
+    min-width: 110px;
+    font-size: 13px;
+  }
+  
+  /* Manager cards */
+  .managers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .top-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .top-bar .brand { font-size: 13px; }
+  
+  .admin-nav-toggle {
+    padding: 6px 8px;
+    font-size: 16px;
+    margin-left: 8px;
+  }
+  
+  .admin-nav {
+    top: 45px;
+    padding: 6px;
+  }
+  
+  .admin-nav .nav-item {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .back-cta {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  /* Admin main sections */
+  .admin-main {
+    padding: 12px;
+    gap: 16px;
+  }
+  
+  .admin-section {
+    padding: 16px;
+  }
+  
+  .admin-section-header h2 {
+    font-size: 16px;
+  }
+  
+  .admin-section-desc {
+    font-size: 12px;
+  }
+  
+  /* Filters */
+  .emp-filters {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .filter-input, .filter-select {
+    min-width: 100px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .filter-multi-btn {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  /* Manager cards grid */
+  .managers-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .manager-card {
+    padding: 12px;
+  }
+  
+  .manager-card-name {
+    font-size: 14px;
+  }
+  
+  .manager-card-actions .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  /* Buttons */
+  .btn { 
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .btn.small {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+  
+  /* Tables */
+  #adminMachinesApp table td,
+  #adminMachinesApp table th {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+  
+  #adminEmployeesApp .admin-emp-row {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  /* Load configuration */
+  #loadConfigApp table th {
+    padding: 8px;
+    font-size: 11px;
+  }
+  
+  #loadConfigApp table td {
+    padding: 8px;
+    font-size: 11px;
+  }
+  
+  .utilization-input {
+    width: 50px;
+    padding: 4px;
+    font-size: 12px;
+  }
 }
 
 /* admin tables: use same .table-card wrapper */
