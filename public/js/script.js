@@ -42,6 +42,7 @@ let assignments = {}; // Nowa zmienna - urlopy na datę
 let vacationsByDate = {}; // Nowa zmienna - urlopy na datę
 let globalAssignments = {}; // Nowa zmienna - przypisania globalne (senior_focke, senior_protos, kartony)
 let stanowistaKartony = {}; // Stanowiska kartony na datę { date: [{ id, employee_id, type, machine_number }, ...] }
+let machineStatusSchedule = {}; // Statusy maszyn per dzień { date: { machineNumber: 'Production' | 'Stop' | 'Maintenance' } }
 let dateInput, tbody, theadRow;
 let currentDate = null;
 
@@ -72,6 +73,7 @@ function getRoleUtilization(machineNumber) {
 function getEmployeeUtilizationForDate(employeeId, date) {
   const dateData = assignments[date] || {};
   const globalData = globalAssignments[date] || {};
+  const todayStanowiska = stanowistaKartony[date] || [];
   let totalUsed = 0;
   
   machines.forEach(machine => {
@@ -94,13 +96,24 @@ function getEmployeeUtilizationForDate(employeeId, date) {
     }
   });
   
-  // Dodaj globalne przypisania (senior_focke, senior_protos, kartony)
+  // Dodaj globalne przypisania (senior_focke, senior_protos)
   Object.entries(globalData).forEach(([role, data]) => {
     if(!data || !data.employee_id) return;
     // Sprawdź czy to nasz pracownik
     if(data.employee_id === employeeId || data.employee_id === `mgr_${employeeId}` || data.employee_id === `rdnst_${employeeId}`) {
-      // Globalne przypisania mają 100% dla wszystkich (senior_focke, senior_protos, kartony)
-      const rolePercent = 100;
+      // Senior przypisania mają 100%
+      if(role === 'senior_focke' || role === 'senior_protos') {
+        totalUsed += 100;
+      }
+    }
+  });
+  
+  // Dodaj stanowiska (kartony)
+  todayStanowiska.forEach(stanowisko => {
+    // Sprawdź czy to nasz pracownik
+    if(stanowisko.employee_id === employeeId || stanowisko.employee_id === `mgr_${employeeId}` || stanowisko.employee_id === `rdnst_${employeeId}`) {
+      // Użyj procent z mapy stanowisk
+      const rolePercent = STANOWISKA_UTILIZATION[stanowisko.stanowisko_type] || 100;
       totalUsed += rolePercent;
     }
   });
@@ -550,6 +563,15 @@ const STATUS_ACTIVE_ROLES = {
   'Stop': []
 };
 
+// Procenty obciążenia dla stanowisk dodatkowych (kartony)
+const STANOWISKA_UTILIZATION = {
+  'czyszczenie_postoj': 100,  // Czyszczenie - Postój
+  'ojt': 100,                 // OJT
+  'podmiany': 100,            // Podmiany
+  'hold_prucie': 100,         // Hold Prucie
+  'tpm': 50                   // TPM
+};
+
 const DEFAULT_MACHINES = ['11','12','15','16','17','18','21','22','24','25','26','27','28','31','32','33','34','35','94','96'];
 
 /* -------------------- pomoc: czekaj na globalne supabase (CDN) -------------------- */
@@ -731,24 +753,46 @@ async function loadAssignmentsForDate(date){
         return;
       }
 
-      if(!machines.find(mm => String(mm.number) === String(a.machine_number))){
-        const newMachine = { number: String(a.machine_number), ord: machines.length+1, status: 'Produkcja' };
-        machines.push(newMachine);
-        if (sb) {
-          sb.from('machines').insert([{ number: newMachine.number, ord: newMachine.ord, default_view:true, status: newMachine.status }])
-            .then(res => { if(res.error) console.warn('sync new machine error', res.error); })
-            .catch(err => console.warn('sync new machine error', err));
-        }
-        map[newMachine.number] = [newMachine.number, newMachine.status];
-        for(let i=2;i<COLUMNS.length;i++) map[newMachine.number].push('');
+      // WAŻNE: Jeśli machine_number zawiera przecinki - to Podmiany (multi-machine assignment)
+      // Podziel na poszczególne numery i obsługuj każdy osobno
+      let machineNumbers = [];
+      if (a.machine_number && String(a.machine_number).includes(',')) {
+        // Podmiany - podziel string
+        machineNumbers = String(a.machine_number).split(',').map(n => n.trim());
+      } else {
+        // Zwykłe przypisanie - jedna maszyna
+        machineNumbers = [a.machine_number];
       }
 
-      const idx = COLUMNS.findIndex(c=>c.key === a.role);
-      if(idx > -1){
-        if(!map[a.machine_number]){ const row=[a.machine_number,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[a.machine_number]=row; }
-        // Przechowuj oryginalny employee_id (może zawierać prefiks "mgr_", "rdnst_" lub być UUID)
-        map[a.machine_number][idx] = a.employee_id;
-      }
+      // Dla każdego numeru maszyny z tego przypisania
+      machineNumbers.forEach(machineNum => {
+        if(!machineNum) return; // Pomiń puste
+        
+        if(!machines.find(mm => String(mm.number) === String(machineNum))){
+          // TYLKO dla Podmiany: nie dodawaj nowych maszyn!
+          if (a.machine_number && String(a.machine_number).includes(',')) {
+            console.warn('Skipping non-existent machine in Podmiany:', machineNum);
+            return;
+          }
+          
+          const newMachine = { number: String(machineNum), ord: machines.length+1, status: 'Produkcja' };
+          machines.push(newMachine);
+          if (sb) {
+            sb.from('machines').insert([{ number: newMachine.number, ord: newMachine.ord, default_view:true, status: newMachine.status }])
+              .then(res => { if(res.error) console.warn('sync new machine error', res.error); })
+              .catch(err => console.warn('sync new machine error', err));
+          }
+          map[newMachine.number] = [newMachine.number, newMachine.status];
+          for(let i=2;i<COLUMNS.length;i++) map[newMachine.number].push('');
+        }
+
+        const idx = COLUMNS.findIndex(c=>c.key === a.role);
+        if(idx > -1){
+          if(!map[machineNum]){ const row=[machineNum,'Produkcja']; for(let i=2;i<COLUMNS.length;i++) row.push(''); map[machineNum]=row; }
+          // Przechowuj oryginalny employee_id (może zawierać prefiks "mgr_", "rdnst_" lub być UUID)
+          map[machineNum][idx] = a.employee_id;
+        }
+      });
     });
 
     assignments[date] = map;
@@ -857,7 +901,52 @@ async function loadVacationsForDate(date) {
   }
 }
 
+/* ============ LOAD MACHINE STATUS SCHEDULE FOR DATE ============ */
+async function loadMachineStatusScheduleForDate(date) {
+  if (!sb || !date) {
+    machineStatusSchedule[date] = {};
+    return;
+  }
+  
+  try {
+    const { data, error } = await sb
+      .from('machine_status_schedule')
+      .select('machine_number, status')
+      .eq('date', date);
+    
+    if (error) {
+      console.error('loadMachineStatusScheduleForDate error', error);
+      machineStatusSchedule[date] = {};
+      return;
+    }
+    
+    // Zamień na object dla szybkiego dostępu: { M26: 'Production', M38: 'Stop' }
+    const statusMap = {};
+    (data || []).forEach(row => {
+      statusMap[row.machine_number] = row.status;
+    });
+    
+    machineStatusSchedule[date] = statusMap;
+    console.log('Loaded machine status schedule for', date, ':', statusMap);
+  } catch(e) {
+    console.error('loadMachineStatusScheduleForDate catch', e);
+    machineStatusSchedule[date] = {};
+  }
+}
+
 /* -------------------- NARZĘDZIA UI -------------------- */
+/* NARZĘDZIA STATUSU */
+function getMachineStatusForDate(machineNumber, date) {
+  // Jeśli jest status dla konkretnego dnia - użyj tego
+  if (machineStatusSchedule[date] && machineStatusSchedule[date][machineNumber]) {
+    return machineStatusSchedule[date][machineNumber];
+  }
+  
+  // Fallback do globalnego statusu maszyny
+  const machine = machines.find(m => m.number === String(machineNumber));
+  return machine ? (machine.status || 'Produkcja') : 'Produkcja';
+}
+
 function statusClassFor(status){
   if(!status) return '';
   const s = String(status).toLowerCase();
@@ -891,7 +980,7 @@ function buildTableFor(date){
       const tr = document.createElement('tr');
       tr.dataset.machine = m.number;
 
-      const effectiveStatus = m.status || vals[1] || 'Produkcja';
+      const effectiveStatus = getMachineStatusForDate(m.number, date);
       const statusCls = statusClassFor(effectiveStatus);
       if(statusCls) tr.classList.add(statusCls);
 
@@ -906,14 +995,14 @@ function buildTableFor(date){
       MACHINE_STATUSES.forEach(st=>{
         const opt = document.createElement('option');
         opt.value = st; opt.textContent = st;
-        if((m.status || effectiveStatus) === st) opt.selected = true;
+        if(effectiveStatus === st) opt.selected = true;
         selectStatus.appendChild(opt);
       });
 
       selectStatus.onchange = async (e) => {
         try{
           const newStatus = e.target.value;
-          const prevStatus = m.status || effectiveStatus || 'Produkcja';
+          const prevStatus = effectiveStatus || 'Produkcja';
           const prevRoles = (STATUS_ACTIVE_ROLES[prevStatus] || []);
           const nextRoles = (STATUS_ACTIVE_ROLES[newStatus] || []);
           const rolesToRemove = prevRoles.filter(r => !nextRoles.includes(r));
@@ -950,8 +1039,6 @@ function buildTableFor(date){
             }
           }
 
-          m.status = newStatus;
-
           if(!sb){
             await showNotification('Brak połączenia z serwerem — zmiana statusu jest zablokowana.', 'Błąd', '❌');
             await loadMachines();
@@ -961,9 +1048,24 @@ function buildTableFor(date){
           }
 
           try{
-            const { error } = await sb.from('machines').update({ status: newStatus }).eq('number', m.number);
-            if(error) console.error('update machine status error', error);
-          }catch(err){ console.error('update machine status catch', err); }
+            // Usuń stary status dla tej daty i maszyny (jeśli istnieje)
+            await sb.from('machine_status_schedule').delete()
+              .eq('machine_number', m.number)
+              .eq('date', date);
+            
+            // Wstaw nowy status dla tej daty i maszyny
+            const { error } = await sb.from('machine_status_schedule').insert({
+              machine_number: m.number,
+              date: date,
+              status: newStatus
+            });
+            
+            if(error) console.error('update machine status schedule error', error);
+            
+            // Zaktualizuj cache globalny
+            if(!machineStatusSchedule[date]) machineStatusSchedule[date] = {};
+            machineStatusSchedule[date][m.number] = newStatus;
+          }catch(err){ console.error('update machine status schedule catch', err); }
 
           await loadAssignmentsForDate(date);
           buildTableFor(date);
@@ -1012,7 +1114,7 @@ function buildTableFor(date){
 
       COLUMNS.slice(2).forEach(col => {
         const td = document.createElement('td');
-        const active = (STATUS_ACTIVE_ROLES[m.status || effectiveStatus] || []).includes(col.key);
+        const active = (STATUS_ACTIVE_ROLES[effectiveStatus] || []).includes(col.key);
         const idx = COLUMNS.findIndex(c => c.key === col.key);
         const val = vals[idx] || '';
 
@@ -1472,13 +1574,16 @@ async function saveAssignment(date,machine,role,empId){
         // Połącz wszystkie numery maszyn w jeden string (26,38,45) - przechowaj w machine_number
         const machinesString = ctx.machineNumbers.join(',');
         
+        // Pobierz procent dla tego stanowiska z mapy
+        const utilizationPercent = STANOWISKA_UTILIZATION[ctx.stanowisoType] || 100;
+        
         const payload = {
           date,
           machine_number: machinesString, // Przechowaj listę maszyn tutaj
           role: 'kartony',
           employee_id: storeId,
           stanowisko_type: ctx.stanowisoType,
-          utilization_percent: 100
+          utilization_percent: utilizationPercent
         };
         
         const { data, error } = await sb.from('assignments').insert([payload]);
@@ -1492,13 +1597,16 @@ async function saveAssignment(date,machine,role,empId){
         // Single stanowisko
         const machineNum = ctx.machine ? (ctx.machine.number || null) : null;
         
+        // Pobierz procent dla tego stanowiska z mapy
+        const utilizationPercent = STANOWISKA_UTILIZATION[ctx.stanowisoType] || 100;
+        
         const payload = {
           date,
           machine_number: machineNum,
           role: 'kartony',
           employee_id: storeId,
           stanowisko_type: ctx.stanowisoType,
-          utilization_percent: 100
+          utilization_percent: utilizationPercent
         };
         
         console.log('INSERT stanowisko payload:', payload);
@@ -1702,6 +1810,297 @@ async function showStanowisoTypeModal(date, machine) {
   modal.appendChild(box);
   modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
   document.body.appendChild(modal);
+}
+
+/* ============ MODAL DO ZMIANY STATUSÓW WSZYSTKICH MASZYN NARAZ ============ */
+async function showBulkStatusModal() {
+  if (!currentDate) {
+    await showNotification('Najpierw wybierz datę', 'Błąd', '❌');
+    return;
+  }
+
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = '30000';
+    
+    const box = document.createElement('div');
+    box.style.width = '700px';
+    box.style.maxWidth = '95%';
+    box.style.maxHeight = '85vh';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '20px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+    box.style.overflowY = 'auto';
+    
+    const title = document.createElement('h3');
+    title.textContent = `⚙️ Ustaw statusy maszyn na ${currentDate}`;
+    title.style.marginTop = '0';
+    title.style.marginBottom = '15px';
+    box.appendChild(title);
+    
+    // Przechowuj wybrane statusy: { machineNumber: selectedStatus }
+    const selectedStatuses = {};
+    
+    // Wczytaj aktualne statusy
+    machines.forEach(machine => {
+      const currentStatus = getMachineStatusForDate(machine.number, currentDate);
+      selectedStatuses[machine.number] = currentStatus;
+    });
+    
+    // Lista maszyn z radio buttons
+    const machinesList = document.createElement('div');
+    machinesList.style.display = 'flex';
+    machinesList.style.flexDirection = 'column';
+    machinesList.style.gap = '12px';
+    machinesList.style.marginBottom = '15px';
+    
+    machines.forEach(machine => {
+      const machineRow = document.createElement('div');
+      machineRow.style.display = 'flex';
+      machineRow.style.alignItems = 'center';
+      machineRow.style.gap = '12px';
+      machineRow.style.padding = '10px';
+      machineRow.style.background = '#f9fafb';
+      machineRow.style.borderRadius = '6px';
+      machineRow.style.border = '1px solid #e0e0e0';
+      
+      // Numer maszyny
+      const machineNum = document.createElement('div');
+      machineNum.textContent = machine.number;
+      machineNum.style.fontWeight = '700';
+      machineNum.style.minWidth = '50px';
+      machineNum.style.color = '#0f1724';
+      machineRow.appendChild(machineNum);
+      
+      // Radio buttons dla statusów
+      const statusContainer = document.createElement('div');
+      statusContainer.style.display = 'flex';
+      statusContainer.style.gap = '10px';
+      statusContainer.style.flexWrap = 'wrap';
+      statusContainer.style.flex = '1';
+      
+      MACHINE_STATUSES.forEach(status => {
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '5px';
+        label.style.cursor = 'pointer';
+        label.style.fontSize = '12px';
+        label.style.padding = '4px 8px';
+        label.style.borderRadius = '4px';
+        label.style.transition = 'background 0.2s';
+        
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `machine-${machine.number}`;
+        radio.value = status;
+        radio.checked = selectedStatuses[machine.number] === status;
+        radio.onchange = () => {
+          selectedStatuses[machine.number] = status;
+          label.style.background = '#e3f2fd';
+        };
+        
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(status));
+        
+        if (radio.checked) {
+          label.style.background = '#e3f2fd';
+        }
+        
+        statusContainer.appendChild(label);
+      });
+      
+      machineRow.appendChild(statusContainer);
+      machinesList.appendChild(machineRow);
+    });
+    
+    box.appendChild(machinesList);
+    
+    // Przyciski
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.marginTop = '15px';
+    actions.style.paddingTop = '15px';
+    actions.style.borderTop = '1px solid #e0e0e0';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Anuluj';
+    cancelBtn.style.padding = '10px 16px';
+    cancelBtn.style.background = '#f0f0f0';
+    cancelBtn.style.border = '1px solid #ccc';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
+    cancelBtn.onclick = () => {
+      modal.remove();
+      resolve(null);
+    };
+    actions.appendChild(cancelBtn);
+    
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '💾 Zapisz';
+    saveBtn.style.padding = '10px 16px';
+    saveBtn.style.background = '#1976d2';
+    saveBtn.style.color = '#fff';
+    saveBtn.style.border = 'none';
+    saveBtn.style.borderRadius = '4px';
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.fontSize = '14px';
+    saveBtn.style.fontWeight = '600';
+    saveBtn.onclick = async () => {
+      try {
+        if (!sb) {
+          await showNotification('Brak połączenia z serwerem', 'Błąd', '❌');
+          return;
+        }
+        
+        // Dla każdej maszyny zapisz nowy status
+        for (const [machineNumber, newStatus] of Object.entries(selectedStatuses)) {
+          const currentStatus = getMachineStatusForDate(machineNumber, currentDate);
+          
+          // Jeśli się zmienił - zapisz
+          if (currentStatus !== newStatus) {
+            try {
+              // Usuń stary status dla tej daty i maszyny
+              await sb.from('machine_status_schedule').delete()
+                .eq('machine_number', machineNumber)
+                .eq('date', currentDate);
+              
+              // Wstaw nowy status
+              const { error } = await sb.from('machine_status_schedule').insert({
+                machine_number: machineNumber,
+                date: currentDate,
+                status: newStatus
+              });
+              
+              if (error) console.error('Error saving status for', machineNumber, error);
+            } catch (err) {
+              console.error('Exception saving status for', machineNumber, err);
+            }
+          }
+        }
+        
+        // Przeładuj dane i odśwież tabelę
+        await loadMachineStatusScheduleForDate(currentDate);
+        buildTableFor(currentDate);
+        
+        modal.remove();
+        await showNotification('✅ Statusy zapisane!', 'Sukces', '✅');
+        resolve(selectedStatuses);
+      } catch (err) {
+        console.error('showBulkStatusModal save error', err);
+        await showNotification(`Błąd: ${err.message}`, 'Błąd', '❌');
+      }
+    };
+    actions.appendChild(saveBtn);
+    
+    box.appendChild(actions);
+    modal.appendChild(box);
+    modal.onclick = (e) => { if (e.target === modal) { modal.remove(); resolve(null); } };
+    document.body.appendChild(modal);
+  });
+}
+
+/* ============ MODAL WYBORU DATY PODMIANY ============ */
+async function showLoadAssignmentDateModal() {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = '30000';
+    
+    const box = document.createElement('div');
+    box.style.width = '400px';
+    box.style.maxWidth = '90%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '25px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Załaduj podmiany z dnia...';
+    title.style.marginTop = '0';
+    title.style.marginBottom = '15px';
+    title.style.fontSize = '18px';
+    box.appendChild(title);
+    
+    const label = document.createElement('label');
+    label.textContent = 'Wybierz datę:';
+    label.style.display = 'block';
+    label.style.marginBottom = '8px';
+    label.style.fontSize = '14px';
+    label.style.fontWeight = 'bold';
+    box.appendChild(label);
+    
+    const datePickerInput = document.createElement('input');
+    datePickerInput.type = 'date';
+    datePickerInput.style.width = '100%';
+    datePickerInput.style.padding = '10px';
+    datePickerInput.style.marginBottom = '15px';
+    datePickerInput.style.border = '1px solid #ccc';
+    datePickerInput.style.borderRadius = '4px';
+    datePickerInput.style.fontSize = '14px';
+    datePickerInput.style.boxSizing = 'border-box';
+    datePickerInput.value = currentDate || dateInput.value || new Date().toISOString().split('T')[0];
+    box.appendChild(datePickerInput);
+    
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.justifyContent = 'flex-end';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Anuluj';
+    cancelBtn.style.padding = '10px 16px';
+    cancelBtn.style.background = '#f0f0f0';
+    cancelBtn.style.border = '1px solid #ccc';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
+    cancelBtn.onclick = () => {
+      modal.remove();
+      resolve(null);
+    };
+    actions.appendChild(cancelBtn);
+    
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Załaduj';
+    okBtn.style.padding = '10px 16px';
+    okBtn.style.background = '#1976d2';
+    okBtn.style.color = '#fff';
+    okBtn.style.border = 'none';
+    okBtn.style.borderRadius = '4px';
+    okBtn.style.cursor = 'pointer';
+    okBtn.style.fontSize = '14px';
+    okBtn.onclick = () => {
+      const selectedDate = datePickerInput.value;
+      if(!selectedDate) {
+        alert('Wybierz datę');
+        return;
+      }
+      modal.remove();
+      resolve(selectedDate);
+    };
+    actions.appendChild(okBtn);
+    
+    box.appendChild(actions);
+    modal.appendChild(box);
+    modal.onclick = (e) => { if(e.target === modal) { modal.remove(); resolve(null); } };
+    document.body.appendChild(modal);
+  });
 }
 
 /* ============ MODAL WYBORU MASZYN ============ */
@@ -2559,6 +2958,7 @@ async function bootstrap(){
     await loadVacationsForDate(currentDate);
     await loadGlobalAssignmentsForDate(currentDate);
     await loadStanowistaForDate(currentDate);
+    await loadMachineStatusScheduleForDate(currentDate);
     buildTableFor(currentDate);
 
     enforceOnlineMode();
@@ -2571,22 +2971,36 @@ async function bootstrap(){
         await loadVacationsForDate(currentDate);
         await loadGlobalAssignmentsForDate(currentDate);
         await loadStanowistaForDate(currentDate);
+        await loadMachineStatusScheduleForDate(currentDate);
         buildTableFor(currentDate);
       });
     }
 
     const loadBtn = document.getElementById('loadDay');
     if(loadBtn) loadBtn.onclick = async ()=>{
-      currentDate = dateInput.value;
-      await loadAssignmentsForDate(currentDate);
-      await loadVacationsForDate(currentDate);
-      await loadGlobalAssignmentsForDate(currentDate);
-      await loadStanowistaForDate(currentDate);
-      buildTableFor(currentDate);
+      const selectedDate = await showLoadAssignmentDateModal();
+      if(selectedDate) {
+        currentDate = selectedDate;
+        dateInput.value = selectedDate;
+        await loadAssignmentsForDate(currentDate);
+        await loadVacationsForDate(currentDate);
+        await loadGlobalAssignmentsForDate(currentDate);
+        await loadStanowistaForDate(currentDate);
+        await loadMachineStatusScheduleForDate(currentDate);
+        buildTableFor(currentDate);
+      }
     };
 
     const exportBtn = document.getElementById('exportDayBtn');
     if(exportBtn) exportBtn.onclick = ()=> exportDayToCSV(currentDate || dateInput.value);
+
+    // Przycisk do ustawiania statusów maszyn
+    const bulkStatusBtn = document.getElementById('bulkStatusBtn');
+    if(bulkStatusBtn) {
+      bulkStatusBtn.onclick = async () => {
+        await showBulkStatusModal();
+      };
+    }
 
     // Przycisk RDNST
     const rdnstBtn = document.getElementById('rdnstBtn');

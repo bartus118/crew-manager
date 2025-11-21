@@ -74,6 +74,26 @@ Kolumny:
 - `firstname` - TEXT
 - `other_info` - JSONB
 
+### `machine_status_schedule` - Tabela statusów maszyn na datę
+Przechowuje statusy maszyn na konkretne daty (przesłania globalny status).
+
+```sql
+CREATE TABLE machine_status_schedule (
+  id BIGSERIAL PRIMARY KEY,
+  machine_number VARCHAR(10) NOT NULL,
+  date DATE NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(machine_number, date)
+);
+
+CREATE INDEX idx_machine_status_schedule_date 
+  ON machine_status_schedule(date);
+CREATE INDEX idx_machine_status_schedule_machine_date 
+  ON machine_status_schedule(machine_number, date);
+```
+
 ## Kroki konfiguracji
 
 1. Zaloguj się do Supabase Dashboard
@@ -83,11 +103,14 @@ Kolumny:
 5. Skopiuj i uruchom SQL dla `vacation_limits`
 6. Utwórz nową query
 7. Skopiuj i uruchom SQL dla `vacation_plans`
-8. Zweryfikuj że tabele się pojawiły w Data Browser
+8. Utwórz nową query
+9. Skopiuj i uruchom SQL dla `machine_status_schedule`
+10. Zweryfikuj że tabele się pojawiły w Data Browser
 
 ## Uwagi
 
-- Obie tabele używają JSONB dla elastyczności
+- Obie tabele `vacation_*` używają JSONB dla elastyczności
 - Indeksy zoptymalizowane dla najczęstszych zapytań
-- UNIQUE constraint zapobiega duplikowaniu planów dla tego samego pracownika i roku
+- UNIQUE constraint zapobiega duplikowaniu planów dla tego samego pracownika i roku / statusu dla tej samej maszyny i daty
 - Kolumna `plan_data` zawiera obiekty z datami w formacie `YYYY-MM-DD`
+- Tabela `machine_status_schedule` przechowuje statusy per-dzień dla maszyn, przesłaniając globalny status z tabeli `machines`
