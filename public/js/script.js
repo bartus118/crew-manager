@@ -2632,6 +2632,338 @@ document.addEventListener('DOMContentLoaded', () => {
   }catch(e){ console.error('adminLoginBtn setup error', e); }
 });
 
+/* ============ MODAL WYBORU DATY ============ */
+async function showLoadAssignmentDateModal() {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    modal.style.background = 'rgba(0,0,0,0.4)';
+    modal.style.zIndex = '30000';
+    
+    const box = document.createElement('div');
+    box.style.width = '400px';
+    box.style.maxWidth = '90%';
+    box.style.background = '#fff';
+    box.style.borderRadius = '10px';
+    box.style.padding = '25px';
+    box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Załaduj dane z dnia...';
+    title.style.marginTop = '0';
+    title.style.marginBottom = '15px';
+    title.style.fontSize = '18px';
+    box.appendChild(title);
+    
+    const label = document.createElement('label');
+    label.textContent = 'Wybierz datę:';
+    label.style.display = 'block';
+    label.style.marginBottom = '8px';
+    label.style.fontSize = '14px';
+    label.style.fontWeight = 'bold';
+    box.appendChild(label);
+    
+    const datePickerInput = document.createElement('input');
+    datePickerInput.type = 'date';
+    datePickerInput.style.width = '100%';
+    datePickerInput.style.padding = '10px';
+    datePickerInput.style.marginBottom = '15px';
+    datePickerInput.style.border = '1px solid #ccc';
+    datePickerInput.style.borderRadius = '4px';
+    datePickerInput.style.fontSize = '14px';
+    datePickerInput.style.boxSizing = 'border-box';
+    datePickerInput.value = currentDate || dateInput.value || new Date().toISOString().split('T')[0];
+    box.appendChild(datePickerInput);
+    
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.justifyContent = 'flex-end';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Anuluj';
+    cancelBtn.style.padding = '10px 16px';
+    cancelBtn.style.background = '#f0f0f0';
+    cancelBtn.style.border = '1px solid #ccc';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
+    cancelBtn.onclick = () => {
+      modal.remove();
+      resolve(null);
+    };
+    actions.appendChild(cancelBtn);
+    
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Załaduj';
+    okBtn.style.padding = '10px 16px';
+    okBtn.style.background = '#1976d2';
+    okBtn.style.color = '#fff';
+    okBtn.style.border = 'none';
+    okBtn.style.borderRadius = '4px';
+    okBtn.style.cursor = 'pointer';
+    okBtn.style.fontSize = '14px';
+    okBtn.onclick = () => {
+      const selectedDate = datePickerInput.value;
+      if(!selectedDate) {
+        alert('Wybierz datę');
+        return;
+      }
+      modal.remove();
+      resolve(selectedDate);
+    };
+    actions.appendChild(okBtn);
+    
+    box.appendChild(actions);
+    modal.appendChild(box);
+    modal.onclick = (e) => { if(e.target === modal) { modal.remove(); resolve(null); } };
+    document.body.appendChild(modal);
+  });
+}
+
+/* ============ MODAL USTAWIANIA STATUSÓW MASZYN (BULK) ============ */
+async function showBulkStatusModal() {
+  const modal = document.createElement('div');
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.background = 'rgba(0,0,0,0.4)';
+  modal.style.zIndex = '30000';
+  
+  const box = document.createElement('div');
+  box.style.width = '500px';
+  box.style.maxWidth = '90%';
+  box.style.maxHeight = '80vh';
+  box.style.background = '#fff';
+  box.style.borderRadius = '10px';
+  box.style.padding = '25px';
+  box.style.boxShadow = '0 10px 30px rgba(0,0,0,0.2)';
+  box.style.overflowY = 'auto';
+  box.style.display = 'flex';
+  box.style.flexDirection = 'column';
+  
+  const title = document.createElement('h3');
+  title.textContent = `⚙️ Ustaw statusy maszyn na ${currentDate}`;
+  title.style.marginTop = '0';
+  title.style.marginBottom = '15px';
+  box.appendChild(title);
+  
+  const quickSetDiv = document.createElement('div');
+  quickSetDiv.style.background = '#f5f5f5';
+  quickSetDiv.style.padding = '12px';
+  quickSetDiv.style.borderRadius = '6px';
+  quickSetDiv.style.marginBottom = '15px';
+  
+  const quickLabel = document.createElement('label');
+  quickLabel.textContent = '⚡ Szybkie ustawienie - wpisz numery maszyn które jadą (np: 26,38,45):';
+  quickLabel.style.display = 'block';
+  quickLabel.style.marginBottom = '8px';
+  quickLabel.style.fontSize = '13px';
+  quickLabel.style.fontWeight = '600';
+  quickSetDiv.appendChild(quickLabel);
+  
+  const quickInput = document.createElement('input');
+  quickInput.type = 'text';
+  quickInput.placeholder = 'np: 26,38,45 lub 26 38 45 lub 26;38;45';
+  quickInput.style.width = '100%';
+  quickInput.style.padding = '8px';
+  quickInput.style.borderRadius = '4px';
+  quickInput.style.border = '1px solid #ddd';
+  quickInput.style.boxSizing = 'border-box';
+  quickInput.style.marginBottom = '8px';
+  quickSetDiv.appendChild(quickInput);
+  
+  const quickSetBtn = document.createElement('button');
+  quickSetBtn.textContent = 'Ustaw: Wpisane = Produkcja, Reszta = Stop';
+  quickSetBtn.style.width = '100%';
+  quickSetBtn.style.padding = '8px';
+  quickSetBtn.style.background = '#4caf50';
+  quickSetBtn.style.color = '#fff';
+  quickSetBtn.style.border = 'none';
+  quickSetBtn.style.borderRadius = '4px';
+  quickSetBtn.style.cursor = 'pointer';
+  quickSetBtn.style.fontSize = '13px';
+  quickSetBtn.style.fontWeight = '600';
+  quickSetBtn.onclick = () => {
+    const input = quickInput.value.trim();
+    if(!input) {
+      alert('Wpisz numery maszyn');
+      return;
+    }
+    
+    // Rozdziel po dowolnym separatorze: przecinek, spacja, średnik, itp.
+    const runningMachines = input.split(/[,;\s]+/).filter(s => s.length > 0);
+    
+    // Ustaw wszystkie selecty
+    const selects = table.querySelectorAll('select');
+    machines.forEach((m, idx) => {
+      if(runningMachines.includes(m.number)) {
+        selects[idx].value = 'Produkcja';
+      } else {
+        selects[idx].value = 'Stop';
+      }
+    });
+    
+    alert(`✅ Ustawiono:\n- Produkcja: ${runningMachines.join(', ')}\n- Stop: reszta`);
+  };
+  quickSetDiv.appendChild(quickSetBtn);
+  box.appendChild(quickSetDiv);
+  
+  const tableWrapper = document.createElement('div');
+  tableWrapper.style.overflowY = 'auto';
+  tableWrapper.style.flex = '1';
+  tableWrapper.style.marginBottom = '15px';
+  tableWrapper.style.border = '1px solid #ddd';
+  tableWrapper.style.borderRadius = '6px';
+  
+  const table = document.createElement('table');
+  table.style.width = '100%';
+  table.style.borderCollapse = 'collapse';
+  table.style.minWidth = '100%';
+  
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  
+  const machineHeader = document.createElement('th');
+  machineHeader.textContent = 'Maszyna';
+  machineHeader.style.textAlign = 'left';
+  machineHeader.style.padding = '8px';
+  machineHeader.style.borderBottom = '2px solid #ddd';
+  machineHeader.style.fontWeight = 'bold';
+  headerRow.appendChild(machineHeader);
+  
+  const statusHeader = document.createElement('th');
+  statusHeader.textContent = 'Status';
+  statusHeader.style.textAlign = 'left';
+  statusHeader.style.padding = '8px';
+  statusHeader.style.borderBottom = '2px solid #ddd';
+  statusHeader.style.fontWeight = 'bold';
+  headerRow.appendChild(statusHeader);
+  
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  
+  const tbody = document.createElement('tbody');
+  
+  machines.forEach(m => {
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid #eee';
+    
+    const machineCell = document.createElement('td');
+    machineCell.textContent = `M${m.number}`;
+    machineCell.style.padding = '8px';
+    machineCell.style.fontWeight = '600';
+    row.appendChild(machineCell);
+    
+    const statusCell = document.createElement('td');
+    statusCell.style.padding = '8px';
+    
+    const currentStatus = getMachineStatusForDate(m.number, currentDate);
+    
+    const select = document.createElement('select');
+    select.style.width = '100%';
+    select.style.padding = '6px';
+    select.style.borderRadius = '4px';
+    select.style.border = '1px solid #ddd';
+    
+    MACHINE_STATUSES.forEach(status => {
+      const opt = document.createElement('option');
+      opt.value = status;
+      opt.textContent = status;
+      if(status === currentStatus) opt.selected = true;
+      select.appendChild(opt);
+    });
+    
+    statusCell.appendChild(select);
+    row.appendChild(statusCell);
+    
+    tbody.appendChild(row);
+  });
+  
+  table.appendChild(tbody);
+  tableWrapper.appendChild(table);
+  box.appendChild(tableWrapper);
+  
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+  actions.style.justifyContent = 'flex-end';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Anuluj';
+  cancelBtn.style.padding = '10px 16px';
+  cancelBtn.style.background = '#f0f0f0';
+  cancelBtn.style.border = '1px solid #ccc';
+  cancelBtn.style.borderRadius = '4px';
+  cancelBtn.style.cursor = 'pointer';
+  cancelBtn.onclick = () => modal.remove();
+  actions.appendChild(cancelBtn);
+  
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Zapisz zmiany';
+  saveBtn.style.padding = '10px 16px';
+  saveBtn.style.background = '#1976d2';
+  saveBtn.style.color = '#fff';
+  saveBtn.style.border = 'none';
+  saveBtn.style.borderRadius = '4px';
+  saveBtn.style.cursor = 'pointer';
+  saveBtn.style.fontWeight = '600';
+  saveBtn.onclick = async () => {
+    try {
+      if(!sb) {
+        await showNotification('Brak połączenia z serwerem', 'Błąd', '❌');
+        return;
+      }
+      
+      // Pobierz wszystkie selecty
+      const selects = table.querySelectorAll('select');
+      
+      for(let i = 0; i < machines.length; i++) {
+        const newStatus = selects[i].value;
+        const machineNumber = machines[i].number;
+        
+        // Usuń stary status
+        await sb.from('machine_status_schedule').delete()
+          .eq('machine_number', machineNumber)
+          .eq('date', currentDate);
+        
+        // Wstaw nowy
+        const { error } = await sb.from('machine_status_schedule').insert({
+          machine_number: machineNumber,
+          date: currentDate,
+          status: newStatus
+        });
+        
+        if(error) {
+          console.error('Error saving status for', machineNumber, error);
+        }
+      }
+      
+      // Zaktualizuj cache i interface
+      await loadMachineStatusScheduleForDate(currentDate);
+      buildTableFor(currentDate);
+      modal.remove();
+      
+      await showNotification('✅ Statusy zapisane!', 'Sukces', '✅');
+    } catch(e) {
+      console.error('showBulkStatusModal save error', e);
+      await showNotification('Błąd przy zapisywaniu statusów', 'Błąd', '❌');
+    }
+  };
+  actions.appendChild(saveBtn);
+  
+  box.appendChild(actions);
+  modal.appendChild(box);
+  modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
 /* -------------------- BOOTSTRAP (inicjalizacja) -------------------- */
 async function bootstrap(){
   await new Promise(r=>document.readyState==='loading'?document.addEventListener('DOMContentLoaded',r):r());
